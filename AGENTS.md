@@ -10,6 +10,53 @@ You are an expert software engineer and AI specialist. Your goal is to implement
 - **Frontend**: Clean Architecture (decoupling UI, domain logic, and data sources).
 - **Backend**: Microservices-based architecture (independent services for Core/Collaboration and AI).
 
+### Backend Microservices
+
+**API Gateway**
+- **Responsibility**: Single entry point for all client requests.
+- **Key Features**:
+  - Request routing to appropriate microservices.
+  - Authentication and authorization validation.
+  - Rate limiting and request throttling.
+  - CORS handling and security policies.
+- **Deployment**: AWS Lambda (Node.js with Serverless Framework or SST).
+
+**Auth Service (Node.js)**
+- **Responsibility**: User authentication and authorization.
+- **Key Features**:
+  - User registration, login, and session management.
+  - Integration with Supabase Auth.
+  - JWT token generation and validation.
+  - Role-based access control (RBAC).
+- **Deployment**: AWS Lambda (serverless, stateless).
+
+**Document Service (Node.js)**
+- **Responsibility**: Document lifecycle management.
+- **Key Features**:
+  - Document CRUD operations (Create, Read, Update, Delete).
+  - Document metadata and versioning.
+  - Integration with PostgreSQL for persistent storage.
+  - Document permissions and sharing.
+- **Deployment**: AWS Lambda (serverless, stateless).
+
+**Collaboration Service (Y.js/Node.js)**
+- **Responsibility**: CRDT-based real-time synchronization.
+- **Key Features**:
+  - WebSocket server for persistent connections.
+  - Y.js CRDT document state management.
+  - Conflict-free collaborative editing.
+  - Awareness protocol for cursor positions and user presence.
+- **Deployment**: AWS ECS (dedicated service, requires persistent state and long-lived connections).
+
+**AI Service (Python/FastAPI)**
+- **Responsibility**: Agentic AI inference and document intelligence.
+- **Key Features**:
+  - Integration with PydanticAI for agent orchestration.
+  - Context-aware text generation and enhancement.
+  - RAG (Retrieval-Augmented Generation) using pgvector.
+  - LLM inference with streaming support.
+- **Deployment**: AWS Lambda (serverless, stateless operations).
+
 ### Technology Stack
 
 **Frontend**
@@ -31,13 +78,20 @@ You are an expert software engineer and AI specialist. Your goal is to implement
 - PydanticAI (agentic framework)
 - uv (package manager)
 
-**Infrastructure & Database**
-- Supabase (PostgreSQL, Auth, Storage)
-- pgvector (vector search/embeddings)
-- Frontend Deployment: Vercel
-- Backend Core (WebSockets): AWS ECS (Persistent for Y.js)
-- Backend AI: AWS Lambda (Serverless for Agentic AI)
-- Development Environment: Docker & Docker Compose for local orchestration
+**Database & Storage**
+- PostgreSQL (Supabase - primary database)
+- pgvector (vector embeddings for RAG)
+- Supabase Storage (file attachments)
+- Supabase Auth (authentication provider)
+
+**Cloud Infrastructure**
+- **Vercel**: Frontend hosting (React/Vite static assets)
+- **AWS Lambda**: Serverless functions for API Gateway, Auth Service, Document Service, AI Service
+- **AWS ECS (Fargate)**: Containerized Collaboration Service (persistent WebSocket connections)
+- **Serverless Framework / SST**: Infrastructure-as-Code for Lambda deployment
+
+**Development Environment**
+- Docker & Docker Compose (local orchestration of all microservices)
 
 ### Architecture Diagram
 
@@ -69,23 +123,25 @@ You are an expert software engineer and AI specialist. Your goal is to implement
 
 ## Core Features (MVP)
 
-### Phase 1: Foundation
-1. **Rich Text Editor** - Tiptap-based document editing with formatting
-2. **Basic Authentication** - Supabase auth integration
-3. **Document Management** - Create, save, retrieve documents
-4. **Real-time Collaboration** - Y.js for multi-user editing
+### Phase 1: Foundation (MVP without AI)
+Focus: Core editor functionality and real-time collaboration.
 
-### Phase 2: Agentic AI
-1. **AI Writing Assistant** - Content generation and enhancement
-2. **Context Awareness** - Document understanding and RAG
-3. **Smart Suggestions** - AI-powered recommendations
-4. **Batch Processing** - Async handling of large document uploads/analysis
+1. **Rich Text Editor** - Tiptap-based document editing with formatting (bold, italic, headings, lists, etc.).
+2. **Basic Authentication** - Supabase auth integration (sign up, login, session management).
+3. **Document Management** - Create, save, retrieve, and delete documents with PostgreSQL persistence.
+4. **Real-time Collaboration** - Y.js CRDT-based multi-user editing with WebSocket synchronization.
 
-### Phase 3: Optimization
-1. **Model Routing** - Automatic LLM selection for cost optimization
-2. **Caching Layer** - Redis for real-time collaboration performance
-3. **Async Task Queue** - Background processing for heavy operations
-4. **Vector Search** - Advanced RAG with pgvector
+**Deliverable**: A fully functional collaborative document editor without AI capabilities.
+
+### Phase 2: Agentic Integration (MVP with AI)
+Focus: AI-powered writing assistance and intelligent document features.
+
+1. **AI Writing Assistant** - Content generation, rewriting, and text enhancement using LLMs.
+2. **Context Awareness (RAG)** - Document understanding using pgvector for semantic search and context retrieval.
+3. **Smart Suggestions** - AI-powered recommendations for style, tone, and structure improvements.
+4. **Streaming Responses** - Real-time AI output using Server-Sent Events (SSE) for responsive UX.
+
+**Deliverable**: A complete agentic document editor with intelligent writing assistance.
 
 ## Known Challenges & Future Improvements
 
@@ -102,3 +158,20 @@ You are an expert software engineer and AI specialist. Your goal is to implement
 4. Advanced RAG with vector search
 5. Offline-first capabilities
 6. Team workspaces and permissions
+
+## Future Improvements (Architecture v2.0)
+
+### Performance & Scalability
+1. **Redis Hot Cache** - Implement Redis for caching frequently accessed documents and Y.js state.
+2. **BullMQ Task Queue** - Async processing for heavy operations (PDF parsing, bulk embeddings generation).
+3. **Connection Pooling** - Optimize database connections for high-concurrency scenarios.
+
+### AI Optimization
+1. **Model Router** - Intelligent routing between "Smart" models (Gemini 3 Pro) for complex tasks and "Fast" models (Gemini 3 Flash) for simple operations.
+2. **Streaming with SSE** - Server-Sent Events for real-time AI response streaming to improve perceived performance.
+3. **Token Usage Analytics** - Monitor and optimize LLM API costs with detailed metrics.
+
+### Developer Experience
+1. **OpenAPI Documentation** - Auto-generated API docs for all backend services.
+2. **E2E Testing** - Comprehensive testing for collaborative editing and AI features.
+3. **CI/CD Pipelines** - Automated deployment to AWS ECS and Lambda.
