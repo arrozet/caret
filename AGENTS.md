@@ -1,21 +1,8 @@
 # Caret - Agentic AI-First Document Editor
 
-## Vision
+## Introduction
 
-Caret is an agentic, AI-first document editor for collaborative and structured writing. It addresses a critical gap in the market: while agentic IDEs like Cursor and Copilot have transformed code writing, document editing remains stagnant.
-
-Current solutions (Word's Copilot, Google Docs' Gemini) offer limited agentic capabilities—they're essentially chat toggles with minimal document interaction. Caret aims to change this by providing true agentic capabilities integrated into a rich document editor where AI can understand, modify, and enhance documents intelligently.
-
-## Problem Statement
-
-As a student and writer, I've encountered a key problem: **document writing is not as "agile" as code writing with modern AI tools**. No major company is effectively integrating AI into Word/Google Docs-like editors with genuine agentic capabilities.
-
-### Why Caret is Viable
-
-1. **Less explored market**: Only lex.pages has achieved relative success with a similar concept, with limited visibility
-2. **Lower token costs**: Modifying documents is significantly cheaper than generating code (fewer tokens)
-3. **High utility**: Essential for students, professionals, and anyone writing structured documents
-4. **Monetization potential**: Clear paths for premium features, API access, and enterprise solutions
+You are an expert software engineer and AI specialist. Your goal is to implement **Caret**, an agentic, AI-first document editor for collaborative and structured writing. Caret integrates true agentic capabilities into a rich document editor, allowing AI to understand, modify, and enhance documents intelligently.
 
 ## Architecture
 
@@ -25,20 +12,25 @@ As a student and writer, I've encountered a key problem: **document writing is n
 - React (TypeScript)
 - Vite (build tool)
 - TailwindCSS (styling)
+- FontAwesome (icons)
 - Tiptap (rich text editor framework)
+- Bun (package manager)
 
 **Core Services**
-- Node.js service for real-time collaboration (Y.js) and core document functionality
-- PostgreSQL database (via Supabase)
+- Node.js (Core & Real-time collaboration)
+- Y.js (CRDT for shared editing)
+- Bun (package manager & runtime)
 
-**Agentic AI**
-- Python service (LangGraph or PydanticAI - TBD)
-- LLM routing for cost optimization
-- Vector embeddings with pgvector for RAG capabilities
+**Agentic AI (Python)**
+- FastAPI (API framework)
+- Pydantic (data validation & typing)
+- PydanticAI (agentic framework)
+- uv (package manager)
 
-**Infrastructure**
-- Supabase (auth, PostgreSQL, storage)
-- Real-time collaboration with Y.js
+**Infrastructure & Database**
+- Supabase (PostgreSQL, Auth, Storage)
+- pgvector (vector search/embeddings)
+- AWS (Lambda or S3 - TBD for deployment)
 
 ### Architecture Diagram
 
@@ -103,30 +95,3 @@ As a student and writer, I've encountered a key problem: **document writing is n
 4. Advanced RAG with vector search
 5. Offline-first capabilities
 6. Team workspaces and permissions
-
-## Project Name
-
-**Caret** (^) - The caret symbol indicates cursor position where text will be inserted. It's:
-- Concise and memorable
-- Related to document writing and editing
-- Not widely known, making it distinctive
-- Technically meaningful for our use case
-
-## Development Approach
-
-This is a thesis project (TFG) that aims to:
-1. Prove the viability of agentic document editors
-2. Create a functional MVP with genuine AI integration
-3. Establish a foundation for future development
-4. Contribute to an underexplored market
-
-The scope is carefully bounded to deliver a working prototype while remaining realistic for thesis completion timeframe.
-
-## References & Inspiration
-
-- **Cursor** / **Copilot** - Agentic code editors (inspiration for UX/workflow)
-- **Lex.pages** - Existing agentic document editor (limited visibility)
-- **Tiptap** - Rich text editor framework
-- **ProseMirror** - Underlying editor technology
-- **Y.js** - Real-time collaboration library
-- **Supabase** - Backend-as-a-service platform
