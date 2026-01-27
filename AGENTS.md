@@ -6,6 +6,10 @@ You are an expert software engineer and AI specialist. Your goal is to implement
 
 ## Architecture
 
+### Architectural Patterns
+- **Frontend**: Clean Architecture (decoupling UI, domain logic, and data sources).
+- **Backend**: Microservices-based architecture (independent services for Core/Collaboration and AI).
+
 ### Technology Stack
 
 **Frontend**
