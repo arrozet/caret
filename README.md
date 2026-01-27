@@ -8,7 +8,7 @@ Caret addresses a critical gap in the market: while agentic IDEs like Cursor and
 
 ## Problem Statement
 
-As a student and writer, I've encountered a key problem: **document writing is not as "agile" as code writing with modern AI tools**. No major company is effectively integrating AI into Word/Google Docs-like editors with genuine agentic capabilities.
+As a student, I've encountered a key problem: **document writing is not as "agile" as code writing with modern AI tools**. No major company is effectively integrating AI into Word/Google Docs-like editors with genuine agentic capabilities.
 
 ### Why Caret is Viable
 
