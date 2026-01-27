@@ -34,7 +34,10 @@ You are an expert software engineer and AI specialist. Your goal is to implement
 **Infrastructure & Database**
 - Supabase (PostgreSQL, Auth, Storage)
 - pgvector (vector search/embeddings)
-- AWS (Lambda or S3 - TBD for deployment)
+- Frontend Deployment: Vercel
+- Backend Core (WebSockets): AWS ECS (Persistent for Y.js)
+- Backend AI: AWS Lambda (Serverless for Agentic AI)
+- Development Environment: Docker & Docker Compose for local orchestration
 
 ### Architecture Diagram
 
