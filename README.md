@@ -23,3 +23,8 @@ As a student, I've encountered a key problem: **document writing is not as "agil
 - Concise and memorable.
 - Directly related to document writing and editing.
 - Technically meaningful yet distinctive.
+
+## Documentation
+
+- **[AGENTS.md](./AGENTS.md)** - Complete project architecture, backend microservices, tech stack, and development phases
+- **[FRONTEND.md](./FRONTEND.md)** - Comprehensive frontend design system: color palette, typography, components, animations, and accessibility guidelines
