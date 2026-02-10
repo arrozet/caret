@@ -15,6 +15,7 @@ We prioritize automated testing to ensure the stability of collaborative editing
 - **API Testing**: Supertest (Node.js) or FastAPI TestClient (Python) to verify endpoints.
 - **Database**: Test RLS policies and complex SQL queries against a local Supabase instance.
 - **Y.js Sync**: Verify document state merging and conflict resolution.
+- **AI-to-Editor Protocol**: Test that AI-streamed text is applied as Tiptap Transactions and correctly synchronized via Y.js across multiple clients.
 
 ### 3. End-to-End (E2E) Testing
 - **Tool**: **Playwright**.

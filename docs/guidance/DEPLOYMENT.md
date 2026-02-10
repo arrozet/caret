@@ -3,6 +3,64 @@
 ## Cloud Infrastructure Overview
 Caret follows a hybrid serverless and containerized approach on **AWS** for maximum scalability and cost-efficiency.
 
+## Local Development Environment
+
+### Docker Compose Setup
+Use `docker-compose.yml` to spin up the full local stack:
+
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    environment:
+      POSTGRES_DB: caret_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/caret_dev
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    depends_on:
+      - postgres
+
+  ai-service:
+    build: ./ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/caret_dev
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+```
+
+### Environment Variables
+Create a `.env` file in the root:
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+OPENAI_API_KEY=sk-...
+```
+
+### Running Locally
+```bash
+docker-compose up -d
+cd frontend && bun dev
+```
+
 ## Deployment Targets
 
 ### 1. Frontend (Vercel)

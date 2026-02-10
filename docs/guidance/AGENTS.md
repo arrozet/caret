@@ -21,6 +21,36 @@ Document writing is not as "agile" as code writing with modern AI tools. No majo
 
 ## High-Level Architecture
 
+### Tech Stack Overview
+
+**Frontend**
+- React + TypeScript
+- Vite (build tool)
+- TailwindCSS (styling with "Swiss Focus" theme)
+- Tiptap (rich text editor)
+- Lucide React (icons)
+- react-i18next (internationalization)
+- Bun (package manager)
+
+**Backend**
+- Node.js (Document Service, Collaboration Service)
+- Y.js (CRDT for real-time collaboration)
+- Python + FastAPI (AI Service)
+- PydanticAI (agentic framework)
+
+**Database & Storage**
+- PostgreSQL (Supabase)
+- pgvector (vector embeddings for RAG)
+- Supabase Auth
+
+**Infrastructure**
+- Vercel (Frontend hosting)
+- AWS Lambda (Stateless services)
+- AWS ECS (WebSocket service)
+- Docker Compose (Local dev)
+
+### Architecture Diagram
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Frontend (React)                        │
