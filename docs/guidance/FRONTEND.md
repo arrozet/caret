@@ -64,17 +64,17 @@ Implement these colors as CSS variables and Tailwind extensions.
 
 ### Font Families
 
-- **UI Font**: `Inter` or `Geist Sans`. Tight tracking, clean, utilitarian.
-- **Document Font**: `Merriweather`, `Newsreader`, or `Tiempos`. Elegant serif for the actual writing canvas to differentiate "writing mode" from "coding mode".
-- **Monospace** (for code blocks): `Fira Code` or `JetBrains Mono`
+- **UI Font**: `Inter`. Tight tracking, clean, utilitarian.
+- **Document Font**: `Merriweather`. Elegant serif for the actual writing canvas to differentiate "writing mode" from "coding mode".
+- **Monospace** (for code blocks): `Fira Code`.
 
 ### Type Scale & Hierarchy
 
 | Element | Font | Size | Line Height | Weight | Tracking | Usage |
 |:--------|:-----|:-----|:------------|:-------|:---------|:------|
-| **Display (H1)** | Document | 32px | 1.3 | 700 | -0.02em | Document title, main heading |
-| **Heading (H2)** | Document | 28px | 1.3 | 600 | -0.02em | Section headings |
-| **Subheading (H3)** | Document | 24px | 1.4 | 600 | -0.02em | Subsections |
+| **Display (H1)** | Document | 32px | 1.3 | 400 | -0.02em | Document title, main heading |
+| **Heading (H2)** | Document | 28px | 1.3 | 400 | -0.02em | Section headings |
+| **Subheading (H3)** | Document | 24px | 1.4 | 400 | -0.02em | Subsections |
 | **Body Text** | Document | 18px | 1.7 | 400 | normal | Main document content |
 | **UI Large** | UI | 16px | 1.5 | 500 | normal | Primary buttons, important labels |
 | **UI Base** | UI | 14px | 1.5 | 400 | normal | Default UI text, menu items |
@@ -176,7 +176,7 @@ Use shadows sparingly to maintain the minimal aesthetic.
 
 ## 5. Iconography
 
-### Icon Library: FontAwesome (or Lucide for lighter bundle)
+### Icon Library: Lucide React
 
 ### Size Standards
 
@@ -190,10 +190,10 @@ Use shadows sparingly to maintain the minimal aesthetic.
 
 ### Style Guidelines
 
-- **Weight**: Use `regular` (400) for most icons, `solid` for active states
-- **Color**: Inherit from parent text color (`currentColor`)
-- **Active State**: Apply `accent-main` color
-- **Spacing**: 8px gap between icon and text label
+- **Weight**: Use `stroke-width={2}` for most icons.
+- **Color**: Inherit from parent text color (`currentColor`).
+- **Active State**: Apply `accent-main` or `accent-ai` color depending on context.
+- **Spacing**: 8px gap between icon and text label.
 
 ---
 
@@ -906,7 +906,7 @@ Instead of grouping by type (components, hooks), group by **Feature** to keep re
 ```
 src/
 ├── features/
-│   ├── editor/           # All editor logic
+│   ├── editor/           # Tiptap implementation & extensions
 │   │   ├── components/   # Editor-specific UI
 │   │   ├── hooks/        # useTiptap, useSelection
 │   │   └── utils/        # Parsers, serializers
@@ -964,21 +964,87 @@ A document editor has complex state needs. We must not mix them.
 
 | State Type | Solution | Usage Rule |
 |:-----------|:---------|:-----------|
-| **Editor State** | Tiptap / Prosemirror | Encapsulated within the editor engine. Accessed ONLY via `useEditor` hook context. Never duplicate this in React state. |
+| **Editor State** | Tiptap (Prosemirror) | Encapsulated within the Tiptap engine. Accessed ONLY via `useEditor` hook context. Never duplicate this in React state. |
 | **Global UI** | Zustand | For app-wide preferences: Theme, Sidebar visibility, User Session. |
 | **Server State** | TanStack Query | For async data: Loading documents, fetching folders. Handles caching and loading states automatically. |
 | **Form/Local** | React `useState` | For ephemeral state: Input values, toggle open/close, hover states. |
 
 ---
 
-## 19. Summary Checklist for Implementation
+## 19. Editor Typography Overrides
+
+To achieve the "Swiss Focus" aesthetic within the document canvas, we apply specific overrides to the Tiptap editor content (usually via the `.prose` class or similar).
+
+```css
+/* Editor Content Styling */
+.caret-editor {
+  font-family: var(--font-document);
+  color: var(--color-text-primary);
+  line-height: 1.7;
+}
+
+/* Swiss Focus Headings: No bold, strictly typographic hierarchy */
+.caret-editor h1 {
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.5rem;
+}
+
+.caret-editor h2 {
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.caret-editor h3 {
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Blockquotes: Minimalist but distinct */
+.caret-editor blockquote {
+  border-left: 4px solid var(--color-accent);
+  padding-left: 1.5rem;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  margin: 2rem 0;
+}
+
+/* Lists: Clean alignment */
+.caret-editor ul, .caret-editor ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.caret-editor li {
+  margin-bottom: 0.5rem;
+}
+
+/* AI Suggestions (Ghost Text) */
+.caret-editor .suggestion {
+  color: var(--color-text-ghost);
+  pointer-events: none;
+}
+```
+
+---
+
+## 20. Summary Checklist for Implementation
 
 - [ ] Setup Tailwind with custom design tokens
 - [ ] Implement CSS variables for theme switching
 - [ ] Implement Feature-First Folder Structure
 - [ ] Setup TanStack Query & Zustand
+- [ ] Install Tiptap & Core Extensions
+- [ ] Setup Lucide React for Iconography
 - [ ] Create base UI component library (Button, Input, etc.)
-- [ ] Build Tiptap editor with Swiss Focus styling
+- [ ] Build Tiptap editor with Swiss Focus typography overrides
 - [ ] Implement Caret AI Panel with all states
 - [ ] Add real-time collaboration UI (cursors, avatars)
 - [ ] Setup responsive layouts for mobile/tablet/desktop
@@ -986,4 +1052,3 @@ A document editor has complex state needs. We must not mix them.
 - [ ] Add keyboard shortcuts and accessibility features
 - [ ] Test color contrast compliance (WCAG AA)
 - [ ] Optimize fonts and animations for performance
-- [ ] Document component usage with Storybook
