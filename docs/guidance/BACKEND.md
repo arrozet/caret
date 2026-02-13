@@ -62,8 +62,19 @@
 ### API Versioning
 - **Version Strategy**: All APIs will implement versioning from the start.
 - **Current Version**: v1 (first version).
-- **URL Pattern**: All services are exposed through the API Gateway under a single prefix: `/api/v1/{resource}`. The Gateway routes by path (e.g. `/api/v1/auth/*`, `/api/v1/documents/*`, `/api/v1/ai/*`) to the corresponding microservice. The frontend only calls `/api/v1/...`.
+- **URL Pattern**: All services are exposed through the API Gateway under a single prefix: `/api/v1/{resource}`. The Gateway routes by path (e.g. `/api/v1/auth/*`, `/api/v1/documents/*`, `/api/v1/ai/*`) to the corresponding microservice.
+- **Frontend contract**: The frontend **always** calls the API Gateway only, using the URL pattern `/api/v{version}/{service}/{method}` (e.g. `/api/v1/auth/login`, `/api/v1/documents/list`, `/api/v1/ai/stream`). It never calls Auth, Document, or AI services directly. The only exception is the Collaboration Service (WebSocket), which the frontend connects to separately because it is not HTTP.
 - **Future Versions**: Breaking changes will be introduced in new versions (v2, v3, etc.) while maintaining backward compatibility for previous versions when possible.
+
+### REST API Design Principles
+All REST endpoints must follow these principles:
+
+- **Naming**: Use **nouns** for resources (e.g. `/documents`, `/users`), not verbs. Use **plural** for collection URLs. Prefer **kebab-case** for multi-word segments. Use HTTP **methods** (GET, POST, PUT, PATCH, DELETE) to express the action.
+- **Idempotency**: **GET**, **PUT**, and **DELETE** must be idempotent (same request, same effect; safe to retry). **POST** for creation is non-idempotent by default; for critical operations (e.g. payments, duplicate-sensitive creates), support an **Idempotency-Key** header and treat repeated requests with the same key as one operation.
+- **Safety**: **GET** must be safe (no side effects on server state). Do not use GET for mutations.
+- **Status codes**: Use standard HTTP status codes (200, 201, 204, 400, 401, 403, 404, 409, 422, 500) consistently. Return **201 Created** with `Location` header for new resources; **204 No Content** for successful DELETE or update-with-no-body.
+- **Statelessness**: Each request must carry enough context (e.g. auth token); the server must not rely on session state stored between requests for correctness.
+- **One resource, one endpoint**: Do not multiply endpoints for the same logical operation with different filters or criteria. For example, do **not** create separate routes like “search by name”, “search by surname”, “search by date”. Use **one** resource (e.g. `GET /api/v1/documents` or `GET /api/v1/users`) and pass optional **query parameters** (e.g. `?name=...&surname=...&createdAfter=...`). The server interprets the combination of params; clients can send any subset. Same idea for sorting: one endpoint with `?sort=field&order=asc|desc` rather than many “sort by X” endpoints.
 
 ### OpenAPI Documentation
 
