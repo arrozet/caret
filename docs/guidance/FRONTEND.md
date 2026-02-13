@@ -56,7 +56,7 @@ Implement these colors as CSS variables and Tailwind extensions.
 
 - **Default Behavior**: Respect system preference (`prefers-color-scheme`)
 - **Manual Toggle**: Persist user choice in `localStorage` under `caret-theme`
-- **Transition**: Smooth theme switch with `transition: background-color 200ms ease`
+- **Transition**: Smooth theme switch with `transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease`
 
 ---
 
@@ -109,11 +109,13 @@ All spacing follows a 4px base unit for visual consistency.
 | `space-6` | 24px | Medium spacing (section margins) |
 | `space-8` | 32px | Large spacing (page margins) |
 | `space-12` | 48px | Extra-large spacing |
+| `space-14` | 56px | Top bar height (exception: not a multiple of 4px base unit) |
 | `space-16` | 64px | Page-level spacing |
 
 ### Layout Grid
 
 - **Document Max-Width**: 800px (optimal reading line length: 60-80 characters)
+- **Document Max-Width (wide)**: 900px (token `document-wide`; use on wide displays, see Section 14)
 - **AI Chat Panel Width**: 400px (desktop)
 - **Gutter**: 24px (space between major UI sections)
 
@@ -159,7 +161,7 @@ To maintain the rigorous, grid-based "Swiss" aesthetic, we avoid overly rounded 
 
 ---
 
-## 5. Shadows & Elevation
+## 6. Shadows & Elevation
 
 Use shadows sparingly to maintain the minimal aesthetic.
 
@@ -174,7 +176,7 @@ Use shadows sparingly to maintain the minimal aesthetic.
 
 ---
 
-## 5. Iconography
+## 7. Iconography
 
 ### Icon Library: Lucide React
 
@@ -197,7 +199,7 @@ Use shadows sparingly to maintain the minimal aesthetic.
 
 ---
 
-## 6. Internationalization (i18n)
+## 8. Internationalization (i18n)
 
 ### Language Support
 
@@ -247,7 +249,7 @@ src/
 
 ---
 
-## 7. Key UI Behaviors
+## 9. Key UI Behaviors
 
 ### The "Caret" Identity
 
@@ -272,16 +274,16 @@ Use translucent backgrounds for overlays:
 
 ```css
 .glass-panel {
-  background: rgba(250, 250, 250, 0.85); /* Light mode */
+  background: rgb(var(--color-app) / 0.85); /* Light mode - uses bg-app variable */
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(229, 229, 229, 0.6);
+  border: 1px solid rgb(var(--color-border-subtle) / 0.6); /* Uses border-subtle variable */
 }
 ```
 
 ---
 
-## 8. Component Architecture
+## 10. Component Architecture
 
 ### Core Layout Structure
 
@@ -379,7 +381,7 @@ Use translucent backgrounds for overlays:
 
 ---
 
-## 9. Animation & Transitions
+## 11. Animation & Transitions
 
 ### Principles
 
@@ -438,7 +440,7 @@ const streamText = (text, element) => {
 
 ---
 
-## 10. Interactive States
+## 12. Interactive States
 
 Define visual feedback for all interactive elements.
 
@@ -466,13 +468,13 @@ Define visual feedback for all interactive elements.
 | State | Visual Change |
 |:------|:--------------|
 | **Default** | `border: 1px solid border-subtle` |
-| **Focus** | `border-color: accent-main`, `box-shadow: 0 0 0 3px rgba(0,102,204,0.1)` |
+| **Focus** | `border-color: accent-main`, `box-shadow: 0 0 0 3px rgba(0,102,204,0.4)` (40% opacity for WCAG visibility) |
 | **Error** | `border-color: error`, red focus ring |
 | **Disabled** | `bg: bg-app`, `opacity: 0.6`, no interaction |
 
 ---
 
-## 11. AI Chat Panel States
+## 13. AI Chat Panel States
 
 Visual representation for each state of the AI interface.
 
@@ -555,7 +557,7 @@ Visual representation for each state of the AI interface.
 
 ---
 
-## 12. Responsive Behavior (Mobile-First)
+## 14. Responsive Behavior (Mobile-First)
 
 ### Mobile (<768px)
 
@@ -586,12 +588,12 @@ Visual representation for each state of the AI interface.
 ### Wide Display (>1440px)
 
 - **Layout**: Same as desktop, but with more breathing room
-- **Document Editor**: Can expand to 900px max-width
+- **Document Editor**: Can expand to `max-w-document-wide` (900px); see Design Tokens, Section 16
 - **Side Panels**: Can show document outline on left (optional)
 
 ---
 
-## 13. Accessibility (WCAG AA Compliance)
+## 15. Accessibility (WCAG AA Compliance)
 
 ### Color Contrast
 
@@ -635,7 +637,7 @@ All text must meet **WCAG AA** standards (4.5:1 contrast ratio for normal text, 
 
 ---
 
-## 14. Design Tokens (Tailwind Configuration)
+## 16. Design Tokens (Tailwind Configuration)
 
 ```javascript
 // tailwind.config.js
@@ -644,12 +646,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Light mode
-        'app-bg': '#FAFAFA',
+        // Light mode (semantic names match doc: bg-app, bg-accent-main)
+        'app': '#FAFAFA',
+        'app-bg': '#FAFAFA', // alias for compatibility
         'surface': '#FFFFFF',
         'text-primary': '#1A1A1A',
         'text-secondary': '#6E6E73',
-        'accent': '#0066CC',
+        'accent-main': '#0066CC',
+        'accent': '#0066CC', // alias
         'accent-caret': '#FF4500',
         'accent-ai': '#8B5CF6',
         'ai-highlight': '#F5F6F8',
@@ -666,10 +670,12 @@ export default {
         
         // Dark mode (via CSS variables)
         'dark': {
+          'app': '#121212',
           'app-bg': '#121212',
           'surface': '#1E1E1E',
           'text-primary': '#E8E8E8',
           'text-secondary': '#9CA3AF',
+          'accent-main': '#3B99FC',
           'accent': '#3B99FC',
           'accent-caret': '#FF6B35',
           'accent-ai': '#A78BFA',
@@ -704,13 +710,14 @@ export default {
         'mono': ['Fira Code', 'JetBrains Mono', 'monospace'],
       },
       fontSize: {
-        'display': ['32px', { lineHeight: '1.3', fontWeight: '700' }],
-        'h2': ['28px', { lineHeight: '1.3', fontWeight: '600' }],
-        'h3': ['24px', { lineHeight: '1.4', fontWeight: '600' }],
+        'display': ['32px', { lineHeight: '1.3', fontWeight: '400' }],
+        'h2': ['28px', { lineHeight: '1.3', fontWeight: '400' }],
+        'h3': ['24px', { lineHeight: '1.4', fontWeight: '400' }],
         'body': ['18px', { lineHeight: '1.7', fontWeight: '400' }],
         'ui-lg': ['16px', { lineHeight: '1.5', fontWeight: '500' }],
         'ui-base': ['14px', { lineHeight: '1.5', fontWeight: '400' }],
         'ui-sm': ['12px', { lineHeight: '1.4', fontWeight: '400' }],
+        'code': ['14px', { lineHeight: '1.6', fontWeight: '400' }], // Monospace code blocks (see Type Scale, Section 2)
       },
       spacing: {
         '0': '0px',
@@ -721,6 +728,7 @@ export default {
         '6': '24px',
         '8': '32px',
         '12': '48px',
+        '14': '56px', // Top bar height (exception: not a multiple of 4px base unit)
         '16': '64px',
       },
       boxShadow: {
@@ -740,6 +748,7 @@ export default {
       },
       maxWidth: {
         'document': '800px',
+        'document-wide': '900px', // Wide display (>1440px), see Section 14
         'chat-panel': '400px',
       },
       backdropBlur: {
@@ -759,12 +768,14 @@ export default {
 ```css
 /* globals.css */
 :root {
-  /* Light mode (default) */
+  /* Light mode (default). Use with Tailwind: bg-app, bg-accent-main */
   --color-app-bg: 250 250 250;
+  --color-app: 250 250 250;
   --color-surface: 255 255 255;
   --color-text-primary: 26 26 26;
   --color-text-secondary: 110 110 115;
   --color-accent: 0 102 204;
+  --color-accent-main: 0 102 204;
   --color-accent-caret: 255 69 0; /* #FF4500 */
   --color-accent-ai: 139 92 246;
   --color-ai-highlight: 245 246 248; /* #F5F6F8 */
@@ -773,15 +784,22 @@ export default {
   --color-diff-del-bg: 254 226 226; /* #FEE2E2 */
   --color-diff-del-text: 185 28 28; /* #B91C1C */
   --color-border-subtle: 229 229 229;
+  
+  /* Font families (see Section 2: Typography Strategy) */
+  --font-document: 'Merriweather', 'Newsreader', Georgia, serif;
+  --font-ui: 'Inter', 'Geist Sans', system-ui, sans-serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
 }
 
 .dark {
   /* Dark mode overrides */
   --color-app-bg: 18 18 18;
+  --color-app: 18 18 18;
   --color-surface: 30 30 30;
   --color-text-primary: 232 232 232;
   --color-text-secondary: 156 163 175;
   --color-accent: 59 153 252;
+  --color-accent-main: 59 153 252;
   --color-accent-caret: 255 107 53; /* #FF6B35 */
   --color-accent-ai: 167 139 250;
   --color-ai-highlight: 32 33 36; /* #202124 */
@@ -800,9 +818,11 @@ export default {
 
 ---
 
-## 15. Component Library Structure
+## 17. Component Library Structure
 
-Organize React components following this structure:
+**Canonical structure:** The recommended layout is **feature-first** (see **Section 19. Frontend Architecture**). The tree below is a simplified view grouped by component type for quick reference; it maps to the same primitives and features as the feature-first layout.
+
+Organize React components following this structure (type-based view):
 
 ```
 src/
@@ -835,6 +855,11 @@ src/
 │   ├── useTheme.ts
 │   ├── useCollaboration.ts
 │   └── useAI.ts
+├── locales/                # Internationalization (see Section 8)
+│   ├── en-US/
+│   ├── es/
+│   ├── fr/
+│   └── ...
 ├── styles/
 │   ├── globals.css
 │   └── tailwind.config.js
@@ -845,7 +870,7 @@ src/
 
 ---
 
-## 16. Performance Considerations
+## 18. Performance Considerations
 
 ### Code Splitting
 
@@ -880,7 +905,9 @@ src/
 
 ---
 
-## 16. Frontend Architecture (Clean Architecture)
+## 19. Frontend Architecture (Clean Architecture)
+
+**This is the canonical directory structure.** Section 17 shows the same components grouped by type (ui, editor, ai, collab) for reference.
 
 We follow a strict separation of concerns based on Feature-Sliced Design principles tailored for React to ensure the codebase remains scalable and maintainable.
 
@@ -917,13 +944,17 @@ src/
 │   └── collaboration/    # Multiplayer logic (Y.js)
 ├── components/ui/        # Shared "Dumb" Primitives (Button, Input)
 ├── hooks/                # Shared hooks (useTheme, useMediaQuery)
+├── locales/              # Internationalization (see Section 8)
+│   ├── en-US/
+│   ├── es/
+│   └── ...
 ├── lib/                  # Shared utilities & 3rd party configs
 └── stores/               # Global state definitions (Zustand)
 ```
 
 ---
 
-## 17. Componentization Strategy
+## 20. Componentization Strategy
 
 ### 1. Primitives vs. Features
 *   **Primitives (`components/ui`)**: "Dumb" components. They have no business logic. They are styled via Tailwind and controlled via props (e.g., `<Button>`, `<Modal>`).
@@ -958,7 +989,7 @@ For complex UI elements (like Dropdowns or Tabs), use the **Compound Component**
 
 ---
 
-## 18. State Management Strategy
+## 21. State Management Strategy
 
 A document editor has complex state needs. We must not mix them.
 
@@ -971,7 +1002,7 @@ A document editor has complex state needs. We must not mix them.
 
 ---
 
-## 19. Editor Typography Overrides
+## 22. Editor Typography Overrides
 
 To achieve the "Swiss Focus" aesthetic within the document canvas, we apply specific overrides to the Tiptap editor content (usually via the `.prose` class or similar).
 
@@ -979,7 +1010,7 @@ To achieve the "Swiss Focus" aesthetic within the document canvas, we apply spec
 /* Editor Content Styling */
 .caret-editor {
   font-family: var(--font-document);
-  color: var(--color-text-primary);
+  color: rgb(var(--color-text-primary));
   line-height: 1.7;
 }
 
@@ -1009,10 +1040,10 @@ To achieve the "Swiss Focus" aesthetic within the document canvas, we apply spec
 
 /* Blockquotes: Minimalist but distinct */
 .caret-editor blockquote {
-  border-left: 4px solid var(--color-accent);
+  border-left: 4px solid rgb(var(--color-accent));
   padding-left: 1.5rem;
   font-style: italic;
-  color: var(--color-text-secondary);
+  color: rgb(var(--color-text-secondary));
   margin: 2rem 0;
 }
 
@@ -1028,27 +1059,7 @@ To achieve the "Swiss Focus" aesthetic within the document canvas, we apply spec
 
 /* AI Suggestions (Ghost Text) */
 .caret-editor .suggestion {
-  color: var(--color-text-ghost);
+  color: rgb(var(--color-text-ghost));
   pointer-events: none;
 }
 ```
-
----
-
-## 20. Summary Checklist for Implementation
-
-- [ ] Setup Tailwind with custom design tokens
-- [ ] Implement CSS variables for theme switching
-- [ ] Implement Feature-First Folder Structure
-- [ ] Setup TanStack Query & Zustand
-- [ ] Install Tiptap & Core Extensions
-- [ ] Setup Lucide React for Iconography
-- [ ] Create base UI component library (Button, Input, etc.)
-- [ ] Build Tiptap editor with Swiss Focus typography overrides
-- [ ] Implement Caret AI Panel with all states
-- [ ] Add real-time collaboration UI (cursors, avatars)
-- [ ] Setup responsive layouts for mobile/tablet/desktop
-- [ ] Implement dark mode toggle with persistence
-- [ ] Add keyboard shortcuts and accessibility features
-- [ ] Test color contrast compliance (WCAG AA)
-- [ ] Optimize fonts and animations for performance
