@@ -85,6 +85,7 @@ Document writing is not as "agile" as code writing with modern AI tools. No majo
 - PostgreSQL (Supabase)
 - pgvector (vector embeddings for RAG)
 - Supabase Auth
+- **Required PostgreSQL extensions**: `pgcrypto`, `vector` (pgvector), `citext`, `pg_trgm`, `pg_stat_statements` — see [DATABASE.md](./DATABASE.md).
 
 **Infrastructure**
 - Vercel (Frontend hosting)
