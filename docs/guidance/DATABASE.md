@@ -138,8 +138,7 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 
 **Suggested/optional indexes**
 
-- `btree(created_at DESC)`
-- `btree(updated_at DESC)`
+- `btree(updated_at DESC)` — list workspaces by most recently updated (recent projects at hand).
 
 #### `workspace_members`
 
@@ -167,10 +166,10 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - FK: (`revoked_by_user_id`) → `auth.users(id)` **ON DELETE SET NULL**
 - CHECK: `revoked_at IS NULL OR revoked_at >= joined_at`
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(user_id, workspace_id)` (supports “list my workspaces”)
-- `btree(workspace_id) WHERE revoked_at IS NULL`
+- `btree(user_id, workspace_id)` — lookup by user: "list all workspaces I belong to" (e.g. sidebar / workspace switcher). Without it, the DB may scan by workspace first and filter by user.
+- `btree(workspace_id) WHERE revoked_at IS NULL` — lookup active members of a workspace: "list current members" (excludes revoked). Partial index keeps only non-revoked rows, so it stays smaller and faster for this common query.
 
 ---
 
@@ -198,16 +197,12 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - FK: (`workspace_id`) → `workspaces(id)` **ON DELETE CASCADE**
 - FK: (`parent_folder_id`) → `folders(id)` **ON DELETE SET NULL**
 - FK: (`created_by_user_id`) → `auth.users(id)` **ON DELETE SET NULL**
+- Partial unique to prevent duplicate folder names within the same parent: `UNIQUE (workspace_id, parent_folder_id, name) WHERE deleted_at IS NULL`
 
-**Suggested/optional constraints**
+**Indexes**
 
-- Partial unique to prevent duplicates within a parent folder:
-  - `UNIQUE (workspace_id, parent_folder_id, name) WHERE deleted_at IS NULL`
-
-**Suggested/optional indexes**
-
-- `btree(workspace_id, parent_folder_id)`
-- `btree(workspace_id, updated_at DESC) WHERE deleted_at IS NULL`
+- `btree(workspace_id, parent_folder_id)` — list children of a folder (or root).
+- `btree(workspace_id, updated_at DESC) WHERE deleted_at IS NULL` — list folders by most recently updated (active only).
 
 #### `documents`
 
@@ -245,13 +240,12 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - CHECK: `deleted_at IS NULL OR deleted_at >= created_at`
 - CHECK: `archived_at IS NULL OR archived_at >= created_at`
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(workspace_id, folder_id, updated_at DESC) WHERE deleted_at IS NULL`
-- `btree(workspace_id, status, updated_at DESC) WHERE deleted_at IS NULL`
-- If title search is needed:
-  - `btree(workspace_id, lower(title)) WHERE deleted_at IS NULL`
-  - Trigram index on `title` (requires `pg_trgm`)
+- `btree(workspace_id, folder_id, updated_at DESC) WHERE deleted_at IS NULL` — list documents in a folder (or root) by most recently updated.
+- `btree(workspace_id, status, updated_at DESC) WHERE deleted_at IS NULL` — list documents by status (active/archived) and recency.
+- `btree(workspace_id, lower(title)) WHERE deleted_at IS NULL` — exact title lookup / sort by title (case-insensitive).
+- Trigram index on `title` (requires `pg_trgm`) — partial/fuzzy title search.
 
 #### `document_members`
 
@@ -275,10 +269,10 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - FK: (`user_id`) → `auth.users(id)` **ON DELETE CASCADE**
 - FK: (`added_by_user_id`) → `auth.users(id)` **ON DELETE SET NULL**
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(user_id, document_id)` (supports “documents shared with me”)
-- `btree(document_id) INCLUDE (role)` (supports permission checks)
+- `btree(user_id, document_id)` — list documents shared with the current user.
+- `btree(document_id) INCLUDE (role)` — permission checks: resolve document + role from index without table lookup.
 
 #### `document_share_links`
 
@@ -309,10 +303,9 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - CHECK: `expires_at IS NULL OR expires_at > created_at`
 - CHECK: `revoked_at IS NULL OR revoked_at >= created_at`
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(document_id) WHERE revoked_at IS NULL`
-- `btree(expires_at) WHERE revoked_at IS NULL AND expires_at IS NOT NULL`
+- `btree(document_id) WHERE revoked_at IS NULL` — list active share links for a document.
 
 ---
 
@@ -346,11 +339,10 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - UNIQUE: (`document_id`, `version_number`)
 - CHECK: `version_number > 0`
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(document_id, version_number DESC)`
-- If full-text search is needed on versions:
-  - `GIN(to_tsvector('english', content_text))` (or a stored `tsvector` column)
+- `btree(document_id, version_number DESC)` — list versions of a document (e.g. history UI, latest version).
+- `GIN(to_tsvector('english', content_text))` (or a stored `tsvector` column) — full-text search over version content. Required when that feature is implemented; can be deferred at launch.
 
 ---
 
@@ -359,6 +351,8 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 #### `document_collab_updates`
 
 **Purpose**: Append-only log of Y.js updates for each document.
+
+**Note**: Updates do not need to be persisted on every change. Real-time sync is handled by the collaboration server (in-memory or ephemeral store). Persist to this table in batches (e.g. every N seconds or N updates) or when creating snapshots; avoid one insert per keystroke to reduce write load and stay within tier limits.
 
 | Column | Type | Null | Default | Notes |
 |---|---:|:---:|---:|---|
@@ -376,13 +370,13 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - FK: (`user_id`) → `auth.users(id)` **ON DELETE SET NULL**
 - CHECK: `seq > 0`
 
-**Suggested/optional partitioning**
+**Partitioning (future)**
 
-- Partition by **time** (monthly) or by **hash(document_id)** when this table becomes large.
+- When this table becomes large, consider partitioning by **time** (monthly) or by **hash(document_id)** to improve maintenance and prune old data.
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(document_id, created_at DESC)` (debugging/ops)
+- `btree(document_id, created_at DESC)` — list updates by document and recency (debugging, ops).
 
 #### `document_collab_snapshots`
 
@@ -406,13 +400,15 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - UNIQUE: (`document_id`, `snapshot_seq`)
 - CHECK: `snapshot_seq > 0`
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(document_id, snapshot_seq DESC)`
+- `btree(document_id, snapshot_seq DESC)` — load latest snapshot for a document (required for fast doc load).
 
 #### (Suggested/Optional) `document_collab_state`
 
 **Purpose**: Fast pointer to the latest CRDT sequence and snapshot without scanning.
+
+**Note**: Not required at launch. You can obtain the latest snapshot via the index on `document_collab_snapshots` and latest seq via `MAX(seq)` on `document_collab_updates`. Consider adding this table later if those queries become a bottleneck (e.g. high concurrency or very large update logs).
 
 | Column | Type | Null | Default | Notes |
 |---|---:|:---:|---:|---|
