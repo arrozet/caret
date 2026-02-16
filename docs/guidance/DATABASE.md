@@ -451,10 +451,10 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - FK: (`document_id`) → `documents(id)` **ON DELETE SET NULL**
 - FK: (`created_by_user_id`) → `auth.users(id)` **ON DELETE SET NULL**
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(workspace_id, updated_at DESC) WHERE deleted_at IS NULL`
-- `btree(document_id, updated_at DESC) WHERE deleted_at IS NULL AND document_id IS NOT NULL`
+- `btree(workspace_id, updated_at DESC) WHERE deleted_at IS NULL` — list conversations in a workspace by most recently updated (recent conversations UI).
+- `btree(document_id, updated_at DESC) WHERE deleted_at IS NULL AND document_id IS NOT NULL` — list conversations for a specific document (document-scoped chat sidebar).
 
 #### `ai_messages`
 
@@ -487,12 +487,12 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - UNIQUE: (`conversation_id`, `message_index`)
 - CHECK: `message_index > 0`
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(conversation_id, message_index)`
-- `btree(created_at DESC)`
+- `btree(conversation_id, message_index)` — load messages for a conversation in order (conversation history).
+- `btree(created_at DESC)` — list messages across all conversations by recency (analytics, global activity view).
 
-#### (Optional) `ai_message_context_items`
+#### `ai_message_context_items`
 
 **Purpose**: Structured references to document context used to answer a message (selections, chunks, headings).
 
@@ -517,12 +517,12 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - FK: (`document_version_id`) → `document_versions(id)` **ON DELETE SET NULL**
 - CHECK: `end_offset IS NULL OR start_offset IS NULL OR end_offset >= start_offset`
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(message_id)`
-- `btree(document_id) WHERE document_id IS NOT NULL`
+- `btree(message_id)` — list context items used for a specific message (show citations/references in UI).
+- `btree(document_id) WHERE document_id IS NOT NULL` — list context items referencing a document (analytics, debugging, "this part was cited" in editor).
 
-#### (Optional) `ai_suggestions`
+#### `ai_suggestions`
 
 **Purpose**: Persist AI-proposed document edits (diffs) that a user can apply/regenerate/audit.
 
@@ -556,10 +556,10 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - FK: (`applied_by_user_id`) → `auth.users(id)` **ON DELETE SET NULL**
 - FK: (`dismissed_by_user_id`) → `auth.users(id)` **ON DELETE SET NULL**
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(document_id, created_at DESC) WHERE deleted_at IS NULL`
-- `btree(workspace_id, status, updated_at DESC) WHERE deleted_at IS NULL`
+- `btree(document_id, created_at DESC) WHERE deleted_at IS NULL` — list suggestions for a document by recency (suggestions panel in editor).
+- `btree(workspace_id, status, updated_at DESC) WHERE deleted_at IS NULL` — list suggestions by status (proposed/applied/dismissed) and recency (suggestions inbox/review panel).
 
 #### `document_embeddings`
 
@@ -596,17 +596,15 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - UNIQUE: (`document_version_id`, `chunk_index`, `embedding_model`)
 - CHECK: `chunk_index >= 0`
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(workspace_id, document_id, document_version_id)`
-- `btree(document_id, document_version_id, chunk_index)`
-- ANN index on `embedding` (choose one):
-  - **HNSW** (fast, good recall; requires newer pgvector)
-  - **IVFFLAT** (requires `ANALYZE` and tuning `lists`)
+- `btree(workspace_id, document_id, document_version_id)` — maintenance and lookups by workspace → document → version.
+- `btree(document_id, document_version_id, chunk_index)` — inspect all chunks for a given document version in order.
+- **HNSW** ANN index on `embedding` — primary vector index for RAG (fast, good recall; requires newer pgvector).
 
-**Suggested/optional partitioning**
+**Partitioning**
 
-- Partition by `workspace_id` (hash) for strong tenant isolation and to keep ANN indexes smaller per partition.
+- Partition by `workspace_id` (hash) for strong tenant isolation and to keep ANN indexes smaller and faster per partition.
 
 ---
 
@@ -637,19 +635,21 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - FK: (`workspace_id`) → `workspaces(id)` **ON DELETE SET NULL**
 - FK: (`actor_user_id`) → `auth.users(id)` **ON DELETE SET NULL**
 
-**Suggested/optional indexes**
+**Indexes**
 
-- `btree(workspace_id, created_at DESC)`
-- `btree(actor_user_id, created_at DESC)`
-- `btree(event_type, created_at DESC)`
+- `btree(workspace_id, created_at DESC)` — list recent events for a workspace.
+- `btree(actor_user_id, created_at DESC)` — list recent events performed by a user.
+- `btree(event_type, created_at DESC)` — list recent events of a given type.
 
-**Suggested/optional partitioning**
+**Partitioning**
 
-- Partition by `created_at` (monthly) once volume grows.
+- Partition by `created_at` (monthly) once volume grows, to support efficient retention and faster time-range queries.
 
 #### (Optional) `idempotency_keys`
 
 **Purpose**: Support `Idempotency-Key` for retry-safe POST operations at the API Gateway.
+
+**Note**: Not required for v1. Introduce this table and idempotency handling when you add billing or other non-idempotent, side-effectful operations that may be retried.
 
 | Column | Type | Null | Default | Notes |
 |---|---:|:---:|---:|---|
@@ -670,53 +670,9 @@ These are recommended as PostgreSQL `ENUM` types (or alternatively `TEXT + CHECK
 - FK: (`workspace_id`) → `workspaces(id)` **ON DELETE SET NULL**
 - FK: (`user_id`) → `auth.users(id)` **ON DELETE SET NULL**
 
-#### (Optional) `background_jobs`
-
-**Purpose**: Minimal DB-backed job tracking for async tasks (embedding generation, snapshot compaction).
-
-| Column | Type | Null | Default | Notes |
-|---|---:|:---:|---:|---|
-| `id` | `uuid` | NO |  | PK |
-| `workspace_id` | `uuid` | YES |  | FK → `workspaces(id)` |
-| `job_type` | `text` | NO |  | e.g., `embed_document_version` |
-| `status` | `job_status` | NO | `queued` |  |
-| `payload` | `jsonb` | NO | `'{}'` | Parameters |
-| `result` | `jsonb` | YES |  | Output summary |
-| `attempts` | `integer` | NO | `0` |  |
-| `max_attempts` | `integer` | NO | `3` |  |
-| `locked_at` | `timestamptz` | YES |  | For workers |
-| `locked_by` | `text` | YES |  | Worker identifier |
-| `run_after` | `timestamptz` | YES |  | Scheduling |
-| `created_at` | `timestamptz` | NO | `now()` |  |
-| `updated_at` | `timestamptz` | NO | `now()` |  |
-
-**Constraints**
-
-- PK: (`id`)
-- FK: (`workspace_id`) → `workspaces(id)` **ON DELETE SET NULL**
-
-**Suggested/optional indexes**
-
-- `btree(status, run_after, created_at)` (worker polling)
-
-## Suggested RLS Policy Matrix (Optional)
-
-If you choose to use Supabase RLS (recommended for defense-in-depth), a consistent pattern is:
-
-- **Workspaces**: a user can read a workspace if they have a non-revoked row in `workspace_members`.
-- **Workspace-scoped tables**: allow read/write if `workspace_id` is in the user’s membership set.
-- **Documents**:
-  - Allow access if:
-    - user is `document_member`, OR
-    - (`visibility = workspace` AND user is a workspace member), OR
-    - (`visibility = link` AND request is authorized by a valid share link token), OR
-    - (`visibility = public` AND your product allows public reads)
-
-This document intentionally does not include SQL `CREATE POLICY` statements; it defines the expected access model.
-
-## Retention & Compaction (Recommended)
+## Operational Notes (Recommended)
 
 - **CRDT updates**: periodic snapshots + compaction to prevent unbounded growth.
   - After creating a snapshot at `snapshot_seq`, older updates can be pruned up to that seq (if snapshots are trusted).
-- **Embeddings**: keep embeddings tied to immutable `document_versions`. When a version is superseded, optionally mark old embeddings as `deleted_at` for cleanup.
-- **Audit events**: partition + retention window if required (e.g., keep 90 days in hot storage, archive older data).
+- **Embeddings**: keep embeddings tied to immutable `document_versions`. When a version is superseded, mark old embeddings as `deleted_at` for cleanup.
+- **Audit events**: add partitioning + a retention window if required (e.g., keep 90 days hot, archive older data).
