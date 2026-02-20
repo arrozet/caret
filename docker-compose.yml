@@ -1,0 +1,156 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # Infrastructure
+  # ─────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-caret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-caret}
+      POSTGRES_DB: ${POSTGRES_DB:-caret_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-caret}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Backend services
+  # ─────────────────────────────────────────────
+
+  api-gateway:
+    build:
+      context: ./app/backend/api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+      ALLOWED_ORIGINS: http://localhost:5173
+      AUTH_SERVICE_URL: http://auth-service:3001
+      DOCUMENT_SERVICE_URL: http://document-service:3002
+      AI_SERVICE_URL: http://ai-service:8000
+    depends_on:
+      - auth-service
+      - document-service
+      - ai-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  auth-service:
+    build:
+      context: ./app/backend/auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-caret}:${POSTGRES_PASSWORD:-caret}@postgres:5432/${POSTGRES_DB:-caret_dev}
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  document-service:
+    build:
+      context: ./app/backend/document-service
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-caret}:${POSTGRES_PASSWORD:-caret}@postgres:5432/${POSTGRES_DB:-caret_dev}
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  collab-service:
+    build:
+      context: ./app/backend/collab-service
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-caret}:${POSTGRES_PASSWORD:-caret}@postgres:5432/${POSTGRES_DB:-caret_dev}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-dev_secret_change_in_production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  ai-service:
+    build:
+      context: ./app/backend/ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: development
+      PORT: 8000
+      # asyncpg requires the postgresql+asyncpg:// scheme
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-caret}:${POSTGRES_PASSWORD:-caret}@postgres:5432/${POSTGRES_DB:-caret_dev}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ─────────────────────────────────────────────
+  # Frontend
+  # ─────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./app/frontend
+    ports:
+      - "5173:5173"
+    environment:
+      # Points the frontend at the local Gateway
+      VITE_API_URL: http://localhost:3000/api/v1
+      VITE_COLLAB_WS_URL: ws://localhost:3003
+    depends_on:
+      - api-gateway
+
+volumes:
+  postgres_data:

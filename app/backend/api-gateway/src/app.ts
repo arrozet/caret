@@ -15,6 +15,10 @@ app.use(rate_limit_middleware);
 
 register_routes(app);
 
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "api-gateway" });
+});
+
 app.use(error_middleware);
 
 app.listen(config.PORT, () => {

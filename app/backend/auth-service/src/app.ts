@@ -21,6 +21,10 @@ app.use(express.json());
 // import { RegisterRoutes } from "./routes/routes.js";
 // RegisterRoutes(app);
 
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", service: "auth-service" });
+});
+
 app.use(error_middleware);
 
 app.listen(config.PORT, () => {
