@@ -1,0 +1,34 @@
+{
+  "name": "@caret/auth-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/app.ts",
+    "build": "tsoa spec-and-routes && tsc",
+    "start": "node dist/app.js",
+    "generate": "tsoa spec-and-routes",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "tsoa": "^6.6.0",
+    "swagger-ui-express": "^5.0.1",
+    "drizzle-orm": "^0.43.0",
+    "postgres": "^3.4.5",
+    "dotenv": "^16.5.0",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/swagger-ui-express": "^4.1.8",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0",
+    "tsx": "^4.19.4",
+    "drizzle-kit": "^0.31.0",
+    "vitest": "^3.1.4"
+  }
+}
