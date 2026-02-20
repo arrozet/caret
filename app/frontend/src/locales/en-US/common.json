@@ -1,0 +1,11 @@
+{
+  "app_name": "Caret",
+  "loading": "Loading...",
+  "error": "Something went wrong",
+  "retry": "Retry",
+  "dismiss": "Dismiss",
+  "save": "Save",
+  "cancel": "Cancel",
+  "confirm": "Confirm",
+  "close": "Close"
+}
