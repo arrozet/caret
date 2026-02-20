@@ -75,10 +75,13 @@ Document writing is not as "agile" as code writing with modern AI tools. No majo
 
 **Backend**
 - Node.js + TypeScript (Document Service, Collaboration Service)
+- Express + tsoa (HTTP framework + OpenAPI generation)
+- Drizzle ORM (type-safe SQL ORM for Node.js services)
 - Y.js (CRDT for real-time collaboration)
 - Python + FastAPI (AI Service)
+- SQLAlchemy async (ORM for Python AI service)
 - PydanticAI (agentic framework)
-- Bun + uv (package manager)
+- Bun + uv (package managers)
 
 
 **Database & Storage**
