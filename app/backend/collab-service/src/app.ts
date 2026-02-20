@@ -1,4 +1,3 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { WebSocketServer } from "ws";
 import { validate_ws_token } from "./middleware/auth_middleware.js";
 import { config } from "./lib/config.js";
@@ -6,22 +5,11 @@ import { logger } from "./lib/logger.js";
 
 /**
  * Collaboration Service entry point.
- * Runs an HTTP server that handles both:
- * - HTTP GET /health  → health check (required by Docker and ECS Fargate)
- * - WebSocket upgrade → Y.js CRDT sync (authenticated via JWT query param)
- * Both on the same port to avoid exposing an extra port on ECS.
+ * Pure WebSocket server — no HTTP layer.
+ * Authentication is performed at handshake time via JWT query param:
+ *   wss://collab.caret.page/document/{doc_id}?token={supabase_jwt}
  */
-const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-  if (req.method === "GET" && req.url === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", service: "collab-service" }));
-    return;
-  }
-  res.writeHead(404);
-  res.end();
-});
-
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ port: config.PORT });
 
 wss.on("connection", async (ws, req) => {
   try {
@@ -33,8 +21,6 @@ wss.on("connection", async (ws, req) => {
   }
 });
 
-server.listen(config.PORT, () => {
-  logger.info(`Collaboration Service running on port ${config.PORT}`);
-});
+logger.info(`Collaboration Service WebSocket server running on port ${config.PORT}`);
 
-export default server;
+export default wss;

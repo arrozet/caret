@@ -1,26 +1,6 @@
 services:
 
   # ─────────────────────────────────────────────
-  # Infrastructure
-  # ─────────────────────────────────────────────
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-caret}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-caret}
-      POSTGRES_DB: ${POSTGRES_DB:-caret_dev}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-caret}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # ─────────────────────────────────────────────
   # Backend services
   # ─────────────────────────────────────────────
 
@@ -55,14 +35,6 @@ services:
     environment:
       PORT: 3001
       NODE_ENV: development
-      DATABASE_URL: postgresql://${POSTGRES_USER:-caret}:${POSTGRES_PASSWORD:-caret}@postgres:5432/${POSTGRES_DB:-caret_dev}
-      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
-      SUPABASE_URL: ${SUPABASE_URL:-}
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
       interval: 10s
@@ -78,13 +50,6 @@ services:
     environment:
       PORT: 3002
       NODE_ENV: development
-      DATABASE_URL: postgresql://${POSTGRES_USER:-caret}:${POSTGRES_PASSWORD:-caret}@postgres:5432/${POSTGRES_DB:-caret_dev}
-      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_production}
-      SUPABASE_URL: ${SUPABASE_URL:-}
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1"]
       interval: 10s
@@ -100,13 +65,9 @@ services:
     environment:
       PORT: 3003
       NODE_ENV: development
-      DATABASE_URL: postgresql://${POSTGRES_USER:-caret}:${POSTGRES_PASSWORD:-caret}@postgres:5432/${POSTGRES_DB:-caret_dev}
-      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-dev_secret_change_in_production}
-    depends_on:
-      postgres:
-        condition: service_healthy
+    # Pure WebSocket service — health check verifies the port is accepting connections
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
+      test: ["CMD-SHELL", "nc -z localhost 3003 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -120,15 +81,8 @@ services:
     environment:
       APP_ENV: development
       PORT: 8000
-      # asyncpg requires the postgresql+asyncpg:// scheme
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-caret}:${POSTGRES_PASSWORD:-caret}@postgres:5432/${POSTGRES_DB:-caret_dev}
-      SUPABASE_URL: ${SUPABASE_URL:-}
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -146,11 +100,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      # Points the frontend at the local Gateway
       VITE_API_URL: http://localhost:3000/api/v1
       VITE_COLLAB_WS_URL: ws://localhost:3003
     depends_on:
       - api-gateway
-
-volumes:
-  postgres_data:
