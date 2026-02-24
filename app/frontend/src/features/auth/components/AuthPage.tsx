@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { use_auth_store } from "../../../stores/auth_store";
@@ -110,9 +110,11 @@ export function AuthPage() {
       <div className="w-full max-w-sm">
         {/* Branding */}
         <div className="mb-8 text-center">
-          <h1 className="font-ui text-display tracking-tight text-text-primary">
-            {t("app_name")}
-          </h1>
+          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
+            <h1 className="font-ui text-display tracking-tight text-text-primary">
+              {t("app_name")}
+            </h1>
+          </Link>
           <p className="mt-2 text-ui-base text-text-secondary">
             {t("auth.tagline")}
           </p>

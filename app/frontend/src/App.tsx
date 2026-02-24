@@ -19,7 +19,6 @@ import "./App.css";
  */
 function App() {
   const initialize = use_auth_store((s) => s.initialize);
-  const status = use_auth_store((s) => s.status);
 
   useEffect(() => {
     initialize();
@@ -31,13 +30,7 @@ function App() {
         {/* Public routes */}
         <Route
           path="/"
-          element={
-            status === "authenticated" ? (
-              <Navigate to="/documents" replace />
-            ) : (
-              <LandingPage />
-            )
-          }
+          element={<LandingPage />}
         />
         <Route path="/login" element={<AuthPage />} />
 

@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { useEffect, useRef } from "react";
 import { Button } from "../../../components/ui/Button";
 import { use_theme } from "../../../hooks/use_theme";
+import { use_auth_store } from "../../../stores/auth_store";
 import { Sun, Moon, Monitor, ArrowRight, Type, Users, Sparkles } from "lucide-react";
 import { CaretLogo } from "../../../components/ui/Logo";
 import { AnimatedMockup } from "./AnimatedMockup";
@@ -142,6 +143,29 @@ function MagneticButton({
   );
 }
 
+/**
+ * Trailing dot cursor that smoothly follows the mouse.
+ */
+function TrailingCursor() {
+  const { x, y } = useMousePosition();
+
+  // Center the 24px dot (offset by 12)
+  const cursor_x = useTransform(x, (val) => val - 12);
+  const cursor_y = useTransform(y, (val) => val - 12);
+
+  return (
+    <motion.div
+      className="pointer-events-none fixed top-0 left-0 z-50 hidden h-6 w-6 rounded-full mix-blend-screen md:block"
+      style={{
+        x: cursor_x,
+        y: cursor_y,
+        background: "radial-gradient(circle, rgba(var(--color-accent-caret-rgb), 0.9) 0%, rgba(var(--color-accent-caret-rgb), 0) 70%)",
+        boxShadow: "0 0 20px rgba(var(--color-accent-caret-rgb), 0.5)",
+      }}
+    />
+  );
+}
+
 interface FeatureCardProps {
   icon: React.ReactNode;
   title: string;
@@ -161,8 +185,10 @@ function FeatureCard({ icon, title, description, index }: FeatureCardProps) {
       viewport={{ once: true, margin: "-80px" }}
       transition={{ type: "spring", stiffness: 100, damping: 20, delay: index * 0.1 }}
       whileHover={{ y: -6, transition: { type: "spring", stiffness: 300, damping: 20 } }}
-      className="group flex flex-col gap-6 rounded-md border border-border-subtle bg-surface/40 p-8 hover:border-accent-main/30 hover:bg-surface/70 transition-colors duration-300"
+      className="group relative flex flex-col gap-6 overflow-hidden rounded-md border border-border-subtle bg-surface/40 p-8 hover:bg-surface/70 transition-all duration-300 backdrop-blur-md"
     >
+      <div className="absolute inset-0 bg-gradient-to-br from-accent-main/5 to-accent-caret/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+      <div className="absolute -inset-px rounded-md border-2 border-transparent bg-gradient-to-br from-accent-main/30 to-accent-caret/30 opacity-0 [mask-image:linear-gradient(white,white)] [mask-clip:padding-box,border-box] group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ WebkitMaskComposite: 'xor', maskComposite: 'exclude' }} />
       <motion.div
         whileHover={{ scale: 1.12, rotate: 4 }}
         transition={{ type: "spring", stiffness: 300, damping: 18 }}
@@ -211,6 +237,8 @@ const theme_icons = { light: Sun, dark: Moon, system: Monitor } as const;
 export function LandingPage() {
   const { t } = useTranslation("common");
   const navigate = useNavigate();
+  const status = use_auth_store((s) => s.status);
+  const is_authenticated = status === "authenticated";
   const { theme, toggle_theme } = use_theme();
   const should_reduce_motion = useReducedMotion() ?? false;
   const hero_ref = useRef<HTMLElement>(null);
@@ -229,8 +257,8 @@ export function LandingPage() {
   const glow_opacity = useTransform(hero_progress, [0, 1], [1, 0.4]);
 
   /* Cursor-reactive background glows */
-  const primary_glow = useMotionTemplate`radial-gradient(520px circle at ${mouse_x}px ${mouse_y}px, rgb(var(--color-accent-main-rgb) / 0.13), transparent 65%)`;
-  const caret_glow = useMotionTemplate`radial-gradient(360px circle at ${mouse_x}px ${mouse_y}px, rgb(var(--color-accent-caret-rgb) / 0.07), transparent 72%)`;
+  const primary_glow = useMotionTemplate`radial-gradient(600px circle at ${mouse_x}px ${mouse_y}px, rgb(var(--color-accent-main-rgb) / 0.1), transparent 70%)`;
+  const caret_glow = useMotionTemplate`radial-gradient(400px circle at ${mouse_x}px ${mouse_y}px, rgb(var(--color-accent-caret-rgb) / 0.05), transparent 80%)`;
 
   const ThemeIcon = theme_icons[theme];
 
@@ -241,6 +269,8 @@ export function LandingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-app overflow-x-hidden relative z-0">
+
+      {!should_reduce_motion && <TrailingCursor />}
 
       {/* ── Scroll progress bar ─────────────────────────────────── */}
       <motion.div
@@ -298,8 +328,8 @@ export function LandingPage() {
           >
             <ThemeIcon className="h-4 w-4" />
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => navigate("/login")}>
-            {t("auth.sign_in")}
+          <Button variant="secondary" size="sm" onClick={() => navigate(is_authenticated ? "/documents" : "/login")}>
+            {is_authenticated ? "Dashboard" : t("auth.sign_in")}
           </Button>
         </motion.div>
       </header>
@@ -383,16 +413,17 @@ export function LandingPage() {
                 <Button
                   variant="primary"
                   size="lg"
-                  onClick={() => navigate("/login")}
-                  className="min-w-[180px] shadow-subtle group/btn relative overflow-hidden"
+                  onClick={() => navigate(is_authenticated ? "/documents" : "/login")}
+                  className="min-w-[180px] shadow-subtle group/btn relative overflow-hidden bg-surface text-text-primary border border-border-subtle hover:border-accent-main/50 hover:bg-surface/80 backdrop-blur-md transition-all duration-300"
                 >
-                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
-                  <span className="relative z-10 flex items-center justify-center gap-2">
-                    Get started
+                  <span className="absolute inset-0 bg-gradient-to-r from-accent-main/10 via-transparent to-accent-caret/10 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-500" />
+                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
+                  <span className="relative z-10 flex items-center justify-center gap-2 font-medium">
+                    {is_authenticated ? "Go to Dashboard" : "Get started"}
                     <motion.span
                       animate={should_reduce_motion ? undefined : { x: [0, 3, 0] }}
                       transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      className="inline-flex"
+                      className="inline-flex text-accent-main group-hover/btn:text-accent-caret transition-colors duration-300"
                     >
                       <ArrowRight className="h-4 w-4" />
                     </motion.span>
@@ -407,7 +438,7 @@ export function LandingPage() {
                   onClick={() =>
                     document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })
                   }
-                  className="min-w-[180px]"
+                  className="min-w-[180px] border border-transparent hover:border-border-subtle/50 transition-all duration-300"
                 >
                   Learn more
                 </Button>
@@ -507,11 +538,14 @@ export function LandingPage() {
               <Button
                 variant="primary"
                 size="lg"
-                onClick={() => navigate("/login")}
-                className="min-w-[200px] shadow-elevated"
+                onClick={() => navigate(is_authenticated ? "/documents" : "/login")}
+                className="min-w-[200px] shadow-elevated bg-surface text-text-primary border border-border-subtle hover:border-accent-main/50 relative overflow-hidden group/btn backdrop-blur-md transition-all duration-300"
               >
-                Create your first document
-                <ArrowRight className="h-4 w-4" />
+                <span className="absolute inset-0 bg-gradient-to-r from-accent-main/10 to-accent-caret/10 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-500" />
+                <span className="relative z-10 flex items-center justify-center gap-2 font-medium">
+                  {is_authenticated ? "Go to Dashboard" : "Create your first document"}
+                  <ArrowRight className="h-4 w-4 text-accent-main group-hover/btn:text-accent-caret transition-colors duration-300" />
+                </span>
               </Button>
             </MagneticButton>
           </motion.div>
