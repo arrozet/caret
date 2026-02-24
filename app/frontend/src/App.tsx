@@ -1,35 +1,66 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { use_auth_store } from "./stores/auth_store";
+import { AuthPage } from "./features/auth";
+import { MainLayout } from "./components/layout/MainLayout";
+import { AuthGuard } from "./components/layout/AuthGuard";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
-
+/**
+ * Placeholder home page shown after successful authentication.
+ * Will be replaced with the Tiptap editor in Phase 2.
+ */
+function HomePage() {
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
+    <div className="flex flex-1 items-center justify-center">
+      <div className="text-center">
+        <h2 className="font-document text-display text-text-primary">
+          Welcome to Caret
+        </h2>
+        <p className="mt-2 text-ui-base text-text-secondary">
+          Your AI-first document editor. The editor is coming in Phase 2.
         </p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </div>
+  );
 }
 
-export default App
+/**
+ * Root application component.
+ *
+ * Initializes the Supabase auth session on mount, then sets up
+ * client-side routing with an auth guard for protected routes.
+ */
+function App() {
+  const initialize = use_auth_store((s) => s.initialize);
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public route */}
+        <Route path="/login" element={<AuthPage />} />
+
+        {/* Protected routes */}
+        <Route
+          path="/"
+          element={
+            <AuthGuard>
+              <MainLayout>
+                <HomePage />
+              </MainLayout>
+            </AuthGuard>
+          }
+        />
+
+        {/* Catch-all redirect */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
