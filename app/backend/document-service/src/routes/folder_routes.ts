@@ -69,10 +69,9 @@ export function create_folder_routes(folder_service: FolderService): Router {
         if (parent_folder_id !== null) {
           validate_uuid(parent_folder_id, "parent_folder_id");
         }
-        const pagination = parse_pagination(
-          req.query.limit as string | undefined,
-          req.query.offset as string | undefined,
-        );
+        const raw_limit = req.query.limit as string | undefined;
+        const raw_offset = req.query.offset as string | undefined;
+        const pagination = parse_pagination(raw_limit, raw_offset);
         const user_id = req.auth_user!.sub;
         const result = await folder_service.list_folders(
           workspace_id,
@@ -80,7 +79,9 @@ export function create_folder_routes(folder_service: FolderService): Router {
           parent_folder_id,
           pagination,
         );
-        res.json(result);
+        /* Backward compatibility: return flat array when no pagination params were sent */
+        const wants_pagination = raw_limit !== undefined || raw_offset !== undefined;
+        res.json(wants_pagination ? result : result.data);
       } catch (err) {
         next(err);
       }
@@ -100,17 +101,18 @@ export function create_folder_routes(folder_service: FolderService): Router {
           throw new ValidationError("workspace_id query parameter is required");
         }
         validate_uuid(workspace_id, "workspace_id");
-        const pagination = parse_pagination(
-          req.query.limit as string | undefined,
-          req.query.offset as string | undefined,
-        );
+        const raw_limit = req.query.limit as string | undefined;
+        const raw_offset = req.query.offset as string | undefined;
+        const pagination = parse_pagination(raw_limit, raw_offset);
         const user_id = req.auth_user!.sub;
         const result = await folder_service.list_all_folders(
           workspace_id,
           user_id,
           pagination,
         );
-        res.json(result);
+        /* Backward compatibility: return flat array when no pagination params were sent */
+        const wants_pagination = raw_limit !== undefined || raw_offset !== undefined;
+        res.json(wants_pagination ? result : result.data);
       } catch (err) {
         next(err);
       }

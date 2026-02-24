@@ -49,15 +49,16 @@ export function create_workspace_routes(
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const user_id = req.auth_user!.sub;
-        const pagination = parse_pagination(
-          req.query.limit as string | undefined,
-          req.query.offset as string | undefined,
-        );
+        const raw_limit = req.query.limit as string | undefined;
+        const raw_offset = req.query.offset as string | undefined;
+        const pagination = parse_pagination(raw_limit, raw_offset);
         const result = await workspace_service.list_workspaces(
           user_id,
           pagination,
         );
-        res.json(result);
+        /* Backward compatibility: return flat array when no pagination params were sent */
+        const wants_pagination = raw_limit !== undefined || raw_offset !== undefined;
+        res.json(wants_pagination ? result : result.data);
       } catch (err) {
         next(err);
       }

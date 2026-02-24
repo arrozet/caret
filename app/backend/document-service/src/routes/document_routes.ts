@@ -65,17 +65,18 @@ export function create_document_routes(
           throw new ValidationError("workspace_id query parameter is required");
         }
         validate_uuid(workspace_id, "workspace_id");
-        const pagination = parse_pagination(
-          req.query.limit as string | undefined,
-          req.query.offset as string | undefined,
-        );
+        const raw_limit = req.query.limit as string | undefined;
+        const raw_offset = req.query.offset as string | undefined;
+        const pagination = parse_pagination(raw_limit, raw_offset);
         const user_id = req.auth_user!.sub;
         const result = await document_service.list_documents(
           workspace_id,
           user_id,
           pagination,
         );
-        res.json(result);
+        /* Backward compatibility: return flat array when no pagination params were sent */
+        const wants_pagination = raw_limit !== undefined || raw_offset !== undefined;
+        res.json(wants_pagination ? result : result.data);
       } catch (err) {
         next(err);
       }
