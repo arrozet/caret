@@ -1,6 +1,13 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import type { JSONContent } from "@tiptap/react";
+import TextAlign from "@tiptap/extension-text-align";
+import Placeholder from "@tiptap/extension-placeholder";
+import Highlight from "@tiptap/extension-highlight";
+import { TextStyle } from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
+import FontFamily from "@tiptap/extension-font-family";
+import type { JSONContent, Editor } from "@tiptap/react";
+import { EditorToolbar } from "./EditorToolbar";
 
 /**
  * Props for the CaretEditor component.
@@ -12,14 +19,16 @@ interface CaretEditorProps {
   on_update?: (json: JSONContent, text: string) => void;
   /** Whether the editor is read-only. */
   editable?: boolean;
+  /** Callback to expose the editor instance to parent components. */
+  on_editor_ready?: (editor: Editor) => void;
 }
 
 /**
  * Core Tiptap rich text editor with Swiss Focus typography.
  *
  * Renders within a centered "sheet" container using the `.caret-editor`
- * CSS class defined in index.css. Extensions include StarterKit
- * (headings, bold, italic, lists, blockquote, code).
+ * CSS class defined in index.css. Includes a full formatting toolbar
+ * with bold, italic, underline, headings, lists, alignment, etc.
  *
  * @param props - Editor configuration and callbacks.
  * @returns The rendered editor component.
@@ -28,11 +37,26 @@ export function CaretEditor({
   content,
   on_update,
   editable = true,
+  on_editor_ready,
 }: CaretEditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
+      }),
+      TextStyle,
+      Color,
+      FontFamily.configure({
+        types: ["textStyle"],
+      }),
+      Highlight.configure({
+        multicolor: true,
+      }),
+      TextAlign.configure({
+        types: ["heading", "paragraph"],
+      }),
+      Placeholder.configure({
+        placeholder: "Start writing...",
       }),
     ],
     content: content ?? {
@@ -50,11 +74,22 @@ export function CaretEditor({
         on_update(ed.getJSON(), ed.getText());
       }
     },
+    onCreate: ({ editor: ed }) => {
+      if (on_editor_ready) {
+        on_editor_ready(ed);
+      }
+    },
   });
 
   return (
-    <div className="mx-auto w-full max-w-[var(--max-width-document)] bg-surface rounded-none shadow-subtle p-8 min-h-[60vh]">
-      <EditorContent editor={editor} />
+    <div className="mx-auto w-full max-w-[var(--max-width-document)] bg-surface rounded-none shadow-subtle min-h-[60vh]">
+      {/* Formatting Toolbar */}
+      {editable && editor && <EditorToolbar editor={editor} />}
+
+      {/* Editor Content */}
+      <div className="p-8">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }

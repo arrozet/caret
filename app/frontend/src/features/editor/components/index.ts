@@ -5,5 +5,6 @@
  * be imported by other features directly.
  */
 export { CaretEditor } from "./CaretEditor";
+export { EditorToolbar } from "./EditorToolbar";
 export { DocumentList } from "./DocumentList";
 export { EditorPage } from "./EditorPage";

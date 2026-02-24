@@ -227,6 +227,69 @@ body {
   margin-bottom: 0.5rem;
 }
 
+/* Placeholder text (Tiptap Placeholder extension) */
+.caret-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: rgb(var(--color-text-secondary-rgb) / 0.4);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+/* Underline */
+.caret-editor u {
+  text-decoration: underline;
+}
+
+/* Highlight */
+.caret-editor mark {
+  background-color: rgb(var(--color-warning-rgb) / 0.3);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Horizontal rule */
+.caret-editor hr {
+  border: none;
+  border-top: 1px solid var(--color-border-subtle);
+  margin: 2rem 0;
+}
+
+/* Code blocks */
+.caret-editor pre {
+  background: rgb(var(--color-text-primary-rgb) / 0.05);
+  border-radius: 4px;
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+
+.caret-editor pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Inline code */
+.caret-editor code {
+  background: rgb(var(--color-text-primary-rgb) / 0.06);
+  border-radius: 3px;
+  padding: 0.15rem 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* Strikethrough */
+.caret-editor s {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
 /* Ghost text for AI inline suggestions */
 .caret-editor .suggestion {
   color: var(--color-text-ghost);
