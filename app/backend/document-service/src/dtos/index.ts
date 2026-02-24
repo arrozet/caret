@@ -1,9 +1,12 @@
 /**
  * Data Transfer Objects (DTOs) for the Document Service.
  * DTOs define the shape of HTTP request bodies and response payloads.
- * Validated automatically by tsoa at the Controller boundary.
  *
  * Rule: DTOs are only used in Controllers and Service mapping logic.
  * Rule: DTOs must never be passed to Repositories — map them to Models first.
  */
-export {};
+export type { CreateDocumentDto } from "./create_document_dto.js";
+export type { UpdateDocumentDto } from "./update_document_dto.js";
+export type { DocumentResponseDto } from "./document_response_dto.js";
+export type { CreateWorkspaceDto } from "./create_workspace_dto.js";
+export type { WorkspaceResponseDto } from "./workspace_response_dto.js";
