@@ -6,7 +6,6 @@ import {
   useSpring,
 } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
 
 /* ── Demo content ──────────────────────────────────────────────── */
 
@@ -172,23 +171,23 @@ export function AnimatedMockup() {
 
       {/* ── App top bar ───────────────────────────────────────── */}
       <div className="flex items-center justify-between border-b border-border-subtle bg-surface px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-bold leading-none text-accent-caret">^</span>
-          <span className="font-ui text-[11px] font-semibold text-text-primary">Caret</span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-bold leading-none text-accent-caret">^</span>
+            <span className="font-ui text-[11px] font-semibold text-text-primary">Caret</span>
+          </div>
+          <span className="text-text-secondary text-[10px]">/</span>
+          <span className="font-ui text-[10px] text-text-secondary">Untitled document</span>
         </div>
-        <span className="font-ui text-[10px] text-text-secondary">Untitled document</span>
         <div className="flex items-center gap-2">
           {/* Collaboration presence avatars */}
           <div className="flex -space-x-1.5">
-            <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0A0A0B] bg-accent-main font-ui text-[8px] font-bold text-white">
+            <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0A0A0B] bg-accent-main font-ui text-[8px] font-bold text-white z-10">
               A
             </div>
-            <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0A0A0B] bg-accent-ai font-ui text-[8px] font-bold text-white">
+            <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0A0A0B] bg-[#10B981] font-ui text-[8px] font-bold text-white z-0">
               B
             </div>
-          </div>
-          <div className="rounded-sm border border-accent-ai/40 px-1.5 py-0.5 font-ui text-[9px] font-medium text-accent-ai">
-            AI
           </div>
         </div>
       </div>
@@ -207,9 +206,9 @@ export function AnimatedMockup() {
 
         {/* AI panel */}
         <div className="flex w-44 flex-col border-l border-border-subtle">
-          <div className="flex items-center gap-1.5 border-b border-border-subtle bg-accent-ai/10 px-2.5 py-2">
-            <Sparkles className="h-3 w-3 text-accent-ai" />
-            <span className="font-ui text-[9px] font-medium text-accent-ai">AI Assistant</span>
+          <div className="flex items-center gap-1.5 border-b border-border-subtle bg-accent-ai px-2.5 py-1.5 text-white">
+            <span className="text-[11px] font-bold leading-none">^</span>
+            <span className="font-ui text-[9px] font-semibold tracking-wide">CARET</span>
           </div>
 
           <div className="flex-1 space-y-2.5 overflow-hidden p-2.5 font-ui text-[9px]">
