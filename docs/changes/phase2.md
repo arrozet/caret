@@ -69,3 +69,23 @@ The EditorPage uses a `SaveStatus` enum (`idle | saving | saved | error`) render
 ### 16. Default empty ProseMirror content uses `{type: "paragraph"}` (no empty text nodes)
 
 The initial editor content uses `{type: "doc", content: [{type: "paragraph"}]}` rather than including an empty text node. ProseMirror rejects empty text nodes (`""`), so this avoids runtime warnings.
+
+## Authentication
+
+### 17. Google OAuth sign-in via Supabase
+
+Added a "Continue with Google" button on the AuthPage using `supabase.auth.signInWithOAuth({ provider: "google" })`. The Supabase client already has `detectSessionInUrl: true`, so the OAuth redirect callback is handled automatically by `onAuthStateChange`. No backend changes are required — Supabase manages the OAuth flow entirely. The Google provider must be enabled in the Supabase Dashboard (Authentication > Providers > Google) with valid Google Cloud Console credentials.
+
+### 18. OAuth store method supports multiple providers
+
+The `sign_in_with_oauth` method in `auth_store.ts` accepts a `provider` parameter typed as `"google" | "github"`, making it trivial to add GitHub OAuth later without touching the store layer.
+
+### 19. GoogleIcon as inline SVG component
+
+The Google "G" logo is rendered as an inline SVG with official brand colors (`#4285F4`, `#34A853`, `#FBBC05`, `#EA4335`) rather than using an icon library or image asset. This avoids external dependencies and ensures the icon renders correctly at any size.
+
+## Infrastructure
+
+### 20. ai-service DATABASE_URL scheme normalization
+
+The `ai-service` uses SQLAlchemy's `create_async_engine` with the `asyncpg` driver. Most PostgreSQL providers (including Supabase) supply a `DATABASE_URL` with the `postgresql://` or `postgres://` scheme, which SQLAlchemy resolves to the synchronous `psycopg2` dialect. The `_build_engine()` function in `session.py` rewrites the URL scheme to `postgresql+asyncpg://` before passing it to `create_async_engine`, avoiding a `ModuleNotFoundError` for `psycopg2`.
