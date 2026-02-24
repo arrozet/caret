@@ -53,12 +53,13 @@ const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
  * Fetch the JWKS from Supabase's GoTrue endpoint.
  *
  * Supabase requires the `apikey` header on all GoTrue endpoints,
- * including `/auth/v1/jwks`.  `createRemoteJWKSet` from jose cannot
- * send custom headers, so we fetch manually and use `createLocalJWKSet`.
+ * including the JWKS well-known endpoint.  `createRemoteJWKSet` from
+ * jose cannot send custom headers, so we fetch manually and use
+ * `createLocalJWKSet`.
  */
 async function fetch_jwks(): Promise<JSONWebKeySet> {
   const base = config.SUPABASE_URL.replace(/\/+$/, "");
-  const url = `${base}/auth/v1/jwks`;
+  const url = `${base}/auth/v1/.well-known/jwks.json`;
 
   const response = await fetch(url, {
     headers: {
