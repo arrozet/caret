@@ -8,6 +8,9 @@ RUN bun install --frozen-lockfile
 
 COPY src/ ./src/
 
+# Run as non-root user for security
+USER bun
+
 EXPOSE 3000
 
 # Bun runs TypeScript natively — no build step required
