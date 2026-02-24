@@ -89,3 +89,11 @@ The Google "G" logo is rendered as an inline SVG with official brand colors (`#4
 ### 20. ai-service DATABASE_URL scheme normalization
 
 The `ai-service` uses SQLAlchemy's `create_async_engine` with the `asyncpg` driver. Most PostgreSQL providers (including Supabase) supply a `DATABASE_URL` with the `postgresql://` or `postgres://` scheme, which SQLAlchemy resolves to the synchronous `psycopg2` dialect. The `_build_engine()` function in `session.py` rewrites the URL scheme to `postgresql+asyncpg://` before passing it to `create_async_engine`, avoiding a `ModuleNotFoundError` for `psycopg2`.
+
+### 21. JWT verification via JWKS (ES256) instead of shared secret (HS256)
+
+Supabase now issues JWTs signed with ES256 (asymmetric) rather than the legacy HS256 (symmetric shared secret). Both `auth-service` and `document-service` were updated to verify tokens against Supabase's JWKS endpoint (`{SUPABASE_URL}/auth/v1/jwks`) using the `jose` library instead of `jsonwebtoken`. The `createRemoteJWKSet` function handles key caching and rotation automatically. This eliminates the need for a `JWT_SECRET` environment variable — only `SUPABASE_URL` is required. The `jsonwebtoken` and `@types/jsonwebtoken` dependencies were removed.
+
+### 22. API Gateway strips only `/api/v1` prefix
+
+The gateway proxy previously stripped the full route prefix (e.g., `/api/v1/workspaces` → `/`), but downstream services mount their routes at the resource path (e.g., `/workspaces`). The `proxyReqPathResolver` was fixed to strip only `/api/v1`, so that `/api/v1/workspaces` becomes `/workspaces` on the document-service.

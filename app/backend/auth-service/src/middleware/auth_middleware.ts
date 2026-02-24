@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { createRemoteJWKSet, jwtVerify, errors as jose_errors } from "jose";
 import { UnauthorizedError } from "../lib/errors.js";
 import { config } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
  * Shape of the decoded Supabase JWT payload.
  * Supabase JWTs follow the standard claims plus custom fields.
  */
-interface SupabaseJwtPayload {
+export interface SupabaseJwtPayload {
   /** Subject — the Supabase user ID (UUID). */
   sub: string;
   /** Email address from Supabase Auth. */
@@ -37,11 +37,53 @@ declare global {
 }
 
 /**
+ * Build the JWKS URL from the Supabase project URL.
+ * Supabase exposes its public signing keys at `/auth/v1/jwks`.
+ */
+function get_jwks_url(): URL {
+  const base = config.SUPABASE_URL.replace(/\/+$/, "");
+  return new URL(`${base}/auth/v1/jwks`);
+}
+
+/**
+ * Cached JWKS remote key set.
+ * `createRemoteJWKSet` handles caching, rotation, and refetch internally.
+ */
+let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+/**
+ * Get or create the cached JWKS key set.
+ * Lazily initialized to avoid errors when SUPABASE_URL is not yet configured.
+ */
+function get_jwks(): ReturnType<typeof createRemoteJWKSet> {
+  if (!jwks) {
+    jwks = createRemoteJWKSet(get_jwks_url());
+  }
+  return jwks;
+}
+
+/**
+ * Reset the cached JWKS — used by tests to inject a fresh key set.
+ */
+export function reset_jwks_cache(): void {
+  jwks = null;
+}
+
+/**
+ * Override the JWKS resolver — used by tests to provide a local key set.
+ */
+export function set_jwks_for_testing(
+  test_jwks: ReturnType<typeof createRemoteJWKSet>,
+): void {
+  jwks = test_jwks;
+}
+
+/**
  * JWT authentication guard.
  *
- * Validates the Bearer token from the Authorization header using
- * the Supabase JWT secret. On success, attaches the decoded payload
- * to `req.auth_user` for downstream handlers.
+ * Validates the Bearer token from the Authorization header by verifying
+ * the signature against Supabase's JWKS endpoint (ES256).  On success,
+ * attaches the decoded payload to `req.auth_user` for downstream handlers.
  *
  * Throws UnauthorizedError if the token is missing, malformed, or invalid.
  */
@@ -59,14 +101,16 @@ export async function auth_middleware(
 
     const token = auth_header.slice(7); /* Strip "Bearer " prefix */
 
-    if (!config.JWT_SECRET) {
-      logger.error("JWT_SECRET is not configured — cannot validate tokens");
+    if (!config.SUPABASE_URL) {
+      logger.error("SUPABASE_URL is not configured — cannot validate tokens");
       throw new UnauthorizedError("Authentication is not configured");
     }
 
-    const decoded = jwt.verify(token, config.JWT_SECRET, {
-      algorithms: ["HS256"],
-    }) as SupabaseJwtPayload;
+    const { payload } = await jwtVerify(token, get_jwks(), {
+      algorithms: ["ES256"],
+    });
+
+    const decoded = payload as unknown as SupabaseJwtPayload;
 
     /* Validate required claims */
     if (!decoded.sub) {
@@ -81,7 +125,8 @@ export async function auth_middleware(
       return;
     }
 
-    if (err instanceof jwt.JsonWebTokenError) {
+    /* Any jose-related error (invalid signature, expired, malformed, etc.) */
+    if (err instanceof jose_errors.JOSEError) {
       next(new UnauthorizedError("Invalid or expired token"));
       return;
     }
