@@ -8,6 +8,7 @@ import {
   validate_uuid,
   validate_non_empty_string,
   validate_optional_uuid,
+  parse_pagination,
 } from "../lib/validation.js";
 
 /**
@@ -53,7 +54,7 @@ export function create_document_routes(
 
   /**
    * GET / — List documents for a workspace.
-   * Query: workspace_id (required).
+   * Query: workspace_id (required), limit (optional), offset (optional).
    */
   router.get(
     "/",
@@ -64,10 +65,15 @@ export function create_document_routes(
           throw new ValidationError("workspace_id query parameter is required");
         }
         validate_uuid(workspace_id, "workspace_id");
+        const pagination = parse_pagination(
+          req.query.limit as string | undefined,
+          req.query.offset as string | undefined,
+        );
         const user_id = req.auth_user!.sub;
         const result = await document_service.list_documents(
           workspace_id,
           user_id,
+          pagination,
         );
         res.json(result);
       } catch (err) {

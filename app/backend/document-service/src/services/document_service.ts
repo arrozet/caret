@@ -4,6 +4,7 @@ import type { WorkspaceRepository } from "../repositories/workspace_repository.j
 import type { CreateDocumentDto } from "../dtos/create_document_dto.js";
 import type { UpdateDocumentDto } from "../dtos/update_document_dto.js";
 import type { DocumentResponseDto } from "../dtos/document_response_dto.js";
+import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
 import { NotFoundError, ForbiddenError } from "../lib/errors.js";
 
 /**
@@ -115,16 +116,18 @@ export class DocumentService {
   }
 
   /**
-   * List all documents in a workspace.
+   * List all documents in a workspace with pagination.
    * The caller must be an active member of the workspace.
    * @param workspace_id - Workspace UUID scope.
    * @param user_id - Authenticated user's UUID.
-   * @returns Array of document response DTOs (without content).
+   * @param pagination - Limit and offset for pagination.
+   * @returns Paginated array of document response DTOs (without content).
    */
   async list_documents(
     workspace_id: string,
     user_id: string,
-  ): Promise<DocumentResponseDto[]> {
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<DocumentResponseDto>> {
     const membership = await this.workspace_repo.find_membership(
       workspace_id,
       user_id,
@@ -133,8 +136,18 @@ export class DocumentService {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const docs = await this.document_repo.list_by_workspace(workspace_id);
-    return docs.map((doc) => this.to_response_dto(doc));
+    const { data, total } = await this.document_repo.list_by_workspace(
+      workspace_id,
+      pagination,
+    );
+    return {
+      data: data.map((doc) => this.to_response_dto(doc)),
+      pagination: {
+        total,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      },
+    };
   }
 
   /**

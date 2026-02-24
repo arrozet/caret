@@ -1,6 +1,7 @@
 import type { WorkspaceRepository } from "../repositories/workspace_repository.js";
 import type { CreateWorkspaceDto } from "../dtos/create_workspace_dto.js";
 import type { WorkspaceResponseDto } from "../dtos/workspace_response_dto.js";
+import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
 import { NotFoundError, ForbiddenError } from "../lib/errors.js";
 
 /**
@@ -76,25 +77,39 @@ export class WorkspaceService {
   }
 
   /**
-   * List all workspaces the authenticated user belongs to.
+   * List all workspaces the authenticated user belongs to, with pagination.
    * @param user_id - Authenticated user's UUID.
-   * @returns Array of workspace response DTOs.
+   * @param pagination - Limit and offset for pagination.
+   * @returns Paginated array of workspace response DTOs.
    */
-  async list_workspaces(user_id: string): Promise<WorkspaceResponseDto[]> {
-    const rows = await this.workspace_repo.list_by_user(user_id);
-    return rows.map((row) =>
-      this.to_response_dto(
-        {
-          id: row.id,
-          slug: row.slug,
-          name: row.name,
-          created_by_user_id: row.created_by_user_id,
-          created_at: row.created_at,
-          updated_at: row.updated_at,
-        },
-        row.role,
-      ),
+  async list_workspaces(
+    user_id: string,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<WorkspaceResponseDto>> {
+    const { data: rows, total } = await this.workspace_repo.list_by_user(
+      user_id,
+      pagination,
     );
+    return {
+      data: rows.map((row) =>
+        this.to_response_dto(
+          {
+            id: row.id,
+            slug: row.slug,
+            name: row.name,
+            created_by_user_id: row.created_by_user_id,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+          },
+          row.role,
+        ),
+      ),
+      pagination: {
+        total,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      },
+    };
   }
 
   /**

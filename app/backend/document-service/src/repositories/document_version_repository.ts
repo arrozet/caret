@@ -1,6 +1,7 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
+import type { PaginationParams } from "../lib/validation.js";
 
 /**
  * Repository for document version snapshot operations.
@@ -43,15 +44,31 @@ export class DocumentVersionRepository {
   }
 
   /**
-   * List all versions for a document, ordered by newest first.
+   * List versions for a document with pagination, ordered by newest first.
    * @param document_id - Document UUID.
-   * @returns Array of version rows.
+   * @param pagination - Limit and offset for pagination.
+   * @returns Object with data array and total count.
    */
-  async list_by_document(document_id: string) {
-    return this.db
-      .select()
-      .from(schema.document_versions)
-      .where(eq(schema.document_versions.document_id, document_id))
-      .orderBy(desc(schema.document_versions.version_number));
+  async list_by_document(
+    document_id: string,
+    pagination: PaginationParams,
+  ): Promise<{ data: (typeof schema.document_versions.$inferSelect)[]; total: number }> {
+    const where_clause = eq(schema.document_versions.document_id, document_id);
+
+    const [data, count_result] = await Promise.all([
+      this.db
+        .select()
+        .from(schema.document_versions)
+        .where(where_clause)
+        .orderBy(desc(schema.document_versions.version_number))
+        .limit(pagination.limit)
+        .offset(pagination.offset),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.document_versions)
+        .where(where_clause),
+    ]);
+
+    return { data, total: count_result[0].count };
   }
 }

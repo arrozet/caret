@@ -3,6 +3,7 @@ import type { WorkspaceRepository } from "../repositories/workspace_repository.j
 import type { CreateFolderDto } from "../dtos/create_folder_dto.js";
 import type { UpdateFolderDto } from "../dtos/update_folder_dto.js";
 import type { FolderResponseDto } from "../dtos/folder_response_dto.js";
+import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
 import { NotFoundError, ForbiddenError } from "../lib/errors.js";
 
 /**
@@ -99,18 +100,20 @@ export class FolderService {
   }
 
   /**
-   * List folders in a workspace, optionally filtered by parent folder.
+   * List folders in a workspace, optionally filtered by parent folder, with pagination.
    * The caller must be an active member of the workspace.
    * @param workspace_id - Workspace UUID scope.
    * @param user_id - Authenticated user's UUID.
    * @param parent_folder_id - Parent folder UUID (null = list root folders).
-   * @returns Array of folder response DTOs.
+   * @param pagination - Limit and offset for pagination.
+   * @returns Paginated array of folder response DTOs.
    */
   async list_folders(
     workspace_id: string,
     user_id: string,
     parent_folder_id: string | null = null,
-  ): Promise<FolderResponseDto[]> {
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<FolderResponseDto>> {
     const membership = await this.workspace_repo.find_membership(
       workspace_id,
       user_id,
@@ -119,24 +122,34 @@ export class FolderService {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const folders = await this.folder_repo.list_by_workspace(
+    const { data, total } = await this.folder_repo.list_by_workspace(
       workspace_id,
       parent_folder_id,
+      pagination,
     );
-    return folders.map((folder) => this.to_response_dto(folder));
+    return {
+      data: data.map((folder) => this.to_response_dto(folder)),
+      pagination: {
+        total,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      },
+    };
   }
 
   /**
-   * List all folders in a workspace (flat list for tree building).
+   * List all folders in a workspace (flat list for tree building), with pagination.
    * The caller must be an active member of the workspace.
    * @param workspace_id - Workspace UUID scope.
    * @param user_id - Authenticated user's UUID.
-   * @returns Array of all folder response DTOs in the workspace.
+   * @param pagination - Limit and offset for pagination.
+   * @returns Paginated array of all folder response DTOs in the workspace.
    */
   async list_all_folders(
     workspace_id: string,
     user_id: string,
-  ): Promise<FolderResponseDto[]> {
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<FolderResponseDto>> {
     const membership = await this.workspace_repo.find_membership(
       workspace_id,
       user_id,
@@ -145,8 +158,18 @@ export class FolderService {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const folders = await this.folder_repo.list_all_by_workspace(workspace_id);
-    return folders.map((folder) => this.to_response_dto(folder));
+    const { data, total } = await this.folder_repo.list_all_by_workspace(
+      workspace_id,
+      pagination,
+    );
+    return {
+      data: data.map((folder) => this.to_response_dto(folder)),
+      pagination: {
+        total,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      },
+    };
   }
 
   /**

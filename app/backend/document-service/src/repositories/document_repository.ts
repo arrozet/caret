@@ -1,6 +1,7 @@
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
+import type { PaginationParams } from "../lib/validation.js";
 
 /**
  * Repository for document CRUD operations.
@@ -42,21 +43,35 @@ export class DocumentRepository {
   }
 
   /**
-   * List all non-deleted documents in a workspace, ordered by most recently updated.
+   * List non-deleted documents in a workspace with pagination, ordered by most recently updated.
    * @param workspace_id - Workspace UUID scope.
-   * @returns Array of document rows.
+   * @param pagination - Limit and offset for pagination.
+   * @returns Object with data array and total count.
    */
-  async list_by_workspace(workspace_id: string) {
-    return this.db
-      .select()
-      .from(schema.documents)
-      .where(
-        and(
-          eq(schema.documents.workspace_id, workspace_id),
-          isNull(schema.documents.deleted_at),
-        ),
-      )
-      .orderBy(desc(schema.documents.updated_at));
+  async list_by_workspace(
+    workspace_id: string,
+    pagination: PaginationParams,
+  ): Promise<{ data: (typeof schema.documents.$inferSelect)[]; total: number }> {
+    const where_clause = and(
+      eq(schema.documents.workspace_id, workspace_id),
+      isNull(schema.documents.deleted_at),
+    );
+
+    const [data, count_result] = await Promise.all([
+      this.db
+        .select()
+        .from(schema.documents)
+        .where(where_clause)
+        .orderBy(desc(schema.documents.updated_at))
+        .limit(pagination.limit)
+        .offset(pagination.offset),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.documents)
+        .where(where_clause),
+    ]);
+
+    return { data, total: count_result[0].count };
   }
 
   /**

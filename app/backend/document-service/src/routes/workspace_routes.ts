@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import type { WorkspaceService } from "../services/workspace_service.js";
 import type { CreateWorkspaceDto } from "../dtos/create_workspace_dto.js";
-import { validate_non_empty_string, validate_uuid } from "../lib/validation.js";
+import { validate_non_empty_string, validate_uuid, parse_pagination } from "../lib/validation.js";
 
 /**
  * Build Express Router for workspace CRUD endpoints.
@@ -42,13 +42,21 @@ export function create_workspace_routes(
 
   /**
    * GET / — List workspaces the authenticated user belongs to.
+   * Query: limit (optional), offset (optional).
    */
   router.get(
     "/",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const user_id = req.auth_user!.sub;
-        const result = await workspace_service.list_workspaces(user_id);
+        const pagination = parse_pagination(
+          req.query.limit as string | undefined,
+          req.query.offset as string | undefined,
+        );
+        const result = await workspace_service.list_workspaces(
+          user_id,
+          pagination,
+        );
         res.json(result);
       } catch (err) {
         next(err);

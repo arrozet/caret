@@ -193,25 +193,30 @@ describe("DocumentService", () => {
   describe("list_documents", () => {
     it("returns all documents in workspace without content", async () => {
       workspace_repo.find_membership.mockResolvedValue(make_membership());
-      document_repo.list_by_workspace.mockResolvedValue([
-        make_doc({ id: "doc-1", title: "First" }),
-        make_doc({ id: "doc-2", title: "Second" }),
-      ]);
+      document_repo.list_by_workspace.mockResolvedValue({
+        data: [
+          make_doc({ id: "doc-1", title: "First" }),
+          make_doc({ id: "doc-2", title: "Second" }),
+        ],
+        total: 2,
+      });
 
-      const result = await service.list_documents(WORKSPACE_ID, USER_ID);
+      const result = await service.list_documents(WORKSPACE_ID, USER_ID, { limit: 50, offset: 0 });
 
-      expect(result).toHaveLength(2);
-      expect(result[0].title).toBe("First");
-      expect(result[1].title).toBe("Second");
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].title).toBe("First");
+      expect(result.data[1].title).toBe("Second");
       /* Content should not be included in list responses */
-      expect(result[0].content_json).toBeUndefined();
+      expect(result.data[0].content_json).toBeUndefined();
+      /* Pagination envelope */
+      expect(result.pagination).toEqual({ total: 2, limit: 50, offset: 0 });
     });
 
     it("throws ForbiddenError when user is not a member", async () => {
       workspace_repo.find_membership.mockResolvedValue(null);
 
       await expect(
-        service.list_documents(WORKSPACE_ID, USER_ID),
+        service.list_documents(WORKSPACE_ID, USER_ID, { limit: 50, offset: 0 }),
       ).rejects.toThrow(ForbiddenError);
     });
   });

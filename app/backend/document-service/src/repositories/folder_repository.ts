@@ -1,6 +1,7 @@
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
+import type { PaginationParams } from "../lib/validation.js";
 
 /**
  * Repository for folder CRUD operations.
@@ -44,16 +45,18 @@ export class FolderRepository {
   }
 
   /**
-   * List all non-deleted folders in a workspace, optionally filtered by parent.
+   * List non-deleted folders in a workspace with pagination, optionally filtered by parent.
    * Results are ordered by sort_order (nulls last), then by name.
    * @param workspace_id - Workspace UUID scope.
    * @param parent_folder_id - Parent folder UUID (null = list root folders).
-   * @returns Array of folder rows.
+   * @param pagination - Limit and offset for pagination.
+   * @returns Object with data array and total count.
    */
   async list_by_workspace(
     workspace_id: string,
     parent_folder_id: string | null = null,
-  ) {
+    pagination: PaginationParams,
+  ): Promise<{ data: (typeof schema.folders.$inferSelect)[]; total: number }> {
     const conditions = [
       eq(schema.folders.workspace_id, workspace_id),
       isNull(schema.folders.deleted_at),
@@ -67,30 +70,56 @@ export class FolderRepository {
       );
     }
 
-    return this.db
-      .select()
-      .from(schema.folders)
-      .where(and(...conditions))
-      .orderBy(schema.folders.sort_order, schema.folders.name);
+    const where_clause = and(...conditions);
+
+    const [data, count_result] = await Promise.all([
+      this.db
+        .select()
+        .from(schema.folders)
+        .where(where_clause)
+        .orderBy(schema.folders.sort_order, schema.folders.name)
+        .limit(pagination.limit)
+        .offset(pagination.offset),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.folders)
+        .where(where_clause),
+    ]);
+
+    return { data, total: count_result[0].count };
   }
 
   /**
-   * List all non-deleted folders in a workspace (flat list, no parent filter).
+   * List all non-deleted folders in a workspace with pagination (flat list, no parent filter).
    * Useful for building tree structures on the client.
    * @param workspace_id - Workspace UUID scope.
-   * @returns Array of all folder rows in the workspace.
+   * @param pagination - Limit and offset for pagination.
+   * @returns Object with data array and total count.
    */
-  async list_all_by_workspace(workspace_id: string) {
-    return this.db
-      .select()
-      .from(schema.folders)
-      .where(
-        and(
-          eq(schema.folders.workspace_id, workspace_id),
-          isNull(schema.folders.deleted_at),
-        ),
-      )
-      .orderBy(schema.folders.sort_order, schema.folders.name);
+  async list_all_by_workspace(
+    workspace_id: string,
+    pagination: PaginationParams,
+  ): Promise<{ data: (typeof schema.folders.$inferSelect)[]; total: number }> {
+    const where_clause = and(
+      eq(schema.folders.workspace_id, workspace_id),
+      isNull(schema.folders.deleted_at),
+    );
+
+    const [data, count_result] = await Promise.all([
+      this.db
+        .select()
+        .from(schema.folders)
+        .where(where_clause)
+        .orderBy(schema.folders.sort_order, schema.folders.name)
+        .limit(pagination.limit)
+        .offset(pagination.offset),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.folders)
+        .where(where_clause),
+    ]);
+
+    return { data, total: count_result[0].count };
   }
 
   /**
