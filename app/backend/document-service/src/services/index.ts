@@ -6,4 +6,5 @@
  * Rule: no HTTP concepts (req, res, status codes) inside Services.
  * Rule: no direct ORM/SQL — delegate all DB access to Repositories.
  */
-export {};
+export { DocumentService } from "./document_service.js";
+export { WorkspaceService } from "./workspace_service.js";
