@@ -35,6 +35,11 @@ services:
     environment:
       PORT: 3001
       NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
       interval: 10s
@@ -50,6 +55,11 @@ services:
     environment:
       PORT: 3002
       NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1"]
       interval: 10s
@@ -65,6 +75,9 @@ services:
     environment:
       PORT: 3003
       NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      JWT_SECRET: ${JWT_SECRET:-}
     # Pure WebSocket service — health check verifies the port is accepting connections
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 3003 || exit 1"]
@@ -81,6 +94,9 @@ services:
     environment:
       APP_ENV: development
       PORT: 8000
+      DATABASE_URL: ${DATABASE_URL:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      JWT_SECRET: ${JWT_SECRET:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     healthcheck:
@@ -97,10 +113,15 @@ services:
   frontend:
     build:
       context: ./app/frontend
+      args:
+        VITE_SUPABASE_URL: ${SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
     ports:
       - "5173:5173"
     environment:
       VITE_API_URL: http://localhost:3000/api/v1
       VITE_COLLAB_WS_URL: ws://localhost:3003
+      VITE_SUPABASE_URL: ${SUPABASE_URL:-}
+      VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
     depends_on:
       - api-gateway
