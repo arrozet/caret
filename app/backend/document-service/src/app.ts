@@ -1,26 +1,59 @@
 import "reflect-metadata";
 import express from "express";
 import { error_middleware } from "./middleware/error_middleware.js";
+import { auth_middleware } from "./middleware/auth_middleware.js";
 import { config } from "./lib/config.js";
 import { logger } from "./lib/logger.js";
+import { db } from "./db/client.js";
+import { DocumentRepository } from "./repositories/document_repository.js";
+import { WorkspaceRepository } from "./repositories/workspace_repository.js";
+import { DocumentVersionRepository } from "./repositories/document_version_repository.js";
+import { DocumentService } from "./services/document_service.js";
+import { WorkspaceService } from "./services/workspace_service.js";
+import { create_document_routes } from "./routes/document_routes.js";
+import { create_workspace_routes } from "./routes/workspace_routes.js";
 
 /**
  * Express app entry point for the Document Service.
- * tsoa-generated routes and OpenAPI spec are registered here.
- * Repositories are instantiated here and injected into Services via DI.
+ * Instantiates repositories, services, and wires routes with DI.
  */
 const app = express();
 
 app.use(express.json());
 
-// tsoa-generated routes will be registered here after running `bun run generate`
-// import { RegisterRoutes } from "./routes/routes.js";
-// RegisterRoutes(app);
+/* ============================================================
+   Dependency Injection — manual wiring (no DI container)
+   ============================================================ */
 
+const document_repo = new DocumentRepository(db);
+const workspace_repo = new WorkspaceRepository(db);
+const version_repo = new DocumentVersionRepository(db);
+
+const document_service = new DocumentService(
+  document_repo,
+  version_repo,
+  workspace_repo,
+);
+const workspace_service = new WorkspaceService(workspace_repo);
+
+/* ============================================================
+   Routes
+   ============================================================ */
+
+/** Health check — unauthenticated. */
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "document-service" });
 });
 
+/** Protected API routes — auth_middleware validates JWT first. */
+app.use("/documents", auth_middleware, create_document_routes(document_service));
+app.use(
+  "/workspaces",
+  auth_middleware,
+  create_workspace_routes(workspace_service),
+);
+
+/** Global error handler — must be last. */
 app.use(error_middleware);
 
 app.listen(config.PORT, () => {
