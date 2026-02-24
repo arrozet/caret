@@ -4,6 +4,11 @@ import type { DocumentService } from "../services/document_service.js";
 import type { CreateDocumentDto } from "../dtos/create_document_dto.js";
 import type { UpdateDocumentDto } from "../dtos/update_document_dto.js";
 import { ValidationError } from "../lib/errors.js";
+import {
+  validate_uuid,
+  validate_non_empty_string,
+  validate_optional_uuid,
+} from "../lib/validation.js";
 
 /**
  * Build Express Router for document CRUD endpoints.
@@ -33,9 +38,10 @@ export function create_document_routes(
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const dto = req.body as CreateDocumentDto;
-        if (!dto.title || !dto.workspace_id) {
-          throw new ValidationError("title and workspace_id are required");
-        }
+        validate_non_empty_string(dto.title, "title");
+        validate_non_empty_string(dto.workspace_id, "workspace_id");
+        validate_uuid(dto.workspace_id, "workspace_id");
+        validate_optional_uuid(dto.folder_id, "folder_id");
         const user_id = req.auth_user!.sub;
         const result = await document_service.create_document(dto, user_id);
         res.status(201).json(result);
@@ -57,6 +63,7 @@ export function create_document_routes(
         if (!workspace_id) {
           throw new ValidationError("workspace_id query parameter is required");
         }
+        validate_uuid(workspace_id, "workspace_id");
         const user_id = req.auth_user!.sub;
         const result = await document_service.list_documents(
           workspace_id,
@@ -76,11 +83,10 @@ export function create_document_routes(
     "/:id",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
+        const id = req.params.id as string;
+        validate_uuid(id, "id");
         const user_id = req.auth_user!.sub;
-        const result = await document_service.get_document(
-          req.params.id,
-          user_id,
-        );
+        const result = await document_service.get_document(id, user_id);
         res.json(result);
       } catch (err) {
         next(err);
@@ -95,10 +101,16 @@ export function create_document_routes(
     "/:id",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
+        const id = req.params.id as string;
+        validate_uuid(id, "id");
         const dto = req.body as UpdateDocumentDto;
+        /* title is optional on update, but if provided must be non-empty */
+        if (dto.title !== undefined) {
+          validate_non_empty_string(dto.title, "title");
+        }
         const user_id = req.auth_user!.sub;
         const result = await document_service.update_document(
-          req.params.id,
+          id,
           dto,
           user_id,
         );
@@ -116,8 +128,10 @@ export function create_document_routes(
     "/:id",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
+        const id = req.params.id as string;
+        validate_uuid(id, "id");
         const user_id = req.auth_user!.sub;
-        await document_service.delete_document(req.params.id, user_id);
+        await document_service.delete_document(id, user_id);
         res.status(204).send();
       } catch (err) {
         next(err);

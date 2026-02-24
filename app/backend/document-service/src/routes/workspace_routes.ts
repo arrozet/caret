@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import type { WorkspaceService } from "../services/workspace_service.js";
 import type { CreateWorkspaceDto } from "../dtos/create_workspace_dto.js";
-import { ValidationError } from "../lib/errors.js";
+import { validate_non_empty_string, validate_uuid } from "../lib/validation.js";
 
 /**
  * Build Express Router for workspace CRUD endpoints.
@@ -30,9 +30,7 @@ export function create_workspace_routes(
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const dto = req.body as CreateWorkspaceDto;
-        if (!dto.name) {
-          throw new ValidationError("name is required");
-        }
+        validate_non_empty_string(dto.name, "name");
         const user_id = req.auth_user!.sub;
         const result = await workspace_service.create_workspace(dto, user_id);
         res.status(201).json(result);
@@ -65,11 +63,10 @@ export function create_workspace_routes(
     "/:id",
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
+        const id = req.params.id as string;
+        validate_uuid(id, "id");
         const user_id = req.auth_user!.sub;
-        const result = await workspace_service.get_workspace(
-          req.params.id,
-          user_id,
-        );
+        const result = await workspace_service.get_workspace(id, user_id);
         res.json(result);
       } catch (err) {
         next(err);
