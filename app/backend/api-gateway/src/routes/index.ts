@@ -33,9 +33,10 @@ function create_proxy(
  * The frontend always calls the Gateway; it never contacts services directly.
  *
  * Route map:
- *   /api/v1/auth/*         → auth-service   (port 3001)
+ *   /api/v1/auth/*         → auth-service     (port 3001)
  *   /api/v1/documents/*    → document-service (port 3002)
- *   /api/v1/ai/*           → ai-service      (port 8000)
+ *   /api/v1/workspaces/*   → document-service (port 3002)
+ *   /api/v1/ai/*           → ai-service       (port 8000)
  */
 export function register_routes(app: Express): void {
   /* --- Auth Service --- */
@@ -50,6 +51,12 @@ export function register_routes(app: Express): void {
     create_proxy(config.DOCUMENT_SERVICE_URL, "/api/v1/documents"),
   );
 
+  /* --- Workspaces (handled by document-service) --- */
+  app.use(
+    "/api/v1/workspaces",
+    create_proxy(config.DOCUMENT_SERVICE_URL, "/api/v1/workspaces"),
+  );
+
   /* --- AI Service --- */
   app.use(
     "/api/v1/ai",
@@ -61,7 +68,7 @@ export function register_routes(app: Express): void {
     res.json({
       service: "caret-api-gateway",
       version: "v1",
-      endpoints: ["/api/v1/auth", "/api/v1/documents", "/api/v1/ai"],
+      endpoints: ["/api/v1/auth", "/api/v1/documents", "/api/v1/workspaces", "/api/v1/ai"],
     });
   });
 }
