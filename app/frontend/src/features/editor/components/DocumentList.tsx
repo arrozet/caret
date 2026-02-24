@@ -1,18 +1,33 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, FileText, Loader2 } from "lucide-react";
+import {
+  Plus,
+  FileText,
+  Loader2,
+  Trash2,
+  Pencil,
+  Check,
+  X,
+  MoreVertical,
+} from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { use_documents } from "../hooks/use_documents";
 import { use_workspaces, use_create_workspace } from "../hooks/use_workspaces";
-import { create_document } from "../api/document_api";
+import {
+  create_document,
+  update_document,
+  delete_document,
+} from "../api/document_api";
+import type { DocumentResponse } from "../api/document_api";
 
 /**
  * Document list page.
  *
  * Shows the user's workspaces and documents. Provides a "New document"
- * button to create documents. If no workspace exists, the user is
- * prompted to create one first (auto-created on first visit).
+ * button to create documents, and per-document actions: rename, delete.
+ * If no workspace exists, the user is prompted to create one first
+ * (auto-created on first visit).
  */
 export function DocumentList() {
   const navigate = useNavigate();
@@ -115,31 +130,239 @@ export function DocumentList() {
         {!is_loading && documents && documents.length > 0 && (
           <ul className="space-y-2">
             {documents.map((doc) => (
-              <li key={doc.id}>
-                <button
-                  onClick={() => navigate(`/documents/${doc.id}`)}
-                  className="flex w-full items-center gap-3 rounded-base bg-surface p-4 text-left shadow-subtle transition-shadow hover:shadow-elevated"
-                >
-                  <FileText className="h-5 w-5 shrink-0 text-text-secondary" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-ui-lg font-medium text-text-primary">
-                      {doc.title || "Untitled"}
-                    </p>
-                    <p className="text-ui-sm text-text-secondary">
-                      Updated{" "}
-                      {new Date(doc.updated_at).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </div>
-                </button>
-              </li>
+              <DocumentCard
+                key={doc.id}
+                document={doc}
+                on_navigate={() => navigate(`/documents/${doc.id}`)}
+              />
             ))}
           </ul>
         )}
       </div>
     </div>
+  );
+}
+
+/* ============================================================
+   DocumentCard — Individual document row with actions
+   ============================================================ */
+
+interface DocumentCardProps {
+  /** Document data. */
+  document: DocumentResponse;
+  /** Navigate to the editor page. */
+  on_navigate: () => void;
+}
+
+/**
+ * Single document card in the list. Supports inline rename
+ * and delete with confirmation.
+ */
+function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
+  const query_client = useQueryClient();
+  const [is_renaming, set_is_renaming] = useState(false);
+  const [rename_value, set_rename_value] = useState(doc.title);
+  const [show_menu, set_show_menu] = useState(false);
+  const [show_delete_confirm, set_show_delete_confirm] = useState(false);
+  const rename_input_ref = useRef<HTMLInputElement>(null);
+  const menu_ref = useRef<HTMLDivElement>(null);
+
+  const rename_mutation = useMutation({
+    mutationFn: (title: string) => update_document(doc.id, { title }),
+    onSuccess: () => {
+      query_client.invalidateQueries({ queryKey: ["documents"] });
+      set_is_renaming(false);
+    },
+  });
+
+  const delete_mutation = useMutation({
+    mutationFn: () => delete_document(doc.id),
+    onSuccess: () => {
+      query_client.invalidateQueries({ queryKey: ["documents"] });
+      set_show_delete_confirm(false);
+    },
+  });
+
+  /** Start rename mode. */
+  const start_rename = useCallback(() => {
+    set_rename_value(doc.title);
+    set_is_renaming(true);
+    set_show_menu(false);
+    setTimeout(() => rename_input_ref.current?.select(), 50);
+  }, [doc.title]);
+
+  /** Commit the rename. */
+  const commit_rename = useCallback(async () => {
+    const trimmed = rename_value.trim();
+    if (!trimmed || trimmed === doc.title) {
+      set_is_renaming(false);
+      return;
+    }
+    await rename_mutation.mutateAsync(trimmed);
+  }, [rename_value, doc.title, rename_mutation]);
+
+  /** Cancel the rename. */
+  const cancel_rename = useCallback(() => {
+    set_rename_value(doc.title);
+    set_is_renaming(false);
+  }, [doc.title]);
+
+  /** Handle keyboard events in rename input. */
+  const handle_rename_key_down = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit_rename();
+      } else if (e.key === "Escape") {
+        cancel_rename();
+      }
+    },
+    [commit_rename, cancel_rename],
+  );
+
+  /* Rename mode */
+  if (is_renaming) {
+    return (
+      <li className="flex items-center gap-2 rounded-base bg-surface p-4 shadow-subtle border border-accent-main/30">
+        <FileText className="h-5 w-5 shrink-0 text-accent-main" />
+        <input
+          ref={rename_input_ref}
+          type="text"
+          value={rename_value}
+          onChange={(e) => set_rename_value(e.target.value)}
+          onKeyDown={handle_rename_key_down}
+          onBlur={commit_rename}
+          className="min-w-0 flex-1 bg-transparent border-none outline-none text-ui-lg font-medium text-text-primary placeholder:text-text-secondary"
+          placeholder="Document title"
+          autoFocus
+        />
+        <button
+          onClick={commit_rename}
+          className="p-1.5 rounded-[4px] text-success hover:bg-success/10 cursor-pointer"
+          aria-label="Confirm rename"
+        >
+          <Check className="h-4 w-4" />
+        </button>
+        <button
+          onClick={cancel_rename}
+          className="p-1.5 rounded-[4px] text-text-secondary hover:bg-surface cursor-pointer"
+          aria-label="Cancel rename"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </li>
+    );
+  }
+
+  /* Delete confirmation */
+  if (show_delete_confirm) {
+    return (
+      <li className="flex items-center gap-3 rounded-base bg-error/5 border border-error/30 p-4">
+        <Trash2 className="h-5 w-5 shrink-0 text-error" />
+        <div className="min-w-0 flex-1">
+          <p className="text-ui-base text-text-primary">
+            Delete "<span className="font-medium">{doc.title || "Untitled"}</span>"?
+          </p>
+          <p className="text-ui-sm text-text-secondary">This action cannot be undone.</p>
+        </div>
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={() => delete_mutation.mutateAsync()}
+          is_loading={delete_mutation.isPending}
+          disabled={delete_mutation.isPending}
+        >
+          Delete
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => set_show_delete_confirm(false)}
+          disabled={delete_mutation.isPending}
+        >
+          Cancel
+        </Button>
+      </li>
+    );
+  }
+
+  /* Normal document card */
+  return (
+    <li className="group relative">
+      <button
+        onClick={on_navigate}
+        className="flex w-full items-center gap-3 rounded-base bg-surface p-4 text-left shadow-subtle transition-shadow hover:shadow-elevated"
+      >
+        <FileText className="h-5 w-5 shrink-0 text-text-secondary" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-ui-lg font-medium text-text-primary">
+            {doc.title || "Untitled"}
+          </p>
+          <p className="text-ui-sm text-text-secondary">
+            Updated{" "}
+            {new Date(doc.updated_at).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </p>
+        </div>
+      </button>
+
+      {/* Actions menu (visible on hover or when open) */}
+      <div
+        ref={menu_ref}
+        className={[
+          "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1",
+          show_menu ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          "transition-opacity duration-[150ms]",
+        ].join(" ")}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            set_show_menu(!show_menu);
+          }}
+          className="p-2 rounded-[4px] text-text-secondary hover:text-text-primary hover:bg-app cursor-pointer"
+          aria-label="Document actions"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+
+        {/* Dropdown menu */}
+        {show_menu && (
+          <>
+            {/* Backdrop to close menu on outside click */}
+            <div
+              className="fixed inset-0 z-30"
+              onClick={() => set_show_menu(false)}
+            />
+            <div className="absolute right-0 top-full mt-1 z-40 min-w-[160px] rounded-md bg-surface border border-border-subtle shadow-elevated py-1">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  start_rename();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-ui-base text-text-primary hover:bg-app cursor-pointer"
+              >
+                <Pencil className="h-4 w-4" />
+                Rename
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  set_show_delete_confirm(true);
+                  set_show_menu(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-ui-base text-error hover:bg-error/5 cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </li>
   );
 }
