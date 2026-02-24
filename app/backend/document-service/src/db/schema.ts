@@ -18,8 +18,24 @@ import {
   uniqueIndex,
   index,
   foreignKey,
+  customType,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+
+/* ============================================================
+   Custom column types
+   ============================================================ */
+
+/**
+ * Case-insensitive text type (`citext` extension).
+ * Requires: CREATE EXTENSION IF NOT EXISTS citext;
+ * Used for slugs, emails, and other case-insensitive identifiers.
+ */
+const citext = customType<{ data: string }>({
+  dataType() {
+    return "citext";
+  },
+});
 
 /* ============================================================
    Enum types — matching DATABASE.md §Enum Types
@@ -97,8 +113,8 @@ export const workspaces = pgTable(
   {
     /** Primary key. */
     id: uuid("id").primaryKey().defaultRandom().notNull(),
-    /** Human-friendly URL slug (globally unique when active). */
-    slug: text("slug"),
+    /** Human-friendly URL slug (globally unique when active). Case-insensitive. */
+    slug: citext("slug"),
     /** Display name. */
     name: text("name").notNull(),
     /** User who created this workspace. */
