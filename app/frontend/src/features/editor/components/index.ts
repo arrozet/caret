@@ -4,4 +4,6 @@
  * All components in this folder are editor-specific and should not
  * be imported by other features directly.
  */
-export {};
+export { CaretEditor } from "./CaretEditor";
+export { DocumentList } from "./DocumentList";
+export { EditorPage } from "./EditorPage";

@@ -4,32 +4,16 @@ import { use_auth_store } from "./stores/auth_store";
 import { AuthPage } from "./features/auth";
 import { MainLayout } from "./components/layout/MainLayout";
 import { AuthGuard } from "./components/layout/AuthGuard";
+import { DocumentList, EditorPage } from "./features/editor/components";
 import "./App.css";
-
-/**
- * Placeholder home page shown after successful authentication.
- * Will be replaced with the Tiptap editor in Phase 2.
- */
-function HomePage() {
-  return (
-    <div className="flex flex-1 items-center justify-center">
-      <div className="text-center">
-        <h2 className="font-document text-display text-text-primary">
-          Welcome to Caret
-        </h2>
-        <p className="mt-2 text-ui-base text-text-secondary">
-          Your AI-first document editor. The editor is coming in Phase 2.
-        </p>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Root application component.
  *
  * Initializes the Supabase auth session on mount, then sets up
  * client-side routing with an auth guard for protected routes.
+ * The home route shows the document list; individual documents
+ * are opened in the editor page.
  */
 function App() {
   const initialize = use_auth_store((s) => s.initialize);
@@ -50,7 +34,17 @@ function App() {
           element={
             <AuthGuard>
               <MainLayout>
-                <HomePage />
+                <DocumentList />
+              </MainLayout>
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/documents/:id"
+          element={
+            <AuthGuard>
+              <MainLayout>
+                <EditorPage />
               </MainLayout>
             </AuthGuard>
           }
