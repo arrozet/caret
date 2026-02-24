@@ -58,6 +58,14 @@ Implement these colors as CSS variables and Tailwind extensions.
 - **Manual Toggle**: Persist user choice in `localStorage` under `caret-theme`
 - **Transition**: Smooth theme switch with `transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease`
 
+### Public Landing Palette Strategy
+
+To keep the marketing surface minimal and distinctive:
+- **Primary accents on landing**: Use `accent-main` (blue) and `accent-caret` (orange) as the dominant duo.
+- **AI purple usage**: Keep `accent-ai` for clearly AI-scoped UI only (AI badges, panel headers, streaming indicators), not as a general hero gradient default.
+- **Color ratio**: For hero/background effects, target roughly **70-80% neutral**, **15-25% accent-main**, **5-10% accent-caret**.
+- **Avoid rainbow gradients**: Prefer one focused emphasis area (single word, icon, or key CTA detail) instead of multi-color headline fills across entire lines.
+
 ---
 
 ## 2. Typography Strategy
@@ -437,6 +445,15 @@ const streamText = (text, element) => {
   opacity: 0.2;
 }
 ```
+
+### Landing Motion Guidelines (Framer Motion)
+
+Use Framer Motion to add personality without visual noise:
+- **Scroll-linked hero motion**: Use `useScroll` + `useTransform` for subtle parallax (translate/opacity), never large displacement.
+- **Cursor-reactive background only**: If tracking pointer movement, apply it to soft background glows (no floating cursor bubbles above content).
+- **Respect reduced motion**: Always gate continuous animations with `useReducedMotion` and provide static fallbacks.
+- **Motion primitives**: Prefer animating `transform` and `opacity`; avoid `top/left/width/height` animation for performance.
+- **Timing**: Keep loops calm (`3-6s` micro-loops), interactions fast (`100-200ms`), and section reveals concise (`200-300ms`).
 
 ---
 

@@ -113,8 +113,8 @@
   --color-text-primary-rgb: 26 26 26;
   --color-text-secondary-rgb: 110 110 115;
   --color-accent-main-rgb: 0 102 204;
-  --color-accent-caret-rgb: 255 69 0;       /* #FF4500 — Signature brand caret */
-  --color-accent-ai-rgb: 139 92 246;        /* #8B5CF6 — AI identity color */
+  --color-accent-caret-rgb: 255 69 0;
+  --color-accent-ai-rgb: 139 92 246;
   --color-ai-highlight-rgb: 245 246 248;
   --color-text-ghost-rgb: 163 163 163;
   --color-diff-add-bg-rgb: 220 252 231;
@@ -138,8 +138,8 @@
   --color-text-primary-rgb: 232 232 232;
   --color-text-secondary-rgb: 156 163 175;
   --color-accent-main-rgb: 59 153 252;
-  --color-accent-caret-rgb: 255 107 53;      /* #FF6B35 */
-  --color-accent-ai-rgb: 167 139 250;        /* #A78BFA */
+  --color-accent-caret-rgb: 255 107 53;
+  --color-accent-ai-rgb: 167 139 250;
   --color-ai-highlight-rgb: 32 33 36;
   --color-text-ghost-rgb: 82 82 82;
   --color-diff-add-bg-rgb: 6 78 59;
@@ -305,4 +305,30 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--color-text-secondary-rgb) / 0.4);
+}
+
+@keyframes gradient-x {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-x {
+  animation: gradient-x 15s ease infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
 }

@@ -17,11 +17,11 @@ export function use_theme() {
   const resolved_theme = use_theme_store((state) => state.resolved_theme);
   const set_theme_action = use_theme_store((state) => state.set_theme);
 
-  /** Cycle through light -> dark -> system on each call. */
+  /** Cycle directly between light and dark based on the resolved theme. */
   const toggle_theme = useCallback(() => {
-    const next_map = { light: "dark", dark: "system", system: "light" } as const;
-    set_theme_action(next_map[theme]);
-  }, [theme, set_theme_action]);
+    const next_theme = resolved_theme === "light" ? "dark" : "light";
+    set_theme_action(next_theme);
+  }, [resolved_theme, set_theme_action]);
 
   return { theme, resolved_theme, set_theme: set_theme_action, toggle_theme } as const;
 }
