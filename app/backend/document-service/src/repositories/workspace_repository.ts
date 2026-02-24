@@ -30,6 +30,19 @@ export class WorkspaceRepository {
   }
 
   /**
+   * Find a single non-deleted workspace by slug.
+   * @param slug - Workspace slug (case-insensitive via citext).
+   * @returns The workspace row, or null if not found / deleted.
+   */
+  async find_by_slug(slug: string) {
+    const rows = await this.db
+      .select()
+      .from(schema.workspaces)
+      .where(and(eq(schema.workspaces.slug, slug), isNull(schema.workspaces.deleted_at)));
+    return rows[0] ?? null;
+  }
+
+  /**
    * Find a single non-deleted workspace by UUID.
    * @param id - Workspace UUID.
    * @returns The workspace row, or null if not found / deleted.

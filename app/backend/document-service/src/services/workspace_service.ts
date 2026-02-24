@@ -2,7 +2,7 @@ import type { WorkspaceRepository } from "../repositories/workspace_repository.j
 import type { CreateWorkspaceDto } from "../dtos/create_workspace_dto.js";
 import type { WorkspaceResponseDto } from "../dtos/workspace_response_dto.js";
 import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
-import { NotFoundError, ForbiddenError } from "../lib/errors.js";
+import { NotFoundError, ForbiddenError, ConflictError } from "../lib/errors.js";
 
 /**
  * Business logic for workspace lifecycle: create, read, list.
@@ -22,6 +22,8 @@ export class WorkspaceService {
   /**
    * Create a new workspace and add the creator as owner.
    * If no slug is provided, one is auto-generated from the name.
+   * When the slug collides with an existing active workspace,
+   * a numeric suffix is appended (e.g. "my-project-2", "my-project-3").
    * @param dto - Creation payload from the controller.
    * @param user_id - Authenticated user's UUID.
    * @returns The created workspace as a response DTO.
@@ -30,14 +32,25 @@ export class WorkspaceService {
     dto: CreateWorkspaceDto,
     user_id: string,
   ): Promise<WorkspaceResponseDto> {
-    const slug =
+    const base_slug =
       dto.slug ?? dto.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
-    const workspace = await this.workspace_repo.create({
-      name: dto.name,
-      slug,
-      created_by_user_id: user_id,
-    });
+    const slug = await this.resolve_unique_slug(base_slug);
+
+    let workspace;
+    try {
+      workspace = await this.workspace_repo.create({
+        name: dto.name,
+        slug,
+        created_by_user_id: user_id,
+      });
+    } catch (err: unknown) {
+      /* Safety net: race condition where slug was taken between check and insert */
+      if (is_unique_violation(err)) {
+        throw new ConflictError(`Workspace slug "${slug}" is already taken`);
+      }
+      throw err;
+    }
 
     /* Add creator as owner */
     await this.workspace_repo.add_member({
@@ -47,6 +60,27 @@ export class WorkspaceService {
     });
 
     return this.to_response_dto(workspace, "owner");
+  }
+
+  /**
+   * Find a slug that does not collide with any active workspace.
+   * Tries the base slug first, then appends -2, -3, … up to a limit.
+   * @param base_slug - The desired slug before deduplication.
+   * @returns A slug guaranteed to not exist among active workspaces.
+   */
+  private async resolve_unique_slug(base_slug: string): Promise<string> {
+    const MAX_ATTEMPTS = 100;
+    let candidate = base_slug;
+
+    for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+      const existing = await this.workspace_repo.find_by_slug(candidate);
+      if (!existing) return candidate;
+      candidate = `${base_slug}-${i + 1}`;
+    }
+
+    throw new ConflictError(
+      `Could not generate a unique slug for "${base_slug}" after ${MAX_ATTEMPTS} attempts`,
+    );
   }
 
   /**
@@ -139,4 +173,16 @@ export class WorkspaceService {
       updated_at: workspace.updated_at.toISOString(),
     };
   }
+}
+
+/**
+ * Check whether a thrown error is a Postgres unique constraint violation (code 23505).
+ */
+function is_unique_violation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "23505"
+  );
 }
