@@ -2,25 +2,33 @@
 
 This roadmap outlines the strict step-by-step technical execution plan for building Caret. Every task refers to its source of truth in the documentation hub.
 
-## 📦 Phase 1: The Skeleton (Setup & Auth)
+**Status Legend**: [x] = Done | [ ] = Pending | [~] = Partially Done
+
+## Phase 1: The Skeleton (Setup & Auth)
 *Goal: A deployable React app where users can sign in.*
-- [ ] Initialize Monorepo structure (Frontend + Backend folders) using **Bun** and **uv**. (See **[DEPLOYMENT.md](./DEPLOYMENT.md)**)
-- [ ] Setup Docker Compose for local development environment. (See **[DEPLOYMENT.md](./DEPLOYMENT.md)**)
-- [ ] Setup testing frameworks: Vitest (Node/React) and Pytest (Python). (See **[TESTING.md](./TESTING.md)**)
-- [ ] Setup React + Vite + Tailwind with "Swiss Focus" tokens. (See **[FRONTEND.md](./FRONTEND.md)**)
-- [ ] Setup Supabase Project (Auth + Database). (See **[DATABASE.md](./DATABASE.md)**)
-- [ ] Implement Login/Signup screens with Supabase Auth. (See **[FRONTEND.md](./FRONTEND.md)**)
-- [ ] Implement API Gateway base routing + versioned paths (`/api/v1/...`). (See **[BACKEND.md](./BACKEND.md)**)
+- [x] Initialize Monorepo structure (Frontend + Backend folders) using **Bun** and **uv**. (See **[DEPLOYMENT.md](./DEPLOYMENT.md)**)
+- [x] Setup Docker Compose for local development environment. (See **[DEPLOYMENT.md](./DEPLOYMENT.md)**)
+- [x] Setup testing frameworks: Vitest (Node/React) and Pytest (Python). (See **[TESTING.md](./TESTING.md)**)
+- [x] Setup React + Vite + Tailwind with "Swiss Focus" tokens. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Setup Supabase Project (Auth + Database). (See **[DATABASE.md](./DATABASE.md)**)
+- [x] Implement Login/Signup screens with Supabase Auth. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Implement API Gateway base routing + versioned paths (`/api/v1/...`). (See **[BACKEND.md](./BACKEND.md)**)
 
-## 💾 Phase 2: The Editor Core (CRUD)
+## Phase 2: The Editor Core (CRUD)
 *Goal: Users can write private documents that save to the DB.*
-- [ ] Implement Tiptap Editor with Swiss Focus typography overrides. (See **[FRONTEND.md](./FRONTEND.md)**)
-- [ ] Create core tables: `workspaces`, `folders`, and `documents` + RLS policies. (See **[DATABASE.md](./DATABASE.md)**)
-- [ ] Create performance indexes for core tables. (See **[DATABASE.md](./DATABASE.md)**)
-- [ ] Build Node.js Document Service: CRUD operations. (See **[BACKEND.md](./BACKEND.md)**)
-- [ ] Connect Editor 'Save' state to API with debouncing. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Implement Tiptap Editor with Swiss Focus typography overrides. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Create core tables: `workspaces`, `folders`, and `documents` + RLS policies. (See **[DATABASE.md](./DATABASE.md)**)
+- [x] Create performance indexes for core tables. (See **[DATABASE.md](./DATABASE.md)**)
+- [x] Build Node.js Document Service: CRUD operations. (See **[BACKEND.md](./BACKEND.md)**)
+- [x] Connect Editor 'Save' state to API with debouncing. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Build Editor Formatting Toolbar: bold, italic, underline, strike, headings, lists, blockquote, code, alignment, undo/redo. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Implement document rename (editable title in editor and document list). (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Implement document delete with confirmation dialog. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Build Settings page: profile info, language selector, theme preferences. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [ ] Implement Document Tabs for multi-document editing. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [ ] Build Context Menu on text selection (floating toolbar). (See **[FRONTEND.md](./FRONTEND.md)**)
 
-## 🤝 Phase 3: Real-time Collaboration
+## Phase 3: Real-time Collaboration
 *Goal: Multiple users can type in the same document via WebSockets.*
 - [ ] Setup dedicated Node.js WebSocket Server on AWS ECS (Fargate). (See **[DEPLOYMENT.md](./DEPLOYMENT.md)**)
 - [ ] Implement WebSocket JWT Authentication via query params. (See **[BACKEND.md](./BACKEND.md)**)
@@ -29,7 +37,7 @@ This roadmap outlines the strict step-by-step technical execution plan for build
 - [ ] Create `document_collab_updates` + `document_collab_snapshots` tables and implement Snapshot + Update Log strategy. (See **[DATABASE.md](./DATABASE.md)**)
 - [ ] Build periodic snapshot compaction job. (See **[DATABASE.md](./DATABASE.md)**)
 
-## 🧠 Phase 4: The AI Brain (Agentic Service)
+## Phase 4: The AI Brain (Agentic Service)
 *Goal: The editor can "speak" to an LLM.*
 - [ ] Setup Python/FastAPI Service with PydanticAI. (See **[BACKEND.md](./BACKEND.md)**)
 - [ ] Create `ai_conversations`, `ai_messages`, and `ai_suggestions` tables. (See **[DATABASE.md](./DATABASE.md)**)
@@ -38,7 +46,7 @@ This roadmap outlines the strict step-by-step technical execution plan for build
 - [ ] Build Frontend SSE consumer that applies chunks as Tiptap Transactions. (See **[BACKEND.md](./BACKEND.md)**)
 - [ ] Test AI streaming with Y.js to ensure CRDT consistency. (See **[TESTING.md](./TESTING.md)**)
 
-## 🔍 Phase 5: Context & RAG
+## Phase 5: Context & RAG
 *Goal: The AI knows what you wrote.*
 - [ ] Enable `pgvector` and create `document_embeddings` table (chunk-level embeddings). (See **[DATABASE.md](./DATABASE.md)**)
 - [ ] Create HNSW index for vector similarity search. (See **[DATABASE.md](./DATABASE.md)**)
@@ -46,14 +54,14 @@ This roadmap outlines the strict step-by-step technical execution plan for build
 - [ ] Implement Contextual Retrieval for chat queries. (See **[BACKEND.md](./BACKEND.md)**)
 - [ ] Add "Ghost Text" and Inline Suggestions UI. (See **[FRONTEND.md](./FRONTEND.md)**)
 
-## 🚀 Phase 6: Production Polish
+## Phase 6: Production Polish
 *Goal: Stability and Performance.*
 - [ ] Implement React Error Boundaries and offline detection. (See **[FRONTEND.md](./FRONTEND.md)**)
 - [ ] Setup Playwright for E2E testing of critical flows. (See **[TESTING.md](./TESTING.md)**)
 - [ ] Deploy Frontend to Vercel and Backend (Lambda/ECS) via SST. (See **[DEPLOYMENT.md](./DEPLOYMENT.md)**)
 - [ ] Perform Accessibility Audit (WCAG AA). (See **[FRONTEND.md](./FRONTEND.md)**)
 
-## 🔮 Future Improvements (V2.0)
+## Future Improvements (V2.0)
 - **Redis Hot Cache**: For frequently accessed documents. (See **[BACKEND.md](./BACKEND.md)**)
 - **Async Task Queues**: For heavy document processing. (See **[BACKEND.md](./BACKEND.md)**)
 - **Model Router**: Intelligent LLM selection. (See **[BACKEND.md](./BACKEND.md)**)
