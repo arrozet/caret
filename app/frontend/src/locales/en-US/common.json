@@ -8,6 +8,8 @@
   "cancel": "Cancel",
   "confirm": "Confirm",
   "close": "Close",
+  "delete": "Delete",
+  "rename": "Rename",
   "auth": {
     "sign_in": "Sign In",
     "sign_up": "Sign Up",
@@ -30,5 +32,26 @@
     "light": "Light",
     "dark": "Dark",
     "system": "System"
+  },
+  "settings": {
+    "title": "Settings",
+    "back": "Back",
+    "profile": "Profile",
+    "appearance": "Appearance",
+    "language": "Language",
+    "about": "About Caret",
+    "about_description": "Caret is an AI-first document editor for collaborative and structured writing.",
+    "account_id": "Account ID",
+    "provider": "Auth Provider"
+  },
+  "documents": {
+    "title": "Documents",
+    "new_document": "New document",
+    "no_documents": "No documents yet",
+    "no_documents_hint": "Click \"New document\" to get started.",
+    "delete_confirm": "Delete this document?",
+    "delete_warning": "This action cannot be undone.",
+    "untitled": "Untitled",
+    "updated": "Updated"
   }
 }

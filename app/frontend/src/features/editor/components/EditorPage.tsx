@@ -11,6 +11,9 @@ import { use_focus_mode } from "../../../hooks/use_focus_mode";
 /** Debounce delay in milliseconds before autosaving after the last keystroke. */
 const AUTOSAVE_DELAY_MS = 1_000;
 
+/** Debounce delay for title saves (shorter since it's a single field). */
+const TITLE_SAVE_DELAY_MS = 500;
+
 /** Possible states for the save status indicator. */
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -20,6 +23,7 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
  * Loads a document by ID from the URL, renders the CaretEditor with
  * its content, and autosaves changes after a debounce period. Displays
  * a status indicator showing "Saving...", "Saved", or "Error".
+ * The document title is editable inline above the editor.
  */
 export function EditorPage() {
   const { id: document_id } = useParams<{ id: string }>();
@@ -29,11 +33,21 @@ export function EditorPage() {
   const save_mutation = use_save_document(document_id ?? "");
 
   const [save_status, set_save_status] = useState<SaveStatus>("idle");
+  const [title, set_title] = useState("");
+  const [is_title_focused, set_is_title_focused] = useState(false);
   const debounce_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const title_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Activate focus mode: fade peripheral UI after 2s idle (FRONTEND.md §9). */
   use_focus_mode(true);
+
+  /** Sync title from server data when document loads. */
+  useEffect(() => {
+    if (document?.title && !is_title_focused) {
+      set_title(document.title);
+    }
+  }, [document?.title, is_title_focused]);
 
   /** Clean up timers on unmount. */
   useEffect(() => {
@@ -41,10 +55,26 @@ export function EditorPage() {
       if (debounce_timer_ref.current) {
         clearTimeout(debounce_timer_ref.current);
       }
+      if (title_timer_ref.current) {
+        clearTimeout(title_timer_ref.current);
+      }
       if (saved_indicator_timer_ref.current) {
         clearTimeout(saved_indicator_timer_ref.current);
       }
     };
+  }, []);
+
+  /**
+   * Show the "Saved" indicator, then clear it after 2 seconds.
+   */
+  const show_saved = useCallback(() => {
+    set_save_status("saved");
+    if (saved_indicator_timer_ref.current) {
+      clearTimeout(saved_indicator_timer_ref.current);
+    }
+    saved_indicator_timer_ref.current = setTimeout(() => {
+      set_save_status("idle");
+    }, 2_000);
   }, []);
 
   /**
@@ -66,22 +96,63 @@ export function EditorPage() {
             content_json: json as Record<string, unknown>,
             content_text: text,
           });
-          set_save_status("saved");
-
-          /* Clear the "Saved" indicator after 2 seconds */
-          if (saved_indicator_timer_ref.current) {
-            clearTimeout(saved_indicator_timer_ref.current);
-          }
-          saved_indicator_timer_ref.current = setTimeout(() => {
-            set_save_status("idle");
-          }, 2_000);
+          show_saved();
         } catch {
           set_save_status("error");
         }
       }, AUTOSAVE_DELAY_MS);
     },
-    [save_mutation],
+    [save_mutation, show_saved],
   );
+
+  /**
+   * Handle title changes with debounced save.
+   */
+  const handle_title_change = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const new_title = e.target.value;
+      set_title(new_title);
+
+      if (title_timer_ref.current) {
+        clearTimeout(title_timer_ref.current);
+      }
+
+      title_timer_ref.current = setTimeout(async () => {
+        if (!new_title.trim()) return;
+        set_save_status("saving");
+        try {
+          await save_mutation.mutateAsync({ title: new_title.trim() });
+          show_saved();
+        } catch {
+          set_save_status("error");
+        }
+      }, TITLE_SAVE_DELAY_MS);
+    },
+    [save_mutation, show_saved],
+  );
+
+  /**
+   * Handle title blur — save immediately if changed.
+   */
+  const handle_title_blur = useCallback(async () => {
+    set_is_title_focused(false);
+    if (title_timer_ref.current) {
+      clearTimeout(title_timer_ref.current);
+    }
+    const trimmed = title.trim();
+    if (trimmed && trimmed !== document?.title) {
+      set_save_status("saving");
+      try {
+        await save_mutation.mutateAsync({ title: trimmed });
+        show_saved();
+      } catch {
+        set_save_status("error");
+      }
+    }
+    if (!trimmed) {
+      set_title(document?.title || "Untitled");
+    }
+  }, [title, document?.title, save_mutation, show_saved]);
 
   /** Navigate back to the document list. */
   function handle_back() {
@@ -115,12 +186,24 @@ export function EditorPage() {
 
   return (
     <div className="flex flex-1 flex-col p-4 md:p-8">
-      {/* Toolbar */}
-      <div className="mx-auto mb-4 flex w-full max-w-[var(--max-width-document)] items-center justify-between">
+      {/* Top bar: back button + document title + save status */}
+      <div className="mx-auto mb-4 flex w-full max-w-[var(--max-width-document)] items-center gap-3">
         <Button variant="ghost" size="sm" onClick={handle_back}>
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Documents</span>
         </Button>
+
+        {/* Editable document title */}
+        <input
+          type="text"
+          value={title}
+          onChange={handle_title_change}
+          onFocus={() => set_is_title_focused(true)}
+          onBlur={handle_title_blur}
+          placeholder="Untitled"
+          className="min-w-0 flex-1 bg-transparent border-none outline-none font-ui text-ui-lg font-semibold text-text-primary placeholder:text-text-secondary/50 focus:border-b-2 focus:border-accent-main px-1 py-0.5 transition-all"
+          aria-label="Document title"
+        />
 
         {/* Save status indicator */}
         <SaveStatusIndicator status={save_status} />
@@ -178,7 +261,7 @@ function SaveStatusIndicator({ status }: SaveStatusIndicatorProps) {
   const { label, icon, class_name } = config[status];
 
   return (
-    <span className={`flex items-center gap-1.5 text-ui-sm ${class_name}`}>
+    <span className={`flex shrink-0 items-center gap-1.5 text-ui-sm ${class_name}`}>
       {icon}
       {label}
     </span>
