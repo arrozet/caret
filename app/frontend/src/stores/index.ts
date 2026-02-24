@@ -10,4 +10,5 @@
  * Rule: Do NOT store editor state here — that belongs to Tiptap (Prosemirror).
  * Rule: Do NOT store server state here — use TanStack Query for async data.
  */
-export {};
+export { use_auth_store } from "./auth_store";
+export { use_theme_store } from "./theme_store";
