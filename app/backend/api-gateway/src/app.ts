@@ -1,4 +1,3 @@
-import "reflect-metadata";
 import express from "express";
 import { cors_middleware } from "./middleware/cors_middleware.js";
 import { rate_limit_middleware } from "./middleware/rate_limit_middleware.js";

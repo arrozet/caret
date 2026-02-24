@@ -1,4 +1,3 @@
-import "reflect-metadata";
 import express from "express";
 import { error_middleware } from "./middleware/error_middleware.js";
 import { auth_middleware } from "./middleware/auth_middleware.js";
