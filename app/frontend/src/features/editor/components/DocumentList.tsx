@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, FileText, Loader2 } from "lucide-react";
+import { Button } from "../../../components/ui/Button";
 import { use_documents } from "../hooks/use_documents";
 import { use_workspaces, use_create_workspace } from "../hooks/use_workspaces";
 import { create_document } from "../api/document_api";
@@ -71,18 +72,16 @@ export function DocumentList() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <h1 className="font-ui text-display text-text-primary">Documents</h1>
-          <button
+          <Button
+            variant="primary"
+            size="md"
             onClick={handle_create_document}
             disabled={is_creating}
-            className="flex items-center gap-2 rounded-base bg-accent-main px-4 py-2 text-ui-base text-white transition-colors hover:opacity-90 disabled:opacity-50"
+            is_loading={is_creating}
           >
-            {is_creating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
+            <Plus className="h-4 w-4" />
             New document
-          </button>
+          </Button>
         </div>
 
         {/* Loading state */}
@@ -102,7 +101,7 @@ export function DocumentList() {
         {/* Empty state */}
         {!is_loading && !documents_error && documents?.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <FileText className="mb-4 h-12 w-12 text-text-secondary opacity-40" />
+            <FileText className="mb-4 h-8 w-8 text-text-secondary opacity-40" />
             <p className="text-ui-lg text-text-secondary">
               No documents yet
             </p>

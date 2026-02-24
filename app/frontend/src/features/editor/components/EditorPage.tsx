@@ -3,8 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Loader2, ArrowLeft, Check, AlertCircle } from "lucide-react";
 import type { JSONContent } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
+import { Button } from "../../../components/ui/Button";
 import { use_document } from "../hooks/use_document";
 import { use_save_document } from "../hooks/use_save_document";
+import { use_focus_mode } from "../../../hooks/use_focus_mode";
 
 /** Debounce delay in milliseconds before autosaving after the last keystroke. */
 const AUTOSAVE_DELAY_MS = 1_000;
@@ -29,6 +31,9 @@ export function EditorPage() {
   const [save_status, set_save_status] = useState<SaveStatus>("idle");
   const debounce_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Activate focus mode: fade peripheral UI after 2s idle (FRONTEND.md §9). */
+  use_focus_mode(true);
 
   /** Clean up timers on unmount. */
   useEffect(() => {
@@ -80,7 +85,7 @@ export function EditorPage() {
 
   /** Navigate back to the document list. */
   function handle_back() {
-    navigate("/");
+    navigate("/documents");
   }
 
   /* Loading state */
@@ -100,27 +105,22 @@ export function EditorPage() {
         <p className="text-ui-base text-error">
           {error?.message ?? "Document not found"}
         </p>
-        <button
-          onClick={handle_back}
-          className="text-ui-base text-accent-main underline"
-        >
+        <Button variant="ghost" size="md" onClick={handle_back}>
+          <ArrowLeft className="h-4 w-4" />
           Back to documents
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col p-8">
+    <div className="flex flex-1 flex-col p-4 md:p-8">
       {/* Toolbar */}
       <div className="mx-auto mb-4 flex w-full max-w-[var(--max-width-document)] items-center justify-between">
-        <button
-          onClick={handle_back}
-          className="flex items-center gap-1 text-ui-base text-text-secondary transition-colors hover:text-text-primary"
-        >
+        <Button variant="ghost" size="sm" onClick={handle_back}>
           <ArrowLeft className="h-4 w-4" />
-          Documents
-        </button>
+          <span className="hidden sm:inline">Documents</span>
+        </Button>
 
         {/* Save status indicator */}
         <SaveStatusIndicator status={save_status} />

@@ -53,7 +53,7 @@ export function CaretEditor({
   });
 
   return (
-    <div className="mx-auto w-full max-w-[var(--max-width-document)] bg-surface rounded-lg shadow-subtle p-8 min-h-[60vh]">
+    <div className="mx-auto w-full max-w-[var(--max-width-document)] bg-surface rounded-none shadow-subtle p-8 min-h-[60vh]">
       <EditorContent editor={editor} />
     </div>
   );

@@ -149,6 +149,11 @@
   --color-success-rgb: 52 211 153;           /* #34D399 */
   --color-warning-rgb: 251 191 36;           /* #FBBF24 */
   --color-error-rgb: 248 113 113;            /* #F87171 */
+
+  /* Dark mode shadows — increase opacity by 0.1 per FRONTEND.md §6 */
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.18);
+  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.22);
+  --shadow-strong: 0 8px 24px rgba(0, 0, 0, 0.26);
 }
 
 /* Smooth theme transitions (see FRONTEND.md §16) */
@@ -243,4 +248,61 @@ body {
 
 .focus-mode .ui-peripheral {
   opacity: 0.2;
+}
+
+.focus-mode .ui-peripheral:hover {
+  opacity: 1;
+}
+
+/* ============================================================
+   Responsive adjustments (FRONTEND.md §3)
+   ============================================================ */
+
+/* Reduce editor padding on smaller screens */
+@media (max-width: 768px) {
+  .caret-editor {
+    line-height: 1.6;
+  }
+
+  .caret-editor h1 {
+    font-size: 26px;
+  }
+
+  .caret-editor h2 {
+    font-size: 22px;
+  }
+
+  .caret-editor h3 {
+    font-size: 20px;
+  }
+}
+
+/* ============================================================
+   Selection style — accent-colored text selection
+   ============================================================ */
+
+::selection {
+  background-color: rgb(var(--color-accent-main-rgb) / 0.2);
+}
+
+/* ============================================================
+   Scrollbar — minimal, Swiss style
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-text-secondary-rgb) / 0.25);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--color-text-secondary-rgb) / 0.4);
 }

@@ -82,7 +82,7 @@ export function AuthPage() {
        the auth state listener in the store will handle the
        transition once the session is established. */
     if (mode === "sign_in") {
-      navigate("/");
+      navigate("/documents");
     }
   }
 
@@ -127,15 +127,18 @@ export function AuthPage() {
           </h2>
 
           {/* Google OAuth */}
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="md"
             onClick={handle_google_sign_in}
             disabled={is_oauth_loading || is_loading}
-            className="flex w-full items-center justify-center gap-3 rounded-base border border-border-subtle bg-surface px-4 py-2.5 text-ui-base text-text-primary transition-colors hover:bg-app disabled:opacity-50"
+            is_loading={is_oauth_loading}
+            className="w-full"
           >
-            <GoogleIcon />
+            {!is_oauth_loading && <GoogleIcon />}
             {t("auth.continue_with_google")}
-          </button>
+          </Button>
 
           {/* Divider */}
           <div className="my-5 flex items-center gap-3">
