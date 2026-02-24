@@ -449,11 +449,17 @@ const streamText = (text, element) => {
 ### Landing Motion Guidelines (Framer Motion)
 
 Use Framer Motion to add personality without visual noise:
-- **Scroll-linked hero motion**: Use `useScroll` + `useTransform` for subtle parallax (translate/opacity), never large displacement.
-- **Cursor-reactive background only**: If tracking pointer movement, apply it to soft background glows (no floating cursor bubbles above content).
-- **Respect reduced motion**: Always gate continuous animations with `useReducedMotion` and provide static fallbacks.
-- **Motion primitives**: Prefer animating `transform` and `opacity`; avoid `top/left/width/height` animation for performance.
-- **Timing**: Keep loops calm (`3-6s` micro-loops), interactions fast (`100-200ms`), and section reveals concise (`200-300ms`).
+
+- **Scroll progress bar**: Use a page-level `useScroll` + `scaleX` on a fixed 2px bar (`origin-left`) to give users a spatial anchor as they scroll. Style with a brand gradient.
+- **Scroll-linked hero parallax**: Use `useScroll({ target, offset })` + `useTransform` for subtle `y` (max ~60px) and `opacity` (min ~0.7) on the hero block. Never exceed these limits.
+- **Cursor-reactive glows**: Drive soft radial gradients via `useMotionTemplate` fed by `useSpring`-smoothed mouse coordinates. Apply only to background layers (`z-[-1]`).
+- **Word-by-word reveal**: Split headlines into `inline-block` `motion.span` elements with a `custom` delay index and a `filter: blur(6px) → 0` + `y: 0.35em → 0` spring. Set `aria-label` on the parent for screen readers.
+- **Magnetic buttons**: Wrap CTA elements in a component that uses per-instance `useMotionValue + useSpring` to pull the element toward the cursor center (max ~20% of mouse offset). Reset on mouse leave.
+- **Icon micro-rotation on hover**: Cards can use `whileHover={{ scale: 1.12, rotate: 4 }}` on the icon container for a tactile feel without moving the whole card aggressively.
+- **Floating decorative element**: A large, low-opacity brand symbol (e.g., `^`) can float with a looping `y` animation (`duration: 10s`). Keep `opacity` under `0.04` to avoid distraction.
+- **Respect reduced motion**: Gate ALL continuous, decorative, and parallax animations behind `useReducedMotion()`. Provide static fallbacks for every animated element.
+- **Motion primitives**: Animate only `transform` and `opacity` — never `top/left/width/height` — for GPU-accelerated performance.
+- **Timing targets**: Loops `8–12s`, scroll-linked `linear`, interaction springs `stiffness: 110–260 / damping: 18–24`, section reveals `stagger: 0.1s`.
 
 ---
 
