@@ -14,6 +14,7 @@ import { Button } from "../../../components/ui/Button";
 import { use_theme } from "../../../hooks/use_theme";
 import { Sun, Moon, Monitor, ArrowRight, Type, Users, Sparkles } from "lucide-react";
 import { CaretLogo } from "../../../components/ui/Logo";
+import { AnimatedMockup } from "./AnimatedMockup";
 
 /* ================================================================
    Hooks
@@ -103,7 +104,7 @@ function AnimatedWord({ word, index }: { word: string; index: number }) {
 /**
  * Wraps children in a "magnetic" motion div.
  * On hover, the element gently follows the cursor towards its center.
- * Respects `prefers-reduced-motion`.
+ * Respects `prefers-reduced-motion` via the `disabled` prop.
  */
 function MagneticButton({
   children,
@@ -149,8 +150,8 @@ interface FeatureCardProps {
 }
 
 /**
- * Feature card with a scroll-triggered reveal and icon glow on hover.
- * `index` drives a small delay offset so cards arrive sequentially.
+ * Feature card with scroll-triggered reveal and icon rotation on hover.
+ * Delay driven by `index` for sequential entrance.
  */
 function FeatureCard({ icon, title, description, index }: FeatureCardProps) {
   return (
@@ -191,21 +192,21 @@ const theme_icons = { light: Sun, dark: Moon, system: Monitor } as const;
 /**
  * Public landing page shown to unauthenticated visitors.
  *
- * Motion features used:
- *  - Scroll progress bar (page-level useScroll)
- *  - Hero parallax + fade-out on scroll (target-level useScroll + useTransform)
- *  - Cursor-reactive radial background glows (useMotionTemplate + useSpring)
- *  - Word-by-word hero title reveal (word_variants + custom index)
- *  - Magnetic buttons (per-button useMotionValue + useSpring)
- *  - Icon micro-rotation on card hover
- *  - useReducedMotion gates all continuous/decorative animations
- *
  * Sections:
- *  1. Hero   — tagline + CTA
- *  2. Stats  — three product pillars as a social-proof strip
- *  3. Features — three capability cards
+ *  1. Hero   — two-column: tagline + CTAs / animated app mockup
+ *  2. Stats  — three product pillar strip
+ *  3. Features — three capability cards with scroll-triggered reveal
  *  4. CTA    — bottom sign-up prompt
  *  5. Footer
+ *
+ * Motion features:
+ *  - Page-level scroll progress bar
+ *  - Hero parallax + fade on scroll
+ *  - Cursor-reactive radial background glows
+ *  - Word-by-word hero headline reveal
+ *  - Magnetic CTA buttons
+ *  - Animated app mockup (AnimatedMockup)
+ *  - All continuous animations gated by useReducedMotion
  */
 export function LandingPage() {
   const { t } = useTranslation("common");
@@ -215,10 +216,10 @@ export function LandingPage() {
   const hero_ref = useRef<HTMLElement>(null);
   const { x: mouse_x, y: mouse_y } = useMousePosition();
 
-  /* Page-level scroll — drives the top progress bar */
+  /* Page-level scroll drives the top progress bar */
   const { scrollYProgress: page_progress } = useScroll();
 
-  /* Hero-section scroll — drives hero parallax */
+  /* Hero-section scroll drives hero parallax */
   const { scrollYProgress: hero_progress } = useScroll({
     target: hero_ref,
     offset: ["start start", "end start"],
@@ -233,7 +234,7 @@ export function LandingPage() {
 
   const ThemeIcon = theme_icons[theme];
 
-  /* Split headline into word arrays for per-word animation */
+  /* Split headline words for per-word animation */
   const line_one = "Write with clarity.".split(" ");
   const line_two_prefix = ["Think", "with"];
   const total_prefix_words = line_one.length + line_two_prefix.length;
@@ -247,7 +248,7 @@ export function LandingPage() {
         style={{ scaleX: page_progress }}
       />
 
-      {/* ── Background glows (cursor-reactive) ─────────────────── */}
+      {/* ── Background glows ────────────────────────────────────── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden z-[-1]">
         <div className="absolute inset-0 bg-app" />
         <motion.div
@@ -267,11 +268,8 @@ export function LandingPage() {
       {/* ── Decorative floating ^ ───────────────────────────────── */}
       <motion.span
         aria-hidden
-        className="pointer-events-none fixed top-[12vh] right-[6vw] z-[-1] hidden select-none font-document text-[18vw] font-light leading-none text-text-primary/[0.03] md:block"
-        animate={should_reduce_motion ? undefined : {
-          y: [0, -20, 0],
-          rotate: [0, 2, 0],
-        }}
+        className="pointer-events-none fixed top-[10vh] right-[4vw] z-[-1] hidden select-none font-document text-[16vw] font-light leading-none text-text-primary/[0.025] md:block"
+        animate={should_reduce_motion ? undefined : { y: [0, -18, 0], rotate: [0, 2, 0] }}
         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
       >
         ^
@@ -282,14 +280,14 @@ export function LandingPage() {
         <motion.div
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.45, ease: "easeOut" }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
         >
           <CaretLogo />
         </motion.div>
         <motion.div
           initial={{ opacity: 0, x: 10 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.45, ease: "easeOut" }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
           className="flex items-center gap-2"
         >
           <Button
@@ -306,7 +304,7 @@ export function LandingPage() {
         </motion.div>
       </header>
 
-      {/* ── Hero ───────────────────────────────────────────────── */}
+      {/* ── Hero ────────────────────────────────────────────────── */}
       <section
         ref={hero_ref}
         className="relative flex flex-1 flex-col items-center justify-center px-6 pt-14"
@@ -319,100 +317,106 @@ export function LandingPage() {
             y: should_reduce_motion ? 0 : hero_y,
             opacity: should_reduce_motion ? 1 : hero_opacity,
           }}
-          className="mx-auto w-full max-w-[var(--max-width-document-wide)] py-24 text-center md:py-32"
+          className="mx-auto grid w-full max-w-5xl grid-cols-1 items-center gap-10 py-16 md:grid-cols-2 md:gap-14 md:py-24"
         >
-          {/* Accent line with traveling dot */}
-          <motion.div variants={item_variants} className="mx-auto mb-10 flex items-center justify-center">
-            <div className="relative h-px w-16 bg-accent-caret/40">
-              <motion.span
-                className="absolute -top-[2px] h-[5px] w-[5px] rounded-full bg-accent-caret"
-                animate={should_reduce_motion ? undefined : { x: [0, 58, 0], opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              />
-            </div>
-          </motion.div>
+          {/* ── Left: text + CTAs ─────────────────────────────── */}
+          <div className="flex flex-col items-center text-center md:items-start md:text-left">
 
-          {/* Word-by-word headline */}
-          <motion.h2
-            initial="hidden"
-            animate="visible"
-            aria-label="Write with clarity. Think with precision."
-            className="font-document text-display leading-tight tracking-tight md:text-[64px] md:leading-[1.06]"
-          >
-            <span className="block text-text-primary">
-              {line_one.map((word, i) => (
-                <AnimatedWord key={`l1-${i}`} word={word} index={i} />
-              ))}
-            </span>
-            <span className="block">
-              {line_two_prefix.map((word, i) => (
-                <AnimatedWord key={`l2-${i}`} word={word} index={line_one.length + i} />
-              ))}
-              {/* Accented "precision" with animated gradient */}
-              <motion.span
-                custom={total_prefix_words}
-                variants={word_variants}
-                className="inline-block bg-gradient-to-r from-accent-main to-accent-caret bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient-x"
-                style={{ marginRight: "0em" }}
-              >
-                precision
-              </motion.span>
-              <motion.span
-                custom={total_prefix_words + 1}
-                variants={word_variants}
-                className="inline-block text-text-primary"
-              >
-                .
-              </motion.span>
-            </span>
-          </motion.h2>
+            {/* Accent line with traveling dot */}
+            <motion.div variants={item_variants} className="mb-10 flex items-center">
+              <div className="relative h-px w-16 bg-accent-caret/40">
+                <motion.span
+                  className="absolute -top-[2px] h-[5px] w-[5px] rounded-full bg-accent-caret"
+                  animate={should_reduce_motion ? undefined : { x: [0, 58, 0], opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                />
+              </div>
+            </motion.div>
 
-          <motion.p
-            variants={item_variants}
-            className="mx-auto mt-8 max-w-md text-body leading-relaxed text-text-secondary"
-          >
-            A focused writing environment where every element serves the text.
-            AI-assisted, real-time collaborative, distraction-free.
-          </motion.p>
+            {/* Word-by-word headline */}
+            <motion.h2
+              initial="hidden"
+              animate="visible"
+              aria-label="Write with clarity. Think with precision."
+              className="font-document text-display leading-tight tracking-tight md:text-[54px] md:leading-[1.08]"
+            >
+              <span className="block text-text-primary">
+                {line_one.map((word, i) => (
+                  <AnimatedWord key={`l1-${i}`} word={word} index={i} />
+                ))}
+              </span>
+              <span className="block">
+                {line_two_prefix.map((word, i) => (
+                  <AnimatedWord key={`l2-${i}`} word={word} index={line_one.length + i} />
+                ))}
+                <motion.span
+                  custom={total_prefix_words}
+                  variants={word_variants}
+                  className="inline-block bg-gradient-to-r from-accent-main to-accent-caret bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient-x"
+                  style={{ marginRight: 0 }}
+                >
+                  precision
+                </motion.span>
+                <motion.span
+                  custom={total_prefix_words + 1}
+                  variants={word_variants}
+                  className="inline-block text-text-primary"
+                >
+                  .
+                </motion.span>
+              </span>
+            </motion.h2>
 
-          <motion.div
-            variants={item_variants}
-            className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center"
-          >
-            <MagneticButton disabled={should_reduce_motion}>
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => navigate("/login")}
-                className="min-w-[180px] shadow-subtle group/btn relative overflow-hidden"
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
-                <span className="relative z-10 flex items-center justify-center gap-2">
-                  Get started
-                  <motion.span
-                    animate={should_reduce_motion ? undefined : { x: [0, 3, 0] }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                    className="inline-flex"
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </motion.span>
-                </span>
-              </Button>
-            </MagneticButton>
+            <motion.p
+              variants={item_variants}
+              className="mx-auto mt-8 max-w-sm text-body leading-relaxed text-text-secondary md:mx-0"
+            >
+              A focused writing environment where every element serves the text.
+              AI-assisted, real-time collaborative, distraction-free.
+            </motion.p>
 
-            <MagneticButton disabled={should_reduce_motion}>
-              <Button
-                variant="secondary"
-                size="lg"
-                onClick={() =>
-                  document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })
-                }
-                className="min-w-[180px]"
-              >
-                Learn more
-              </Button>
-            </MagneticButton>
-          </motion.div>
+            <motion.div
+              variants={item_variants}
+              className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center md:justify-start"
+            >
+              <MagneticButton disabled={should_reduce_motion}>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => navigate("/login")}
+                  className="min-w-[180px] shadow-subtle group/btn relative overflow-hidden"
+                >
+                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    Get started
+                    <motion.span
+                      animate={should_reduce_motion ? undefined : { x: [0, 3, 0] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      className="inline-flex"
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                    </motion.span>
+                  </span>
+                </Button>
+              </MagneticButton>
+
+              <MagneticButton disabled={should_reduce_motion}>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() =>
+                    document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })
+                  }
+                  className="min-w-[180px]"
+                >
+                  Learn more
+                </Button>
+              </MagneticButton>
+            </motion.div>
+          </div>
+
+          {/* ── Right: animated app mockup ────────────────────── */}
+          <AnimatedMockup />
         </motion.div>
       </section>
 
@@ -429,12 +433,8 @@ export function LandingPage() {
             { label: "Real-time", sub: "Collaboration" },
             { label: "AI-native", sub: "Writing assistant" },
             { label: "Offline-first", sub: "Document editor" },
-          ].map(({ label, sub }, i) => (
-            <motion.div
-              key={label}
-              variants={item_variants}
-              className="flex flex-col items-center gap-1"
-            >
+          ].map(({ label, sub }) => (
+            <motion.div key={label} variants={item_variants} className="flex flex-col items-center gap-1">
               <span className="font-ui text-xl font-semibold text-text-primary">{label}</span>
               <span className="font-ui text-ui-sm uppercase tracking-widest text-text-secondary">
                 {sub}
