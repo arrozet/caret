@@ -79,6 +79,7 @@ describe("auth_middleware", () => {
 
   beforeEach(async () => {
     vi.stubEnv("SUPABASE_URL", "https://test-project.supabase.co");
+    vi.stubEnv("SUPABASE_ANON_KEY", "test-anon-key");
     vi.resetModules();
 
     const mod = await import("../../src/middleware/auth_middleware.js");

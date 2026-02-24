@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import { createRemoteJWKSet, jwtVerify, errors as jose_errors } from "jose";
+import { createLocalJWKSet, jwtVerify, errors as jose_errors } from "jose";
+import type { JSONWebKeySet, FlattenedJWSInput, JWSHeaderParameters } from "jose";
 import { UnauthorizedError } from "../lib/errors.js";
 import { config } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
@@ -36,54 +37,84 @@ declare global {
   }
 }
 
+/** Type alias for the key resolver function returned by createLocalJWKSet. */
+type JwksResolver = (
+  protectedHeader?: JWSHeaderParameters,
+  token?: FlattenedJWSInput,
+) => Promise<ReturnType<typeof import("jose").createLocalJWKSet> extends (...args: never[]) => infer R ? Awaited<R> : never>;
+
+/** Cached JWKS resolver and the timestamp (ms) when it was fetched. */
+let cached_jwks: { resolver: JwksResolver; fetched_at: number } | null = null;
+
+/** How long to cache the JWKS before refetching (5 minutes). */
+const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+
 /**
- * Build the JWKS URL from the Supabase project URL.
- * Supabase exposes its public signing keys at `/auth/v1/jwks`.
+ * Fetch the JWKS from Supabase's GoTrue endpoint.
+ *
+ * Supabase requires the `apikey` header on all GoTrue endpoints,
+ * including `/auth/v1/jwks`.  `createRemoteJWKSet` from jose cannot
+ * send custom headers, so we fetch manually and use `createLocalJWKSet`.
  */
-function get_jwks_url(): URL {
+async function fetch_jwks(): Promise<JSONWebKeySet> {
   const base = config.SUPABASE_URL.replace(/\/+$/, "");
-  return new URL(`${base}/auth/v1/jwks`);
+  const url = `${base}/auth/v1/jwks`;
+
+  const response = await fetch(url, {
+    headers: {
+      apikey: config.SUPABASE_ANON_KEY,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch JWKS from ${url}: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  return response.json() as Promise<JSONWebKeySet>;
 }
 
 /**
- * Cached JWKS remote key set.
- * `createRemoteJWKSet` handles caching, rotation, and refetch internally.
+ * Get or refresh the cached JWKS resolver.
+ * Fetches the key set from Supabase if the cache is empty or stale.
  */
-let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+async function get_jwks(): Promise<JwksResolver> {
+  const now = Date.now();
 
-/**
- * Get or create the cached JWKS key set.
- * Lazily initialized to avoid errors when SUPABASE_URL is not yet configured.
- */
-function get_jwks(): ReturnType<typeof createRemoteJWKSet> {
-  if (!jwks) {
-    jwks = createRemoteJWKSet(get_jwks_url());
+  if (cached_jwks && now - cached_jwks.fetched_at < JWKS_CACHE_TTL_MS) {
+    return cached_jwks.resolver;
   }
-  return jwks;
+
+  logger.info("[auth] Fetching JWKS from Supabase...");
+  const jwks_data = await fetch_jwks();
+  const resolver = createLocalJWKSet(jwks_data) as unknown as JwksResolver;
+  cached_jwks = { resolver, fetched_at: now };
+  logger.info(`[auth] JWKS loaded — ${jwks_data.keys.length} key(s) cached`);
+
+  return resolver;
 }
 
 /**
  * Reset the cached JWKS — used by tests to inject a fresh key set.
  */
 export function reset_jwks_cache(): void {
-  jwks = null;
+  cached_jwks = null;
 }
 
 /**
  * Override the JWKS resolver — used by tests to provide a local key set.
  */
-export function set_jwks_for_testing(
-  test_jwks: ReturnType<typeof createRemoteJWKSet>,
-): void {
-  jwks = test_jwks;
+export function set_jwks_for_testing(test_jwks: JwksResolver): void {
+  cached_jwks = { resolver: test_jwks, fetched_at: Date.now() };
 }
 
 /**
  * JWT authentication guard.
  *
  * Validates the Bearer token from the Authorization header by verifying
- * the signature against Supabase's JWKS endpoint (ES256).  On success,
- * attaches the decoded payload to `req.auth_user` for downstream handlers.
+ * the signature against Supabase's JWKS (ES256).  On success, attaches
+ * the decoded payload to `req.auth_user` for downstream handlers.
  *
  * Throws UnauthorizedError if the token is missing, malformed, or invalid.
  */
@@ -101,12 +132,14 @@ export async function auth_middleware(
 
     const token = auth_header.slice(7); /* Strip "Bearer " prefix */
 
-    if (!config.SUPABASE_URL) {
-      logger.error("SUPABASE_URL is not configured — cannot validate tokens");
+    if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
+      logger.error("SUPABASE_URL or SUPABASE_ANON_KEY is not configured");
       throw new UnauthorizedError("Authentication is not configured");
     }
 
-    const { payload } = await jwtVerify(token, get_jwks(), {
+    const jwks_resolver = await get_jwks();
+
+    const { payload } = await jwtVerify(token, jwks_resolver, {
       algorithms: ["ES256"],
     });
 
@@ -127,10 +160,12 @@ export async function auth_middleware(
 
     /* Any jose-related error (invalid signature, expired, malformed, etc.) */
     if (err instanceof jose_errors.JOSEError) {
+      logger.warn(`[auth] JOSEError (${err.constructor.name}): ${err.message}`);
       next(new UnauthorizedError("Invalid or expired token"));
       return;
     }
 
+    logger.error(`[auth] Unexpected error: ${(err as Error).message}`);
     next(err);
   }
 }

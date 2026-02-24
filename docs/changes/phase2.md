@@ -92,8 +92,12 @@ The `ai-service` uses SQLAlchemy's `create_async_engine` with the `asyncpg` driv
 
 ### 21. JWT verification via JWKS (ES256) instead of shared secret (HS256)
 
-Supabase now issues JWTs signed with ES256 (asymmetric) rather than the legacy HS256 (symmetric shared secret). Both `auth-service` and `document-service` were updated to verify tokens against Supabase's JWKS endpoint (`{SUPABASE_URL}/auth/v1/jwks`) using the `jose` library instead of `jsonwebtoken`. The `createRemoteJWKSet` function handles key caching and rotation automatically. This eliminates the need for a `JWT_SECRET` environment variable — only `SUPABASE_URL` is required. The `jsonwebtoken` and `@types/jsonwebtoken` dependencies were removed.
+Supabase now issues JWTs signed with ES256 (asymmetric) rather than the legacy HS256 (symmetric shared secret). Both `auth-service` and `document-service` were updated to verify tokens against Supabase's JWKS endpoint (`{SUPABASE_URL}/auth/v1/jwks`) using the `jose` library instead of `jsonwebtoken`. This eliminates the need for a `JWT_SECRET` environment variable — only `SUPABASE_URL` and `SUPABASE_ANON_KEY` are required. The `jsonwebtoken` and `@types/jsonwebtoken` dependencies were removed. See decision #23 for how JWKS fetching works.
 
 ### 22. API Gateway strips only `/api/v1` prefix
 
 The gateway proxy previously stripped the full route prefix (e.g., `/api/v1/workspaces` → `/`), but downstream services mount their routes at the resource path (e.g., `/workspaces`). The `proxyReqPathResolver` was fixed to strip only `/api/v1`, so that `/api/v1/workspaces` becomes `/workspaces` on the document-service.
+
+### 23. Manual JWKS fetch with `apikey` header (replacing `createRemoteJWKSet`)
+
+Supabase's GoTrue JWKS endpoint (`/auth/v1/jwks`) requires the `apikey` header with the project's anon key — requests without it return `401`. The `jose` library's `createRemoteJWKSet` does not support custom headers on the fetch request, so it fails silently. The fix: manually `fetch()` the JWKS JSON with `{ headers: { apikey: SUPABASE_ANON_KEY } }`, then pass the result to `createLocalJWKSet`. The resolved key set is cached in-memory with a 5-minute TTL to avoid fetching on every request. Both `auth-service` and `document-service` use the same pattern (`fetch_jwks()` → `get_jwks()` → `createLocalJWKSet`). Tests inject a local key set via `set_jwks_for_testing()` to bypass the network call entirely.
