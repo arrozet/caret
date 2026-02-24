@@ -2,35 +2,41 @@
 
 /* ============================================================
    Caret Design Tokens — "Swiss Focus" Theme
-   Tailwind CSS v4 @theme configuration.
    See: docs/guidance/FRONTEND.md §16 (Design Tokens)
+
+   Tailwind v4 uses CSS-based @theme directives instead of a JS
+   config file. The @theme block below registers custom tokens
+   as first-class Tailwind utilities (e.g., bg-app, text-accent-main).
+
+   CSS custom properties in :root / .dark handle light/dark mode
+   color switching; @theme maps them to the Tailwind engine.
    ============================================================ */
 
 @theme {
-  /* ── Colors (Light mode base values) ── */
-  --color-app: #FAFAFA;
-  --color-surface: #FFFFFF;
-  --color-text-primary: #1A1A1A;
-  --color-text-secondary: #6E6E73;
-  --color-accent-main: #0066CC;
-  --color-accent-caret: #FF4500;
-  --color-accent-ai: #8B5CF6;
-  --color-ai-highlight: #F5F6F8;
-  --color-text-ghost: #A3A3A3;
-  --color-diff-add-bg: #DCFCE7;
-  --color-diff-del-bg: #FEE2E2;
-  --color-diff-del-text: #B91C1C;
-  --color-border-subtle: #E5E5E5;
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-error: #EF4444;
+  /* --- Colors (light mode defaults, overridden by .dark) --- */
+  --color-app: rgb(var(--color-app-bg));
+  --color-surface: rgb(var(--color-surface-rgb));
+  --color-text-primary: rgb(var(--color-text-primary-rgb));
+  --color-text-secondary: rgb(var(--color-text-secondary-rgb));
+  --color-accent-main: rgb(var(--color-accent-main-rgb));
+  --color-accent-caret: rgb(var(--color-accent-caret-rgb));
+  --color-accent-ai: rgb(var(--color-accent-ai-rgb));
+  --color-ai-highlight: rgb(var(--color-ai-highlight-rgb));
+  --color-text-ghost: rgb(var(--color-text-ghost-rgb));
+  --color-diff-add-bg: rgb(var(--color-diff-add-bg-rgb));
+  --color-diff-del-bg: rgb(var(--color-diff-del-bg-rgb));
+  --color-diff-del-text: rgb(var(--color-diff-del-text-rgb));
+  --color-border-subtle: rgb(var(--color-border-subtle-rgb));
+  --color-success: rgb(var(--color-success-rgb));
+  --color-warning: rgb(var(--color-warning-rgb));
+  --color-error: rgb(var(--color-error-rgb));
 
-  /* ── Font families (§2 Typography Strategy) ── */
+  /* --- Font families (FRONTEND.md §2) --- */
   --font-ui: 'Inter', 'Geist Sans', system-ui, sans-serif;
   --font-document: 'Merriweather', 'Newsreader', Georgia, serif;
   --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
 
-  /* ── Font sizes (§2 Type Scale) ── */
+  /* --- Font sizes (FRONTEND.md §2 type scale) --- */
   --font-size-display: 32px;
   --font-size-h2: 28px;
   --font-size-h3: 24px;
@@ -40,7 +46,15 @@
   --font-size-ui-sm: 12px;
   --font-size-code: 14px;
 
-  /* ── Spacing (§3 Grid System — 4px base unit) ── */
+  /* --- Border radius (FRONTEND.md §5 — Swiss Scale) --- */
+  --radius-none: 0px;
+  --radius-sm: 2px;
+  --radius-base: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* --- Spacing (FRONTEND.md §3 — 4px base unit) --- */
   --spacing-0: 0px;
   --spacing-1: 4px;
   --spacing-2: 8px;
@@ -52,102 +66,104 @@
   --spacing-14: 56px;
   --spacing-16: 64px;
 
-  /* ── Border radius (§5 Swiss Scale) ── */
-  --radius-none: 0px;
-  --radius-sm: 2px;
-  --radius-base: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-full: 9999px;
-
-  /* ── Shadows (§6 Elevation) ── */
+  /* --- Box shadows (FRONTEND.md §6) --- */
   --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.12);
   --shadow-strong: 0 8px 24px rgba(0, 0, 0, 0.16);
 
-  /* ── Transition durations (§11 Animation) ── */
+  /* --- Z-index layers (FRONTEND.md §4) --- */
+  --z-0: 0;
+  --z-10: 10;
+  --z-20: 20;
+  --z-30: 30;
+  --z-40: 40;
+  --z-50: 50;
+  --z-100: 100;
+
+  /* --- Layout max-widths (FRONTEND.md §3) --- */
+  --max-width-document: 800px;
+  --max-width-document-wide: 900px;
+  --max-width-chat-panel: 400px;
+
+  /* --- Transition durations (FRONTEND.md §11) --- */
   --duration-fast: 150ms;
   --duration-base: 200ms;
   --duration-medium: 250ms;
   --duration-slow: 300ms;
 
-  /* ── Transition timing functions ── */
+  /* --- Transition timing functions (FRONTEND.md §11) --- */
   --ease-out-custom: cubic-bezier(0.4, 0.0, 0.2, 1);
   --ease-in-custom: cubic-bezier(0.4, 0.0, 1, 1);
   --ease-in-out-custom: cubic-bezier(0.4, 0.0, 0.6, 1);
 
-  /* ── Max widths (§3 Layout Grid) ── */
-  --container-document: 800px;
-  --container-document-wide: 900px;
-  --container-chat-panel: 400px;
-
-  /* ── Breakpoints (§3 Responsive) ── */
+  /* --- Breakpoints (FRONTEND.md §3) --- */
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1024px;
   --breakpoint-wide: 1440px;
 }
 
 /* ============================================================
-   CSS Custom Properties for runtime theme switching.
-   These are used by components via rgb(var(--caret-*)).
-   The @theme block above registers Tailwind utility classes;
-   the :root/.dark blocks below handle runtime dark mode toggle.
+   CSS Custom Properties — Light / Dark mode color switching
    ============================================================ */
 
 :root {
-  /* Light mode (default) */
-  --caret-app: 250 250 250;
-  --caret-surface: 255 255 255;
-  --caret-text-primary: 26 26 26;
-  --caret-text-secondary: 110 110 115;
-  --caret-accent-main: 0 102 204;
-  --caret-accent-caret: 255 69 0;
-  --caret-accent-ai: 139 92 246;
-  --caret-ai-highlight: 245 246 248;
-  --caret-text-ghost: 163 163 163;
-  --caret-diff-add-bg: 220 252 231;
-  --caret-diff-del-bg: 254 226 226;
-  --caret-diff-del-text: 185 28 28;
-  --caret-border-subtle: 229 229 229;
-  --caret-success: 16 185 129;
-  --caret-warning: 245 158 11;
-  --caret-error: 239 68 68;
+  /* Light mode (default) — RGB triplets for use with rgb() */
+  --color-app-bg: 250 250 250;
+  --color-surface-rgb: 255 255 255;
+  --color-text-primary-rgb: 26 26 26;
+  --color-text-secondary-rgb: 110 110 115;
+  --color-accent-main-rgb: 0 102 204;
+  --color-accent-caret-rgb: 255 69 0;       /* #FF4500 — Signature brand caret */
+  --color-accent-ai-rgb: 139 92 246;        /* #8B5CF6 — AI identity color */
+  --color-ai-highlight-rgb: 245 246 248;
+  --color-text-ghost-rgb: 163 163 163;
+  --color-diff-add-bg-rgb: 220 252 231;
+  --color-diff-del-bg-rgb: 254 226 226;
+  --color-diff-del-text-rgb: 185 28 28;
+  --color-border-subtle-rgb: 229 229 229;
+  --color-success-rgb: 16 185 129;           /* #10B981 */
+  --color-warning-rgb: 245 158 11;           /* #F59E0B */
+  --color-error-rgb: 239 68 68;              /* #EF4444 */
+
+  /* Font family custom properties (consumed by @theme and editor) */
+  --font-document: 'Merriweather', 'Newsreader', Georgia, serif;
+  --font-ui: 'Inter', 'Geist Sans', system-ui, sans-serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
 }
 
 .dark {
-  /* Dark mode overrides */
-  --caret-app: 18 18 18;
-  --caret-surface: 30 30 30;
-  --caret-text-primary: 232 232 232;
-  --caret-text-secondary: 156 163 175;
-  --caret-accent-main: 59 153 252;
-  --caret-accent-caret: 255 107 53;
-  --caret-accent-ai: 167 139 250;
-  --caret-ai-highlight: 32 33 36;
-  --caret-text-ghost: 82 82 82;
-  --caret-diff-add-bg: 6 78 59;
-  --caret-diff-del-bg: 127 29 29;
-  --caret-diff-del-text: 248 113 113;
-  --caret-border-subtle: 42 42 42;
-  --caret-success: 52 211 153;
-  --caret-warning: 251 191 36;
-  --caret-error: 248 113 113;
+  /* Dark mode overrides — same variable names, different values */
+  --color-app-bg: 18 18 18;
+  --color-surface-rgb: 30 30 30;
+  --color-text-primary-rgb: 232 232 232;
+  --color-text-secondary-rgb: 156 163 175;
+  --color-accent-main-rgb: 59 153 252;
+  --color-accent-caret-rgb: 255 107 53;      /* #FF6B35 */
+  --color-accent-ai-rgb: 167 139 250;        /* #A78BFA */
+  --color-ai-highlight-rgb: 32 33 36;
+  --color-text-ghost-rgb: 82 82 82;
+  --color-diff-add-bg-rgb: 6 78 59;
+  --color-diff-del-bg-rgb: 127 29 29;
+  --color-diff-del-text-rgb: 248 113 113;
+  --color-border-subtle-rgb: 42 42 42;
+  --color-success-rgb: 52 211 153;           /* #34D399 */
+  --color-warning-rgb: 251 191 36;           /* #FBBF24 */
+  --color-error-rgb: 248 113 113;            /* #F87171 */
 }
 
-/* ============================================================
-   Global styles
-   ============================================================ */
-
-/* Smooth theme transitions (§16 Theme Toggle Strategy) */
+/* Smooth theme transitions (see FRONTEND.md §16) */
 * {
   transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
 }
 
-/* Base typography (§2 Text Rendering) */
+/* ============================================================
+   Base typography — applied to the entire application
+   ============================================================ */
+
 body {
   font-family: var(--font-ui);
-  background-color: rgb(var(--caret-app));
-  color: rgb(var(--caret-text-primary));
+  background-color: var(--color-app);
+  color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -160,9 +176,9 @@ body {
 
 .caret-editor {
   font-family: var(--font-document);
-  color: rgb(var(--caret-text-primary));
+  color: var(--color-text-primary);
   line-height: 1.7;
-  caret-color: rgb(var(--caret-accent-caret));
+  caret-color: var(--color-accent-caret);
 }
 
 .caret-editor h1 {
@@ -189,10 +205,10 @@ body {
 }
 
 .caret-editor blockquote {
-  border-left: 4px solid rgb(var(--caret-accent-main));
+  border-left: 4px solid var(--color-accent-main);
   padding-left: 1.5rem;
   font-style: italic;
-  color: rgb(var(--caret-text-secondary));
+  color: var(--color-text-secondary);
   margin: 2rem 0;
 }
 
@@ -208,23 +224,19 @@ body {
 
 /* Ghost text for AI inline suggestions */
 .caret-editor .suggestion {
-  color: rgb(var(--caret-text-ghost));
+  color: var(--color-text-ghost);
   pointer-events: none;
 }
 
-/* ============================================================
-   Utility classes
-   ============================================================ */
-
-/* Glassmorphism panel (§9 Key UI Behaviors) */
+/* Glassmorphism panel (see FRONTEND.md §9) */
 .glass-panel {
-  background: rgb(var(--caret-app) / 0.85);
+  background: rgb(var(--color-app-bg) / 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgb(var(--caret-border-subtle) / 0.6);
+  border: 1px solid rgb(var(--color-border-subtle-rgb) / 0.6);
 }
 
-/* Focus mode: peripheral UI fades out (§9) */
+/* Focus mode: peripheral UI fades out (see FRONTEND.md §9) */
 .ui-peripheral {
   transition: opacity 200ms ease-out;
 }
