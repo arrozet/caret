@@ -63,7 +63,7 @@ export class DocumentService {
 
     /* Create the initial version (v1) with empty content */
     const initial_content = { type: "doc", content: [] };
-    await this.version_repo.create({
+    const initial_version = await this.version_repo.create({
       document_id: doc.id,
       version_number: 1,
       source: "manual",
@@ -72,7 +72,12 @@ export class DocumentService {
       created_by_user_id: user_id,
     });
 
-    return this.to_response_dto(doc, initial_content, "");
+    /* Set the denormalized latest_version_id pointer */
+    const updated_doc = await this.document_repo.update(doc.id, {
+      latest_version_id: initial_version.id,
+    });
+
+    return this.to_response_dto(updated_doc ?? doc, initial_content, "");
   }
 
   /**
@@ -158,15 +163,17 @@ export class DocumentService {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    /* Update document metadata (title) */
-    const update_data: Record<string, unknown> = {
+    /* Build a type-safe update payload — only whitelisted fields */
+    const update_fields: Partial<{
+      title: string;
+      updated_by_user_id: string;
+      latest_version_id: string;
+    }> = {
       updated_by_user_id: user_id,
     };
     if (dto.title !== undefined) {
-      update_data.title = dto.title;
+      update_fields.title = dto.title;
     }
-
-    const updated_doc = await this.document_repo.update(document_id, update_data);
 
     /* If content was provided, create a new version snapshot */
     let content_json: Record<string, unknown> | null = null;
@@ -187,9 +194,20 @@ export class DocumentService {
 
       content_json = version.content_json as Record<string, unknown>;
       content_text = version.content_text;
+
+      /* Update the denormalized latest_version_id pointer */
+      update_fields.latest_version_id = version.id;
     }
 
-    return this.to_response_dto(updated_doc!, content_json, content_text);
+    const updated_doc = await this.document_repo.update(
+      document_id,
+      update_fields,
+    );
+    if (!updated_doc) {
+      throw new NotFoundError("Document was deleted during update");
+    }
+
+    return this.to_response_dto(updated_doc, content_json, content_text);
   }
 
   /**
