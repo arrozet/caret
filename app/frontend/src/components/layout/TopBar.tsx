@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { use_auth_store } from "../../stores/auth_store";
 import { use_theme } from "../../hooks/use_theme";
+import { use_document } from "../../features/editor/hooks/use_document";
 import { Button } from "../ui/Button";
-import { LogOut, Sun, Moon, Monitor } from "lucide-react";
+import { LogOut, Sun, Moon, Monitor, Settings } from "lucide-react";
 
 /** Map theme value to its corresponding icon component. */
 const theme_icons = {
@@ -15,8 +16,8 @@ const theme_icons = {
 /**
  * Top navigation bar — fixed at the top of the viewport.
  *
- * Displays the app logo/name, breadcrumb context (e.g. document title),
- * and user actions (theme toggle, sign out).
+ * Displays the app logo/name, breadcrumb context (document title when
+ * editing), and user actions (settings, theme toggle, sign out).
  * Height: 56px (space-14 token, see FRONTEND.md §3).
  * Z-index: z-30 (Chrome layer, see FRONTEND.md §4).
  */
@@ -24,6 +25,7 @@ export function TopBar() {
   const { t } = useTranslation("common");
   const location = useLocation();
   const navigate = useNavigate();
+  const params = useParams<{ id: string }>();
   const user = use_auth_store((s) => s.user);
   const sign_out = use_auth_store((s) => s.sign_out);
   const { theme, toggle_theme } = use_theme();
@@ -32,6 +34,14 @@ export function TopBar() {
 
   /** Whether we're on a document editing page. */
   const is_editor_page = location.pathname.startsWith("/documents/");
+
+  /** Fetch document title for breadcrumb when on editor page. */
+  const { data: document } = use_document(
+    is_editor_page ? params.id : undefined,
+  );
+
+  /** Display title: use document title or fallback to "Untitled". */
+  const display_title = document?.title || "Untitled";
 
   return (
     <header className="ui-peripheral fixed top-0 right-0 left-0 z-30 flex h-14 items-center justify-between border-b border-border-subtle bg-surface px-4 md:px-6">
@@ -44,12 +54,12 @@ export function TopBar() {
           {t("app_name")}
         </button>
 
-        {/* Breadcrumb separator + context for editor pages */}
+        {/* Breadcrumb separator + document title for editor pages */}
         {is_editor_page && (
           <>
             <span className="text-text-secondary select-none">/</span>
-            <span className="truncate text-ui-base text-text-secondary">
-              Editing
+            <span className="truncate text-ui-base text-text-secondary max-w-[200px] md:max-w-[300px]">
+              {display_title}
             </span>
           </>
         )}
@@ -63,6 +73,16 @@ export function TopBar() {
             {/* Avatars will render here in Phase 3 */}
           </div>
         )}
+
+        {/* Settings */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/settings")}
+          aria-label={t("settings.title", { defaultValue: "Settings" })}
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
 
         {/* Theme toggle */}
         <Button
