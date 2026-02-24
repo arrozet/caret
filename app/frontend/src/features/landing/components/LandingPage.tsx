@@ -62,7 +62,7 @@ const item_variants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { type: "spring", stiffness: 110, damping: 18 },
+    transition: { type: "spring" as const, stiffness: 110, damping: 18 },
   },
 };
 
@@ -76,7 +76,7 @@ const word_variants = {
     opacity: 1,
     y: 0,
     filter: "blur(0px)",
-    transition: { type: "spring", stiffness: 120, damping: 22, delay: i * 0.065 },
+    transition: { type: "spring" as const, stiffness: 120, damping: 22, delay: i * 0.065 },
   }),
 };
 
@@ -451,7 +451,7 @@ export function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-80px" }}
-            transition={{ type: "spring", stiffness: 100, damping: 18 }}
+            transition={{ type: "spring" as const, stiffness: 100, damping: 18 }}
             className="mb-16 text-center font-ui text-h3 tracking-tight text-text-primary"
           >
             Built for writers who care about clarity
