@@ -10,3 +10,6 @@ export type { UpdateDocumentDto } from "./update_document_dto.js";
 export type { DocumentResponseDto } from "./document_response_dto.js";
 export type { CreateWorkspaceDto } from "./create_workspace_dto.js";
 export type { WorkspaceResponseDto } from "./workspace_response_dto.js";
+export type { CreateFolderDto } from "./create_folder_dto.js";
+export type { UpdateFolderDto } from "./update_folder_dto.js";
+export type { FolderResponseDto } from "./folder_response_dto.js";
