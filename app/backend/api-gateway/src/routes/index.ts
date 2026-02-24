@@ -5,17 +5,13 @@ import { logger } from "../lib/logger.js";
 
 /**
  * Create a proxy middleware that forwards requests to a downstream service.
- * Strips the versioned prefix (e.g., /api/v1/auth) before forwarding.
+ * Strips only the `/api/v1` prefix so the downstream service receives
+ * its own mount path (e.g., `/api/v1/documents/123` → `/documents/123`).
  */
-function create_proxy(
-  target_url: string,
-  path_prefix: string,
-): ReturnType<typeof proxy> {
+function create_proxy(target_url: string): ReturnType<typeof proxy> {
   return proxy(target_url, {
     proxyReqPathResolver(req: Request): string {
-      /* Remove the gateway prefix so the downstream service sees
-         clean paths. e.g., /api/v1/auth/profile → /profile */
-      const downstream_path = req.originalUrl.replace(path_prefix, "") || "/";
+      const downstream_path = req.originalUrl.replace("/api/v1", "") || "/";
       logger.info(`Proxying ${req.method} ${req.originalUrl} → ${target_url}${downstream_path}`);
       return downstream_path;
     },
@@ -42,25 +38,25 @@ export function register_routes(app: Express): void {
   /* --- Auth Service --- */
   app.use(
     "/api/v1/auth",
-    create_proxy(config.AUTH_SERVICE_URL, "/api/v1/auth"),
+    create_proxy(config.AUTH_SERVICE_URL),
   );
 
   /* --- Document Service --- */
   app.use(
     "/api/v1/documents",
-    create_proxy(config.DOCUMENT_SERVICE_URL, "/api/v1/documents"),
+    create_proxy(config.DOCUMENT_SERVICE_URL),
   );
 
   /* --- Workspaces (handled by document-service) --- */
   app.use(
     "/api/v1/workspaces",
-    create_proxy(config.DOCUMENT_SERVICE_URL, "/api/v1/workspaces"),
+    create_proxy(config.DOCUMENT_SERVICE_URL),
   );
 
   /* --- AI Service --- */
   app.use(
     "/api/v1/ai",
-    create_proxy(config.AI_SERVICE_URL, "/api/v1/ai"),
+    create_proxy(config.AI_SERVICE_URL),
   );
 
   /* --- API info endpoint --- */
