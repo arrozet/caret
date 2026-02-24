@@ -50,3 +50,19 @@ Nueva iteración de animaciones para aumentar personalidad sin romper el minimal
 - **Glow reactivo al cursor:** Se mantiene seguimiento del ratón únicamente en capas de fondo (sin cursor bubble superpuesto).
 - **Accesibilidad motion-aware:** Se incorporó `useReducedMotion` para degradar animaciones continuas cuando el sistema lo solicita.
 - **Microloop de acento:** La línea superior del hero ahora incluye un punto animado de baja intensidad como detalle de identidad.
+
+## 8. Animated app mockup en el hero
+
+Se restructuró el hero en dos columnas (texto + mockup) y se creó el componente `AnimatedMockup`:
+
+- **Hero dos columnas:** En desktop (`md+`), el hero pasa a `grid-cols-2` con texto a la izquierda y el mockup a la derecha. En mobile se apila verticalmente.
+- **`AnimatedMockup` — `src/features/landing/components/AnimatedMockup.tsx`:** Nuevo componente decorativo que simula una sesión de edición real:
+  - Chrome de navegador (semáforo macOS + barra URL con `^` brand icon).
+  - Top bar de la app con logo, nombre del documento y avatares de colaboración.
+  - Área de documento con palabras que se van escribiendo una a una y cursor naranja parpadeante.
+  - Panel AI lateral con mensaje de usuario y respuesta IA que se va revelando carácter a carácter.
+  - Bucle infinito basado en máquina de estados async (`live` guard para cleanup correcto).
+- **3D tilt con mouse:** El componente `useCardTilt` aplica `rotateX`/`rotateY` con spring (stiffness 200, damping 28) según la posición del ratón relativa al centro de la tarjeta, dando sensación de profundidad 3D.
+- **Tema siempre oscuro:** El mockup fuerza la clase `.dark` en su raíz para mostrar la versión dark de la app de forma consistente independientemente del tema del usuario.
+- **`aria-hidden="true"`:** El mockup es puramente decorativo; no es interactivo ni accesible por lectores de pantalla.
+- **`useReducedMotion` gate:** Todos los bucles de animación se omiten con `prefers-reduced-motion`, mostrando el estado final estático.

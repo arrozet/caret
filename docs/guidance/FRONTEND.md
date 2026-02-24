@@ -460,6 +460,7 @@ Use Framer Motion to add personality without visual noise:
 - **Respect reduced motion**: Gate ALL continuous, decorative, and parallax animations behind `useReducedMotion()`. Provide static fallbacks for every animated element.
 - **Motion primitives**: Animate only `transform` and `opacity` — never `top/left/width/height` — for GPU-accelerated performance.
 - **Timing targets**: Loops `8–12s`, scroll-linked `linear`, interaction springs `stiffness: 110–260 / damping: 18–24`, section reveals `stagger: 0.1s`.
+- **Animated app mockup**: Use a dedicated `AnimatedMockup` component to showcase the product inside the hero. It must: force `.dark` class on its root (always dark regardless of user theme), be `aria-hidden="true"` (decorative), use a phase-based async animation loop with a `live` guard for safe cleanup, apply 3-D tilt (`useCardTilt`: `rotateX`/`rotateY` + `transformPerspective`) driven by mouse events on the element itself (not the page), and be `select-none` + `pointer-events-none`-safe. Never exceed 5° tilt. Spring config: `stiffness: 200, damping: 28`.
 
 ---
 
