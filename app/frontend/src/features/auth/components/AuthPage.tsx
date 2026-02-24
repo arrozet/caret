@@ -29,6 +29,7 @@ export function AuthPage() {
   const navigate = useNavigate();
   const sign_in = use_auth_store((s) => s.sign_in);
   const sign_up = use_auth_store((s) => s.sign_up);
+  const sign_in_with_oauth = use_auth_store((s) => s.sign_in_with_oauth);
   const { theme, toggle_theme } = use_theme();
 
   const [mode, set_mode] = useState<AuthMode>("sign_in");
@@ -36,8 +37,27 @@ export function AuthPage() {
   const [password, set_password] = useState("");
   const [error, set_error] = useState<string | null>(null);
   const [is_loading, set_is_loading] = useState(false);
+  const [is_oauth_loading, set_is_oauth_loading] = useState(false);
 
   const ThemeIcon = theme_icons[theme];
+
+  /**
+   * Handle Google OAuth sign-in.
+   * Supabase redirects to Google, then back to the app.
+   * The onAuthStateChange listener handles session detection.
+   */
+  async function handle_google_sign_in() {
+    set_error(null);
+    set_is_oauth_loading(true);
+
+    const error_message = await sign_in_with_oauth("google");
+
+    if (error_message) {
+      set_is_oauth_loading(false);
+      set_error(error_message);
+    }
+    /* If no error, the browser is redirecting to Google — no need to reset loading */
+  }
 
   /**
    * Handle form submission for both sign-in and sign-up.
@@ -106,6 +126,26 @@ export function AuthPage() {
               : t("auth.create_account")}
           </h2>
 
+          {/* Google OAuth */}
+          <button
+            type="button"
+            onClick={handle_google_sign_in}
+            disabled={is_oauth_loading || is_loading}
+            className="flex w-full items-center justify-center gap-3 rounded-base border border-border-subtle bg-surface px-4 py-2.5 text-ui-base text-text-primary transition-colors hover:bg-app disabled:opacity-50"
+          >
+            <GoogleIcon />
+            {t("auth.continue_with_google")}
+          </button>
+
+          {/* Divider */}
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-border-subtle" />
+            <span className="text-ui-sm text-text-secondary">
+              {t("auth.or_divider")}
+            </span>
+            <div className="h-px flex-1 bg-border-subtle" />
+          </div>
+
           <form onSubmit={handle_submit} className="flex flex-col gap-4">
             <Input
               id="email"
@@ -171,5 +211,32 @@ export function AuthPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Google "G" logo as an inline SVG.
+ * Uses the official brand colors for recognition.
+ */
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path
+        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
+        fill="#4285F4"
+      />
+      <path
+        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
+        fill="#34A853"
+      />
+      <path
+        d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+        fill="#EA4335"
+      />
+    </svg>
   );
 }

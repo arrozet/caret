@@ -7,5 +7,9 @@
   "save": "Guardar",
   "cancel": "Cancelar",
   "confirm": "Confirmar",
-  "close": "Cerrar"
+  "close": "Cerrar",
+  "auth": {
+    "continue_with_google": "Continuar con Google",
+    "or_divider": "o"
+  }
 }
