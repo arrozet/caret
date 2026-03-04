@@ -41,7 +41,8 @@ interface CaretEditorProps {
  *
  * Renders within a centered "sheet" container using the `.caret-editor`
  * CSS class defined in index.css. Includes a full formatting toolbar
- * with bold, italic, underline, headings, lists, alignment, etc.
+ * with bold, italic, underline, headings, lists, alignment, etc., and
+ * a floating SelectionMenu that appears on text selection.
  *
  * @param props - Editor configuration and callbacks.
  * @returns The rendered editor component.
@@ -58,6 +59,11 @@ export function CaretEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
+        // Tiptap v3 StarterKit bundles Link and Underline by default.
+        // Disable them here to avoid "Duplicate extension names" warnings;
+        // we register both below with our own configuration options.
+        link: false,
+        underline: false,
       }),
       TextStyle,
       Color,
@@ -134,8 +140,8 @@ export function CaretEditor({
       {editable && editor && (
         <div className="shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle flex justify-center">
           <div className="w-full max-w-[var(--max-width-document-wide)]">
-            <EditorToolbar 
-              editor={editor} 
+            <EditorToolbar
+              editor={editor}
               paper_size={paper_size}
               set_paper_size={set_paper_size}
             />

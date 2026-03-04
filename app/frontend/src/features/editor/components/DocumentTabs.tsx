@@ -69,14 +69,23 @@ export function DocumentTabs() {
       {open_tabs.map((tab) => {
         const is_active = tab.id === active_id;
         return (
-          <button
+          // Use <div role="tab"> instead of <button> because the close button
+          // lives inside each tab — HTML disallows <button> inside <button>.
+          <div
             key={tab.id}
             role="tab"
+            tabIndex={0}
             aria-selected={is_active}
             aria-label={`${tab.title} document tab`}
             onClick={() => handle_tab_click(tab.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handle_tab_click(tab.id);
+              }
+            }}
             className={[
-              "group relative flex h-full min-w-0 max-w-[200px] shrink-0 cursor-pointer items-center gap-1.5 border-r border-border-subtle px-3 text-left transition-colors",
+              "group relative flex h-full min-w-0 max-w-[200px] shrink-0 cursor-pointer items-center gap-1.5 border-r border-border-subtle px-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-main",
               is_active
                 ? "bg-bg-app text-text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent-main after:content-['']"
                 : "bg-surface text-text-secondary hover:bg-bg-app hover:text-text-primary",
@@ -91,11 +100,11 @@ export function DocumentTabs() {
               onClick={(e) => handle_close(e, tab.id)}
               className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-border-subtle group-hover:opacity-100 focus:opacity-100"
               aria-label={`Close ${tab.title} tab`}
-              tabIndex={-1}
+              tabIndex={0}
             >
               <X className="h-3 w-3" aria-hidden="true" />
             </button>
-          </button>
+          </div>
         );
       })}
 
