@@ -185,10 +185,10 @@ export function EditorPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col p-4 md:p-8">
-      {/* Top bar: back button + document title + save status */}
-      <div className="mx-auto mb-4 flex w-full max-w-[var(--max-width-document)] items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={handle_back}>
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-app">
+      {/* Sub-header: back button + document title + save status */}
+      <div className="flex w-full shrink-0 items-center gap-3 px-4 py-2 border-b border-border-subtle bg-surface z-20">
+        <Button variant="ghost" size="sm" onClick={handle_back} className="hover:bg-border-subtle/50">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Documents</span>
         </Button>
@@ -201,19 +201,23 @@ export function EditorPage() {
           onFocus={() => set_is_title_focused(true)}
           onBlur={handle_title_blur}
           placeholder="Untitled"
-          className="min-w-0 flex-1 bg-transparent border-none outline-none font-ui text-ui-lg font-semibold text-text-primary placeholder:text-text-secondary/50 focus:border-b-2 focus:border-accent-main px-1 py-0.5 transition-all"
+          className="min-w-0 max-w-sm bg-transparent border-none outline-none font-ui text-ui-lg font-semibold text-text-primary placeholder:text-text-secondary/50 focus:border-b-2 focus:border-accent-main px-1 py-0.5 transition-all"
           aria-label="Document title"
         />
 
         {/* Save status indicator */}
-        <SaveStatusIndicator status={save_status} />
+        <div className="ml-auto">
+          <SaveStatusIndicator status={save_status} />
+        </div>
       </div>
 
-      {/* Editor */}
-      <CaretEditor
-        content={document.content_json as JSONContent | undefined}
-        on_update={handle_update}
-      />
+      {/* Editor Region */}
+      <div className="flex-1 overflow-hidden">
+        <CaretEditor
+          content={document.content_json as JSONContent | undefined}
+          on_update={handle_update}
+        />
+      </div>
     </div>
   );
 }
