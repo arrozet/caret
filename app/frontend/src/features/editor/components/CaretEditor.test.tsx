@@ -11,7 +11,7 @@ describe("CaretEditor", () => {
   it("renders the editor container", () => {
     const { container } = render(<CaretEditor />);
 
-    /* The outer editor-canvas wrapper should be present */
+    /* The canvas wrapper with the paper sizing class should be present */
     const canvas = container.querySelector(".editor-canvas");
     expect(canvas).toBeInTheDocument();
   });

@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Loader2, ArrowLeft, Check, AlertCircle } from "lucide-react";
 import type { JSONContent } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
-import { DocumentTabs } from "./DocumentTabs";
 import { Button } from "../../../components/ui/Button";
 import { use_document } from "../hooks/use_document";
 import { use_save_document } from "../hooks/use_save_document";
@@ -202,10 +201,7 @@ export function EditorPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-app">
-      {/* Document tabs strip */}
-      <DocumentTabs />
-
+    <div className="flex flex-1 flex-col overflow-hidden bg-app">
       {/* Sub-header: back button + document title + save status */}
       <div className="flex w-full shrink-0 items-center gap-3 px-4 py-2 border-b border-border-subtle bg-surface z-20">
         <Button variant="ghost" size="sm" onClick={handle_back} className="hover:bg-border-subtle/50">

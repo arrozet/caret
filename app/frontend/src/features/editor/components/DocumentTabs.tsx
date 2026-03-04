@@ -23,7 +23,7 @@ export function DocumentTabs() {
    */
   function handle_tab_click(id: string) {
     if (id !== active_id) {
-      navigate(`/editor/${id}`);
+      navigate(`/documents/${id}`);
     }
   }
 
@@ -44,7 +44,7 @@ export function DocumentTabs() {
       } else {
         // Navigate to the previous tab, or the first if we closed index 0.
         const next_index = Math.max(0, tab_index - 1);
-        navigate(`/editor/${remaining[next_index].id}`);
+        navigate(`/documents/${remaining[next_index].id}`);
       }
     }
   }
