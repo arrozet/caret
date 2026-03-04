@@ -138,15 +138,15 @@ Future (v2.0):
 └──────────────┘
 ```
 
-## System Documentation Index
+## System Documentation
 
-This hub connects all detailed technical specifications for the Caret project.
+Full specifications live in `docs/guidance/`. Read the relevant file when you need deep context on a topic. AI agents can also load each topic on demand as a skill from `.agents/skills/`.
 
-| File | Description |
-|:---|:---|
-| **[FRONTEND.md](./FRONTEND.md)** | Design system, UI components, and React architecture. |
-| **[BACKEND.md](./BACKEND.md)** | Microservices architecture, API specifications, and Node.js/Python services. |
-| **[DATABASE.md](./DATABASE.md)** | PostgreSQL schema, Supabase configuration, and Vector storage (pgvector). |
-| **[DEPLOYMENT.md](./DEPLOYMENT.md)** | Infrastructure-as-Code, AWS services (Lambda/ECS), and CI/CD pipelines. |
-| **[TESTING.md](./TESTING.md)** | QA strategies, E2E testing (Playwright), and unit testing standards. |
-| **[ROADMAP.md](./ROADMAP.md)** | Execution phases and step-by-step engineering checklist. |
+| Topic | Full reference | Skill |
+|:---|:---|:---|
+| Frontend design system, UI components, React architecture | `docs/guidance/FRONTEND.md` | `caret-frontend` |
+| Backend microservices, API specs, Node.js/Python services | `docs/guidance/BACKEND.md` | `caret-backend` |
+| PostgreSQL schema, Supabase, RLS, pgvector | `docs/guidance/DATABASE.md` | `caret-database` |
+| Infrastructure, Docker, AWS (Lambda/ECS), CI/CD | `docs/guidance/DEPLOYMENT.md` | `caret-deployment` |
+| QA strategy, Vitest, Pytest, Playwright | `docs/guidance/TESTING.md` | `caret-testing` |
+| Engineering roadmap and step-by-step checklist | `docs/guidance/ROADMAP.md` | `caret-roadmap` |
