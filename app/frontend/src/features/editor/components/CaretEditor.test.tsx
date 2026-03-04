@@ -11,9 +11,9 @@ describe("CaretEditor", () => {
   it("renders the editor container", () => {
     const { container } = render(<CaretEditor />);
 
-    /* The outer sheet wrapper should be present */
-    const sheet = container.querySelector(".max-w-\\[var\\(--max-width-document\\)\\]");
-    expect(sheet).toBeInTheDocument();
+    /* The outer editor-canvas wrapper should be present */
+    const canvas = container.querySelector(".editor-canvas");
+    expect(canvas).toBeInTheDocument();
   });
 
   it("renders with default empty content", () => {
