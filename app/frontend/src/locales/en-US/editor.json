@@ -1,0 +1,35 @@
+{
+  "untitled_document": "Untitled Document",
+  "placeholder": "Start writing...",
+  "toolbar": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strikethrough": "Strikethrough",
+    "highlight": "Highlight",
+    "heading_1": "Heading 1",
+    "heading_2": "Heading 2",
+    "heading_3": "Heading 3",
+    "bullet_list": "Bullet list",
+    "ordered_list": "Numbered list",
+    "blockquote": "Blockquote",
+    "code_block": "Code block",
+    "horizontal_rule": "Horizontal rule",
+    "align_left": "Align left",
+    "align_center": "Align center",
+    "align_right": "Align right",
+    "align_justify": "Justify",
+    "undo": "Undo",
+    "redo": "Redo",
+    "clear_formatting": "Clear formatting",
+    "font_family": "Font family",
+    "link": "Insert link",
+    "ai_enhance": "AI Enhance",
+    "ask_ai": "Ask AI"
+  },
+  "save_status": {
+    "saving": "Saving...",
+    "saved": "Saved",
+    "error": "Error saving"
+  }
+}

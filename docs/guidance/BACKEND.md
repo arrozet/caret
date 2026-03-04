@@ -122,6 +122,195 @@ All REST endpoints must follow these principles:
 - The Collaboration Service validates the token before accepting the connection.
 - Invalid tokens result in immediate connection closure (403 Unauthorized).
 
+## Internal Service Architecture (Layered Structure)
+
+Every microservice follows the same 4-layer internal architecture. The goal is strict separation of concerns: each layer has one responsibility and one only. Violating these boundaries is a code review blocker.
+
+### The 4-Layer Model
+
+```
+┌─────────────────────────────────────────────────┐
+│  Controller (HTTP boundary)                     │
+│  • Parses HTTP request                          │
+│  • Validates input DTO                          │
+│  • Calls Service                                │
+│  • Returns HTTP response with output DTO        │
+│  Rule: NO business logic. NO SQL.               │
+├─────────────────────────────────────────────────┤
+│  Service (Business logic)                       │
+│  • Orchestrates Repositories                    │
+│  • Enforces domain rules                        │
+│  • Maps DTOs → Models and Models → DTOs         │
+│  Rule: NO HTTP concepts (req/res). NO SQL.      │
+├─────────────────────────────────────────────────┤
+│  Repository (Data access)                       │
+│  • All ORM/SQL queries live here                │
+│  • Receives and returns domain Models           │
+│  • One repository per domain aggregate          │
+│  Rule: NO business logic. Returns Models only.  │
+├─────────────────────────────────────────────────┤
+│  Model / Schema (Domain & API shapes)           │
+│  • Domain Models: internal data representations │
+│  • DTOs: validated API input/output types       │
+│  Rule: DTOs never reach the Repository.         │
+│  Rule: Models are never serialized directly.    │
+└─────────────────────────────────────────────────┘
+```
+
+### Layer Rules Summary
+
+| Layer | Can import | Cannot import |
+|:------|:-----------|:--------------|
+| Controller | DTOs, Service | Repository, ORM, Models |
+| Service | Repository, Models, DTOs (for mapping) | ORM directly, HTTP types |
+| Repository | ORM (Drizzle / SQLAlchemy), Models | Service, DTOs, HTTP types |
+| DTO / Model | (pure types, no imports) | Any layer |
+
+### Key Patterns
+
+- **DTO (Data Transfer Object)**: Define explicit input/output types for every API endpoint. DTOs are validated at the HTTP boundary (Controller layer). They must never be passed down to the Repository layer — map them to domain Models at the Service layer.
+- **Repository Pattern**: All database queries live in Repository classes. Services never import the ORM directly. This makes the DB layer swappable and unit-testable in isolation.
+- **ORM**: Use **Drizzle ORM** for Node.js services (type-safe, SQL-first, minimal overhead for Lambda). Use **SQLAlchemy** (async) for the Python AI service.
+- **Dependency Injection**: Services receive their Repositories as constructor arguments (not imports). This enables clean unit testing with mocked repositories.
+
+### Data Flow
+
+```
+HTTP Request
+    │
+    ▼
+Controller          ← validates InputDTO (e.g. CreateDocumentDto)
+    │ calls service(input_dto)
+    ▼
+Service             ← maps InputDTO → Model, applies business rules
+    │ calls repository.create(model)
+    ▼
+Repository          ← executes SQL via ORM, returns Model
+    │ returns Model
+    ▼
+Service             ← maps Model → OutputDTO
+    │ returns output_dto
+    ▼
+Controller          ← sends HTTP 201 with OutputDTO as JSON body
+```
+
+---
+
+## Directory Structure per Service
+
+### Node.js Services (Auth, Document, Collaboration)
+
+**Tech**: Express + tsoa + Drizzle ORM + TypeScript
+
+```
+service-name/
+├── src/
+│   ├── controllers/        # tsoa: @Route, @Get, @Post decorators
+│   │   └── document_controller.ts
+│   ├── services/           # Business logic; receives repos via DI
+│   │   └── document_service.ts
+│   ├── repositories/       # All Drizzle ORM queries
+│   │   └── document_repository.ts
+│   ├── models/             # Domain entity types (internal)
+│   │   └── document_model.ts
+│   ├── dtos/               # Input/output API shapes (validated by tsoa)
+│   │   ├── create_document_dto.ts
+│   │   └── document_response_dto.ts
+│   ├── db/                 # Drizzle ORM config, schema definitions, migrations
+│   │   ├── schema.ts
+│   │   ├── client.ts
+│   │   └── migrations/
+│   ├── lib/                # Shared utilities: logger, error classes, constants
+│   │   ├── errors.ts
+│   │   └── logger.ts
+│   ├── middleware/         # Express middleware: auth guards, error handler, rate limit
+│   │   ├── auth_middleware.ts
+│   │   └── error_middleware.ts
+│   └── app.ts              # Express app setup + tsoa route registration
+├── tests/
+│   ├── unit/               # Service and Repository unit tests (mocked dependencies)
+│   └── integration/        # Full HTTP endpoint tests (test DB)
+├── package.json
+└── tsconfig.json
+```
+
+**Dependency injection rule**: Services are instantiated in `app.ts` (or a DI container). Repositories are injected into Services via constructor. Services are injected into Controllers via tsoa's DI mechanism. Nothing is imported directly inside business logic files.
+
+---
+
+### Python AI Service (FastAPI + SQLAlchemy)
+
+**Tech**: FastAPI + SQLAlchemy async + Pydantic + PydanticAI + uv
+
+```
+ai-service/
+├── app/
+│   ├── routers/            # FastAPI routers (equivalent of controllers)
+│   │   └── ai_router.py
+│   ├── services/           # Business logic; PydanticAI agent orchestration
+│   │   └── ai_service.py
+│   ├── repositories/       # All SQLAlchemy queries; returns domain models
+│   │   └── conversation_repository.py
+│   ├── models/             # SQLAlchemy ORM table definitions (DB layer)
+│   │   └── conversation_model.py
+│   ├── schemas/            # Pydantic schemas = DTOs (API input/output validation)
+│   │   ├── ai_request.py
+│   │   └── ai_response.py
+│   ├── db/                 # SQLAlchemy async engine, session factory
+│   │   ├── session.py
+│   │   └── migrations/     # Alembic migration files
+│   ├── core/               # Settings (pydantic-settings), startup lifespan, DI
+│   │   ├── config.py
+│   │   └── dependencies.py # FastAPI Depends() factories
+│   └── main.py             # FastAPI app instantiation + router registration
+├── tests/
+│   ├── unit/               # Service and repository unit tests
+│   └── integration/        # API endpoint tests (HTTPX + async test DB)
+├── pyproject.toml
+└── uv.lock
+```
+
+**Pydantic schemas as DTOs**: In FastAPI, Pydantic `BaseModel` subclasses serve as DTOs. They are declared as request/response types in the router, validated automatically by FastAPI, and must be mapped to SQLAlchemy Models before being passed to the Repository.
+
+**SQLAlchemy vs Pydantic models**: These are two distinct types and must never be mixed.
+- `app/models/` = SQLAlchemy ORM classes (represent DB tables, used only in Repositories).
+- `app/schemas/` = Pydantic classes (represent API data shapes, used only in Routers and Services for mapping).
+
+---
+
+## Communication Protocols
+
+| Protocol | Direction | Services Involved | Use Case |
+|:---------|:----------|:-----------------|:---------|
+| **REST (HTTP/JSON)** | Frontend → Gateway → Service | Auth, Document, AI (via Gateway) | All stateless CRUD and request/response operations |
+| **WebSocket** | Frontend ↔ Collaboration Service | Collaboration Service (ECS) | Y.js CRDT real-time sync; persistent bidirectional connection |
+| **SSE (Server-Sent Events)** | AI Service → Frontend | AI Service (ECS) | Token-by-token LLM streaming; unidirectional server push |
+
+### REST
+
+All REST endpoints are exposed exclusively through the **API Gateway**. The frontend never calls individual services directly. Versioning prefix: `/api/v1/`.
+
+### WebSocket
+
+The Collaboration Service runs as a persistent WebSocket server on ECS (not Lambda, due to connection statefulness). Authentication is performed at handshake time via JWT query param:
+
+```
+wss://collab.caret.page/document/{doc_id}?token={supabase_jwt}
+```
+
+### SSE (AI Streaming)
+
+The AI Service pushes token chunks to the frontend via SSE. The frontend applies each chunk as a **Tiptap transaction**, which propagates through Y.js automatically to maintain CRDT consistency. The AI Service **never** writes to the database directly.
+
+```
+POST /api/v1/ai/stream
+    │
+    ▼  (SSE stream opens)
+AI Service → chunk → Frontend → Tiptap transaction → Y.js update → all collaborators
+```
+
+---
+
 ## Future Improvements (v2.0)
 - **Redis Hot Cache**: For caching frequently accessed documents and Y.js state.
 - **BullMQ Task Queue**: Async processing for heavy operations (PDF parsing, bulk embeddings).

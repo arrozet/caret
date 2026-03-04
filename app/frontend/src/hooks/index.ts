@@ -1,0 +1,7 @@
+/**
+ * Shared application-level hooks.
+ * Cross-cutting hooks that are not tied to a single feature.
+ *
+ * Examples: useTheme, useMediaQuery, useLocalStorage, useDebounce.
+ */
+export { use_theme } from "./use_theme";

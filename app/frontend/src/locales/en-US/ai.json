@@ -1,0 +1,15 @@
+{
+  "panel_title": "Caret",
+  "input_placeholder": "Type a message...",
+  "stop_generating": "Stop Generating",
+  "apply": "Apply",
+  "regenerate": "Regenerate",
+  "suggested_prompts": {
+    "summarize": "Summarize this document",
+    "improve_intro": "Improve the introduction",
+    "check_clarity": "Check for clarity"
+  },
+  "error": {
+    "unavailable": "The AI service is temporarily unavailable. Please try again."
+  }
+}

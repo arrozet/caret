@@ -1,0 +1,7 @@
+{
+  "generic": "An unexpected error occurred.",
+  "network": "Network error. Please check your connection.",
+  "unauthorized": "You are not authorized to perform this action.",
+  "not_found": "The requested resource was not found.",
+  "document_save_failed": "Failed to save the document. Please try again."
+}

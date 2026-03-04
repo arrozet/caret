@@ -1,0 +1,31 @@
+{
+  "name": "@caret/collab-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/app.ts",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "ws": "^8.18.2",
+    "yjs": "^13.6.29",
+    "y-protocols": "^1.0.6",
+    "lib0": "^0.2.110",
+    "drizzle-orm": "^0.43.0",
+    "postgres": "^3.4.5",
+    "dotenv": "^16.5.0",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.14",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0",
+    "tsx": "^4.19.4",
+    "drizzle-kit": "^0.31.0",
+    "vitest": "^3.1.4"
+  }
+}

@@ -1,0 +1,630 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Caret Design Tokens — "Swiss Focus" Theme
+   See: docs/guidance/FRONTEND.md §16 (Design Tokens)
+
+   Tailwind v4 uses CSS-based @theme directives instead of a JS
+   config file. The @theme block below registers custom tokens
+   as first-class Tailwind utilities (e.g., bg-app, text-accent-main).
+
+   CSS custom properties in :root / .dark handle light/dark mode
+   color switching; @theme maps them to the Tailwind engine.
+   ============================================================ */
+
+@theme {
+  /* --- Colors (light mode defaults, overridden by .dark) --- */
+  --color-app: rgb(var(--color-app-bg));
+  --color-surface: rgb(var(--color-surface-rgb));
+  --color-text-primary: rgb(var(--color-text-primary-rgb));
+  --color-text-secondary: rgb(var(--color-text-secondary-rgb));
+  --color-accent-main: rgb(var(--color-accent-main-rgb));
+  --color-accent-caret: rgb(var(--color-accent-caret-rgb));
+  --color-accent-ai: rgb(var(--color-accent-ai-rgb));
+  --color-ai-highlight: rgb(var(--color-ai-highlight-rgb));
+  --color-text-ghost: rgb(var(--color-text-ghost-rgb));
+  --color-diff-add-bg: rgb(var(--color-diff-add-bg-rgb));
+  --color-diff-del-bg: rgb(var(--color-diff-del-bg-rgb));
+  --color-diff-del-text: rgb(var(--color-diff-del-text-rgb));
+  --color-border-subtle: rgb(var(--color-border-subtle-rgb));
+  --color-success: rgb(var(--color-success-rgb));
+  --color-warning: rgb(var(--color-warning-rgb));
+  --color-error: rgb(var(--color-error-rgb));
+
+  /* --- Font families (FRONTEND.md §2) --- */
+  --font-ui: 'Inter', 'Geist Sans', system-ui, sans-serif;
+  --font-document: 'Merriweather', 'Newsreader', Georgia, serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
+
+  /* --- Font sizes (FRONTEND.md §2 type scale) --- */
+  --font-size-display: 32px;
+  --font-size-h2: 28px;
+  --font-size-h3: 24px;
+  --font-size-body: 18px;
+  --font-size-ui-lg: 16px;
+  --font-size-ui-base: 14px;
+  --font-size-ui-sm: 12px;
+  --font-size-code: 14px;
+
+  /* --- Border radius (FRONTEND.md §5 — Swiss Scale) --- */
+  --radius-none: 0px;
+  --radius-sm: 2px;
+  --radius-base: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* --- Spacing (FRONTEND.md §3 — 4px base unit) --- */
+  --spacing-0: 0px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-12: 48px;
+  --spacing-14: 56px;
+  --spacing-16: 64px;
+
+  /* --- Box shadows (FRONTEND.md §6) --- */
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-strong: 0 8px 24px rgba(0, 0, 0, 0.16);
+
+  /* --- Z-index layers (FRONTEND.md §4) --- */
+  --z-0: 0;
+  --z-10: 10;
+  --z-20: 20;
+  --z-30: 30;
+  --z-40: 40;
+  --z-50: 50;
+  --z-100: 100;
+
+  /* --- Layout max-widths (FRONTEND.md §3) --- */
+  --max-width-document: 800px;
+  --max-width-document-wide: 900px;
+  --max-width-chat-panel: 400px;
+
+  /* --- Transition durations (FRONTEND.md §11) --- */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-medium: 250ms;
+  --duration-slow: 300ms;
+
+  /* --- Transition timing functions (FRONTEND.md §11) --- */
+  --ease-out-custom: cubic-bezier(0.4, 0.0, 0.2, 1);
+  --ease-in-custom: cubic-bezier(0.4, 0.0, 1, 1);
+  --ease-in-out-custom: cubic-bezier(0.4, 0.0, 0.6, 1);
+
+  /* --- Breakpoints (FRONTEND.md §3) --- */
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+  --breakpoint-wide: 1440px;
+}
+
+/* ============================================================
+   CSS Custom Properties — Light / Dark mode color switching
+   ============================================================ */
+
+:root {
+  /* Light mode (default) — RGB triplets for use with rgb() */
+  --color-app-bg: 250 250 250;
+  --color-surface-rgb: 255 255 255;
+  --color-text-primary-rgb: 26 26 26;
+  --color-text-secondary-rgb: 110 110 115;
+  --color-accent-main-rgb: 0 102 204;
+  --color-accent-caret-rgb: 255 69 0;
+  --color-accent-ai-rgb: 139 92 246;
+  --color-ai-highlight-rgb: 245 246 248;
+  --color-text-ghost-rgb: 163 163 163;
+  --color-diff-add-bg-rgb: 220 252 231;
+  --color-diff-del-bg-rgb: 254 226 226;
+  --color-diff-del-text-rgb: 185 28 28;
+  --color-border-subtle-rgb: 229 229 229;
+  --color-success-rgb: 16 185 129;           /* #10B981 */
+  --color-warning-rgb: 245 158 11;           /* #F59E0B */
+  --color-error-rgb: 239 68 68;              /* #EF4444 */
+
+  /* Font family custom properties (consumed by @theme and editor) */
+  --font-document: 'Merriweather', 'Newsreader', Georgia, serif;
+  --font-ui: 'Inter', 'Geist Sans', system-ui, sans-serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
+}
+
+.dark {
+  /* Dark mode overrides — same variable names, different values */
+  --color-app-bg: 18 18 18;
+  --color-surface-rgb: 30 30 30;
+  --color-text-primary-rgb: 232 232 232;
+  --color-text-secondary-rgb: 156 163 175;
+  --color-accent-main-rgb: 59 153 252;
+  --color-accent-caret-rgb: 255 107 53;
+  --color-accent-ai-rgb: 167 139 250;
+  --color-ai-highlight-rgb: 32 33 36;
+  --color-text-ghost-rgb: 82 82 82;
+  --color-diff-add-bg-rgb: 6 78 59;
+  --color-diff-del-bg-rgb: 127 29 29;
+  --color-diff-del-text-rgb: 248 113 113;
+  --color-border-subtle-rgb: 42 42 42;
+  --color-success-rgb: 52 211 153;           /* #34D399 */
+  --color-warning-rgb: 251 191 36;           /* #FBBF24 */
+  --color-error-rgb: 248 113 113;            /* #F87171 */
+
+  /* Dark mode shadows — increase opacity by 0.1 per FRONTEND.md §6 */
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.18);
+  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.22);
+  --shadow-strong: 0 8px 24px rgba(0, 0, 0, 0.26);
+}
+
+/* Smooth theme transitions (see FRONTEND.md §16) */
+* {
+  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+
+/* ============================================================
+   Base typography — applied to the entire application
+   ============================================================ */
+
+body {
+  font-family: var(--font-ui);
+  background-color: var(--color-app);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ============================================================
+   Editor Content Overrides — "Swiss Focus" Typography
+   See: docs/guidance/FRONTEND.md §22 (Editor Typography)
+   ============================================================ */
+
+.caret-editor {
+  font-family: var(--font-document);
+  color: var(--color-text-primary);
+  line-height: 1.7;
+  caret-color: var(--color-accent-caret);
+}
+
+.caret-editor h1 {
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.5rem;
+}
+
+.caret-editor h2 {
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.caret-editor h3 {
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.caret-editor blockquote {
+  border-left: 4px solid var(--color-accent-main);
+  padding-left: 1.5rem;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  margin: 2rem 0;
+}
+
+.caret-editor ul,
+.caret-editor ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.caret-editor li {
+  margin-bottom: 0.5rem;
+}
+
+/* Placeholder text (Tiptap Placeholder extension) */
+.caret-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: rgb(var(--color-text-secondary-rgb) / 0.4);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+/* Underline */
+.caret-editor u {
+  text-decoration: underline;
+}
+
+/* Highlight */
+.caret-editor mark {
+  background-color: rgb(var(--color-warning-rgb) / 0.3);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* Horizontal rule */
+.caret-editor hr {
+  border: none;
+  border-top: 1px solid var(--color-border-subtle);
+  margin: 2rem 0;
+}
+
+/* Code blocks */
+.caret-editor pre {
+  background: rgb(var(--color-text-primary-rgb) / 0.05);
+  border-radius: 4px;
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+
+.caret-editor pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Inline code */
+.caret-editor code {
+  background: rgb(var(--color-text-primary-rgb) / 0.06);
+  border-radius: 3px;
+  padding: 0.15rem 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* Strikethrough */
+.caret-editor s {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
+/* Ghost text for AI inline suggestions */
+.caret-editor .suggestion {
+  color: var(--color-text-ghost);
+  pointer-events: none;
+}
+
+/* Links */
+.caret-editor a {
+  color: var(--color-accent-main);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.caret-editor a:hover {
+  text-decoration: underline;
+}
+
+/* Task Lists */
+ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+}
+
+ul[data-type="taskList"] p {
+  margin: 0;
+}
+
+ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+ul[data-type="taskList"] li > label {
+  margin-right: 0.75rem;
+  margin-top: 0.2rem;
+  user-select: none;
+}
+
+ul[data-type="taskList"] li > label input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--color-accent-main);
+  cursor: pointer;
+}
+
+ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
+/* Tables */
+.caret-editor table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 1.5rem 0;
+  overflow: hidden;
+}
+
+.caret-editor table td,
+.caret-editor table th {
+  min-width: 1em;
+  border: 1px solid var(--color-border-subtle);
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.caret-editor table th {
+  font-weight: 600;
+  text-align: left;
+  background-color: rgb(var(--color-text-primary-rgb) / 0.03);
+}
+
+.caret-editor table .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(var(--color-accent-main-rgb), 0.1);
+  pointer-events: none;
+}
+
+/* Images */
+.caret-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  margin: 1.5rem auto;
+  display: block;
+}
+
+.caret-editor img.ProseMirror-selectednode {
+  outline: 3px solid var(--color-accent-main);
+}
+
+/* Glassmorphism panel (see FRONTEND.md §9) */
+.glass-panel {
+  background: rgb(var(--color-app-bg) / 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgb(var(--color-border-subtle-rgb) / 0.6);
+}
+
+/* Focus mode: peripheral UI fades out (see FRONTEND.md §9) */
+.ui-peripheral {
+  transition: opacity 200ms ease-out;
+}
+
+.focus-mode .ui-peripheral {
+  opacity: 0.2;
+}
+
+.focus-mode .ui-peripheral:hover {
+  opacity: 1;
+}
+
+/* ============================================================
+   Responsive adjustments (FRONTEND.md §3)
+   ============================================================ */
+
+/* Reduce editor padding on smaller screens */
+@media (max-width: 768px) {
+  .caret-editor {
+    line-height: 1.6;
+  }
+
+  .caret-editor h1 {
+    font-size: 26px;
+  }
+
+  .caret-editor h2 {
+    font-size: 22px;
+  }
+
+  .caret-editor h3 {
+    font-size: 20px;
+  }
+}
+
+/* ============================================================
+   Paper Sizes (Editor Canvas)
+   ============================================================ */
+
+/* A4: 210mm x 297mm -> ~794px x 1123px */
+.paper-size-a4 .tiptap {
+  width: 794px;
+  min-height: 1123px;
+  padding: 96px; /* 1 inch margins (96px) */
+}
+
+/* Letter: 8.5in x 11in -> 816px x 1056px */
+.paper-size-letter .tiptap {
+  width: 816px;
+  min-height: 1056px;
+  padding: 96px; /* 1 inch margins */
+}
+
+/* A3: 297mm x 420mm -> ~1123px x 1587px */
+.paper-size-a3 .tiptap {
+  width: 1123px;
+  min-height: 1587px;
+  padding: 120px; /* slightly larger margins for A3 */
+}
+
+/* Make pages look like they are individual physical sheets */
+.editor-canvas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding-bottom: 40px;
+}
+
+/* Apply paper styling to the Tiptap editor instance */
+.tiptap {
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-elevated);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 100%;
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   Page Break Widgets (Pagination Extension)
+   Visual separators between "pages" in the editor canvas.
+   ============================================================ */
+
+.page-break-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 40px;
+  user-select: none;
+  pointer-events: none;
+  position: relative;
+  margin: 0;
+}
+
+/* The bottom edge of the ending page (top half of the gap) */
+.page-break-edge {
+  position: absolute;
+  left: calc(-96px); /* extend to the full page width (match padding) */
+  right: calc(-96px);
+  height: 20px;
+}
+
+.paper-size-a3 .page-break-edge {
+  left: calc(-120px);
+  right: calc(-120px);
+}
+
+.page-break-edge--bottom {
+  top: 0;
+  background: var(--color-app);
+  border-top: 1px solid var(--color-border-subtle);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.06);
+}
+
+.page-break-edge--top {
+  bottom: 0;
+  background: var(--color-app);
+  border-bottom: 1px solid var(--color-border-subtle);
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.06);
+}
+
+.dark .page-break-edge--bottom {
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.18);
+}
+
+.dark .page-break-edge--top {
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.18);
+}
+
+/* Page number label centered in the gap */
+.page-break-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  background: var(--color-app);
+  padding: 1px 8px;
+  border-radius: 8px;
+  z-index: 1;
+  line-height: 1;
+}
+
+/* ============================================================
+   Selection style — accent-colored text selection
+   ============================================================ */
+
+/* Print support */
+@media print {
+  .ui-peripheral,
+  header {
+    display: none !important;
+  }
+
+  .tiptap {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: none !important;
+    min-height: 0 !important;
+  }
+
+  .page-break-widget {
+    display: none !important;
+  }
+
+  .flex-1.overflow-y-auto {
+    overflow: visible !important;
+  }
+}
+
+::selection {
+  background-color: rgb(var(--color-accent-main-rgb) / 0.2);
+}
+
+/* ============================================================
+   Scrollbar — minimal, Swiss style
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-text-secondary-rgb) / 0.25);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--color-text-secondary-rgb) / 0.4);
+}
+
+@keyframes gradient-x {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient-x {
+  animation: gradient-x 15s ease infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}

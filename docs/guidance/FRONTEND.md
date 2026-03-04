@@ -58,6 +58,14 @@ Implement these colors as CSS variables and Tailwind extensions.
 - **Manual Toggle**: Persist user choice in `localStorage` under `caret-theme`
 - **Transition**: Smooth theme switch with `transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease`
 
+### Public Landing Palette Strategy
+
+To keep the marketing surface minimal and distinctive:
+- **Primary accents on landing**: Use `accent-main` (blue) and `accent-caret` (orange) as the dominant duo.
+- **AI purple usage**: Keep `accent-ai` for clearly AI-scoped UI only (AI badges, panel headers, streaming indicators), not as a general hero gradient default.
+- **Color ratio**: For hero/background effects, target roughly **70-80% neutral**, **15-25% accent-main**, **5-10% accent-caret**.
+- **Avoid rainbow gradients**: Prefer one focused emphasis area (single word, icon, or key CTA detail) instead of multi-color headline fills across entire lines.
+
 ---
 
 ## 2. Typography Strategy
@@ -290,17 +298,26 @@ Use translucent backgrounds for overlays:
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Top Bar (fixed, height: 56px)                      │
-│ [Logo] [Document Title] [Collab Avatars] [Menu]    │
+│ [Logo] [Breadcrumb: Documents / Doc Title]  [⚙ Settings] │
 ├─────────────────────┬───────────────────────────────┤
 │                     │ AI Chat Panel (collapsible)  │
 │  Document Editor    │ width: 400px (desktop)        │
 │  max-width: 800px   │ [Chat History]                │
 │                     │ [Input Field]                 │
-│  [Rich Text Area]   │ [Context Display]             │
-│                     │                               │
+│  [EditorToolbar]    │ [Context Display]             │
+│  [Rich Text Area]   │                               │
 │                     │                               │
 └─────────────────────┴───────────────────────────────┘
 ```
+
+### Top Bar
+
+- **Height**: 56px, fixed at top
+- **Background**: `surface` with `border-border-subtle` bottom border
+- **Left**: Logo linking to `/documents`
+- **Center**: Breadcrumb showing navigation path; on editor pages shows `Documents / {Document Title}` with the document title fetched dynamically via `use_document` hook
+- **Right**: Settings gear icon (`Settings` from Lucide) linking to `/settings`
+- **Responsive**: Breadcrumb truncates on narrow viewports
 
 ### AI Chat Panel Specifications
 
@@ -317,6 +334,60 @@ Use translucent backgrounds for overlays:
 3. **Input Field**: Multi-line textarea with auto-resize
 4. **Context Tags**: Show referenced document sections as chips
 5. **Streaming Indicator**: Animated dots in `accent-ai` color during AI response
+
+### Editor Toolbar
+
+- **Position**: Fixed at top of the editor area, above the rich text canvas
+- **Layout**: Single row of icon buttons with dividers between groups
+- **Background**: `surface` with `border-border-subtle` bottom border, `gap-0.5` between items
+- **Button Groups** (separated by vertical dividers):
+  1. **History**: Undo, Redo
+  2. **Font Family**: Dropdown selector (Inter, Georgia, Merriweather, Fira Code, system fonts)
+  3. **Inline Formatting**: Bold, Italic, Underline, Strikethrough, Highlight
+  4. **Headings**: H1, H2, H3
+  5. **Lists**: Bullet list, Ordered list
+  6. **Block Elements**: Blockquote, Code block, Horizontal rule
+  7. **Text Alignment**: Left, Center, Right, Justify
+  8. **Utility**: Clear formatting
+- **Active State**: Active buttons show `bg-bg-tertiary` background and `text-accent-caret` color
+- **Implementation**: `EditorToolbar` component receives a Tiptap `Editor` instance via prop; uses `editor.isActive()` for state and `editor.chain().focus()` for commands
+- **Extension Dependencies**: StarterKit (includes Underline in v3.20), TextStyle, Color, FontFamily, Highlight, TextAlign, Placeholder
+
+### Document List
+
+- **Location**: `/documents` route, the main landing page after login
+- **Layout**: Grid of document cards (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`, `gap-4`)
+- **Create Button**: Prominent "New Document" button at top-right, uses `Plus` icon
+- **Document Card**:
+  - Displays document title (truncated), last-updated timestamp
+  - Clickable to navigate to `/editor/:id`
+  - **Action Menu**: "More" button (`MoreVertical` icon) on each card, reveals dropdown with:
+    - **Rename**: Inline text input with save/cancel, debounced PATCH to `/documents/:id`
+    - **Delete**: Confirmation dialog ("Are you sure?"), sends DELETE to `/documents/:id`
+  - Action menu closes on outside click
+- **Empty State**: Message encouraging user to create their first document
+- **Data**: Uses `use_documents` hook (TanStack Query) with automatic cache invalidation on mutations
+
+### Settings Page
+
+- **Route**: `/settings`, protected by `AuthGuard`
+- **Layout**: Centered single column (`max-w-2xl`), sections separated by `border-border-subtle` dividers
+- **Sections**:
+  1. **Profile**: User avatar, email (read-only), account ID, auth provider badge, "Sign out" button
+  2. **Appearance**: Theme selector with three options (Light, Dark, System) as radio-style buttons; uses `use_theme` hook
+  3. **Language**: Language selector dropdown (EN, ES, FR, DE, PT); uses `react-i18next` `changeLanguage()`
+  4. **About**: App name, version, copyright
+- **Navigation**: Accessible via Settings gear icon in TopBar
+
+### Document Editor Page
+
+- **Route**: `/editor/:document_id`
+- **Layout**: Full-height flex column containing editable title + toolbar + editor canvas
+- **Editable Title**: Large `input` field at top of editor area, styled as `text-2xl font-bold`, with:
+  - Debounced autosave (500ms) via `use_save_document` mutation
+  - Title synced to TopBar breadcrumb via `use_document` query cache
+- **Editor Canvas**: `CaretEditor` component with `EditorToolbar` integrated
+- **Autosave**: Content changes debounced and saved automatically via `on_update` callback
 
 ### Document Tabs
 
@@ -437,6 +508,22 @@ const streamText = (text, element) => {
   opacity: 0.2;
 }
 ```
+
+### Landing Motion Guidelines (Framer Motion)
+
+Use Framer Motion to add personality without visual noise:
+
+- **Scroll progress bar**: Use a page-level `useScroll` + `scaleX` on a fixed 2px bar (`origin-left`) to give users a spatial anchor as they scroll. Style with a brand gradient.
+- **Scroll-linked hero parallax**: Use `useScroll({ target, offset })` + `useTransform` for subtle `y` (max ~60px) and `opacity` (min ~0.7) on the hero block. Never exceed these limits.
+- **Cursor-reactive glows**: Drive soft radial gradients via `useMotionTemplate` fed by `useSpring`-smoothed mouse coordinates. Apply only to background layers (`z-[-1]`).
+- **Word-by-word reveal**: Split headlines into `inline-block` `motion.span` elements with a `custom` delay index and a `filter: blur(6px) → 0` + `y: 0.35em → 0` spring. Set `aria-label` on the parent for screen readers.
+- **Magnetic buttons**: Wrap CTA elements in a component that uses per-instance `useMotionValue + useSpring` to pull the element toward the cursor center (max ~20% of mouse offset). Reset on mouse leave.
+- **Icon micro-rotation on hover**: Cards can use `whileHover={{ scale: 1.12, rotate: 4 }}` on the icon container for a tactile feel without moving the whole card aggressively.
+- **Floating decorative element**: A large, low-opacity brand symbol (e.g., `^`) can float with a looping `y` animation (`duration: 10s`). Keep `opacity` under `0.04` to avoid distraction.
+- **Respect reduced motion**: Gate ALL continuous, decorative, and parallax animations behind `useReducedMotion()`. Provide static fallbacks for every animated element.
+- **Motion primitives**: Animate only `transform` and `opacity` — never `top/left/width/height` — for GPU-accelerated performance.
+- **Timing targets**: Loops `8–12s`, scroll-linked `linear`, interaction springs `stiffness: 110–260 / damping: 18–24`, section reveals `stagger: 0.1s`.
+- **Animated app mockup**: Use a dedicated `AnimatedMockup` component to showcase the product inside the hero. It must: force `.dark` class on its root (always dark regardless of user theme), be `aria-hidden="true"` (decorative), use a phase-based async animation loop with a `live` guard for safe cleanup, apply 3-D tilt (`useCardTilt`: `rotateX`/`rotateY` + `transformPerspective`) driven by mouse events on the element itself (not the page), and be `select-none` + `pointer-events-none`-safe. Never exceed 5° tilt. Spring config: `stiffness: 200, damping: 28`.
 
 ---
 
@@ -832,8 +919,9 @@ src/
 │   │   ├── Input.tsx
 │   │   ├── Toast.tsx
 │   │   ├── Modal.tsx
+│   │   ├── Logo.tsx
 │   │   └── ...
-│   ├── editor/             # Tiptap editor components
+│   ├── editor/             # Tiptap editor components (type-based view)
 │   │   ├── Editor.tsx
 │   │   ├── Toolbar.tsx
 │   │   ├── ContextMenu.tsx
@@ -848,21 +936,34 @@ src/
 │   │   ├── LiveCursor.tsx
 │   │   └── PresenceIndicator.tsx
 │   └── layout/             # Layout components
-│       ├── TopBar.tsx
+│       ├── TopBar.tsx       # Breadcrumb + settings link
 │       ├── DocumentTabs.tsx
 │       └── MainLayout.tsx
+├── features/
+│   ├── editor/
+│   │   ├── components/     # CaretEditor, EditorToolbar, EditorPage, DocumentList
+│   │   ├── hooks/          # use_document, use_documents, use_save_document
+│   │   └── api/            # document_api.ts
+│   ├── settings/
+│   │   └── components/     # SettingsPage
+│   ├── landing/
+│   │   └── components/     # LandingPage, AnimatedMockup
+│   └── auth/
+│       └── components/     # LoginPage
 ├── hooks/                  # Custom React hooks
-│   ├── useTheme.ts
-│   ├── useCollaboration.ts
-│   └── useAI.ts
+│   ├── use_theme.ts
+│   ├── use_focus_mode.ts
+│   └── ...
+├── stores/                 # Zustand stores
+│   ├── auth_store.ts
+│   └── theme_store.ts
 ├── locales/                # Internationalization (see Section 8)
 │   ├── en-US/
 │   ├── es/
 │   ├── fr/
 │   └── ...
 ├── styles/
-│   ├── globals.css
-│   └── tailwind.config.js
+│   └── index.css           # TailwindCSS v4 with @theme tokens + editor styles
 └── utils/
     ├── theme.ts
     └── animation.ts
@@ -934,22 +1035,33 @@ Instead of grouping by type (components, hooks), group by **Feature** to keep re
 src/
 ├── features/
 │   ├── editor/           # Tiptap implementation & extensions
-│   │   ├── components/   # Editor-specific UI
-│   │   ├── hooks/        # useTiptap, useSelection
+│   │   ├── components/   # CaretEditor, EditorToolbar, EditorPage, DocumentList
+│   │   ├── hooks/        # use_document, use_documents, use_save_document
+│   │   ├── api/          # document_api.ts
 │   │   └── utils/        # Parsers, serializers
+│   ├── settings/         # Application settings
+│   │   └── components/   # SettingsPage
+│   ├── landing/          # Public landing page
+│   │   └── components/   # LandingPage, AnimatedMockup
+│   ├── auth/             # Authentication
+│   │   └── components/   # LoginPage
 │   ├── ai-assistant/     # All AI logic (Caret)
 │   │   ├── components/   # ChatPanel, DiffView
 │   │   ├── hooks/        # useCompletion
 │   │   └── api/          # streamingClient.ts
 │   └── collaboration/    # Multiplayer logic (Y.js)
-├── components/ui/        # Shared "Dumb" Primitives (Button, Input)
-├── hooks/                # Shared hooks (useTheme, useMediaQuery)
+├── components/
+│   ├── ui/               # Shared "Dumb" Primitives (Button, Input, Logo)
+│   └── layout/           # TopBar, MainLayout
+├── hooks/                # Shared hooks (use_theme, use_focus_mode)
+├── stores/               # Global state definitions (Zustand: auth_store, theme_store)
 ├── locales/              # Internationalization (see Section 8)
 │   ├── en-US/
 │   ├── es/
 │   └── ...
-├── lib/                  # Shared utilities & 3rd party configs
-└── stores/               # Global state definitions (Zustand)
+├── lib/                  # Shared utilities & 3rd party configs (i18n.ts, supabase.ts)
+└── styles/
+    └── index.css         # TailwindCSS v4 with @theme tokens + editor styles
 ```
 
 ---
