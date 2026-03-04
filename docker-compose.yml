@@ -94,11 +94,17 @@ services:
     environment:
       APP_ENV: development
       PORT: 8000
+      # Ensure the app package is importable when alembic (or any one-off
+      # command) is run via `docker compose exec`.
+      PYTHONPATH: /app
       DATABASE_URL: ${DATABASE_URL:-}
       SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       JWT_SECRET: ${JWT_SECRET:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-thudm/glm-4.5-air}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
