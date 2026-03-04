@@ -1,9 +1,8 @@
 """
-Services for the AI Service.
-Contain all business logic: PydanticAI agent orchestration, RAG pipeline, streaming coordination.
-Receive Repositories via constructor injection (DI).
-
-Rule: no FastAPI/HTTP concepts (Request, Response) inside Services.
-Rule: no direct SQLAlchemy imports — delegate all DB access to Repositories.
-Rule: map Pydantic schemas → SQLAlchemy models on the way in, and models → schemas on the way out.
+Service layer for the Caret AI Service.
+Business logic and PydanticAI agent orchestration live here.
 """
+
+from app.services.ai_agent_service import AiAgentService
+
+__all__ = ["AiAgentService"]
