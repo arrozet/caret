@@ -12,3 +12,4 @@
  */
 export { use_auth_store } from "./auth_store";
 export { use_theme_store } from "./theme_store";
+export { use_ai_store } from "./ai_store";

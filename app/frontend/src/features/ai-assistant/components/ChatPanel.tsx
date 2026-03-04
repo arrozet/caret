@@ -1,0 +1,418 @@
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { X, Send, Square, RefreshCw, Sparkles } from "lucide-react";
+import { Button } from "../../../components/ui/Button";
+import { use_ai_store } from "../../../stores/ai_store";
+import { use_ai_stream } from "../hooks/use_ai_stream";
+import type { ChatMessage } from "../hooks/use_ai_stream";
+import { delete_conversation, get_models } from "../api/ai_api";
+import type { ModelInfo } from "../api/ai_api";
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+/**
+ * Props for a single rendered chat message bubble.
+ */
+interface MessageBubbleProps {
+  /** The message to render. */
+  message: ChatMessage;
+}
+
+/**
+ * Renders a single chat message bubble.
+ * User messages are right-aligned; assistant messages are left-aligned.
+ */
+function MessageBubble({ message }: MessageBubbleProps) {
+  const is_user = message.role === "user";
+
+  return (
+    <div
+      className={`flex w-full ${is_user ? "justify-end" : "justify-start"} mb-3`}
+    >
+      <div
+        className={[
+          "max-w-[85%] rounded-[4px] px-3 py-2 text-ui-sm leading-relaxed",
+          is_user
+            ? "bg-accent-ai text-white"
+            : "bg-surface border border-border-subtle text-text-primary",
+          message.is_streaming ? "animate-pulse" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {/* Render content; for assistant show a blinking cursor while streaming */}
+        {message.content}
+        {message.is_streaming && (
+          <span
+            className="ml-0.5 inline-block h-3.5 w-0.5 bg-current opacity-75 animate-pulse"
+            aria-hidden="true"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Suggested prompts strip
+// ---------------------------------------------------------------------------
+
+/**
+ * Props for the suggested prompts strip shown in the empty state.
+ */
+interface SuggestedPromptsProps {
+  /** Called when the user clicks a prompt chip. */
+  on_select: (prompt: string) => void;
+}
+
+/**
+ * Horizontal strip of quick-action prompt chips shown when there are no
+ * messages yet, giving users a starting point.
+ */
+function SuggestedPrompts({ on_select }: SuggestedPromptsProps) {
+  const { t } = useTranslation("ai");
+
+  const prompts: Array<{ key: string; label: string }> = [
+    { key: "summarize", label: t("suggested_prompts.summarize") },
+    { key: "improve_intro", label: t("suggested_prompts.improve_intro") },
+    { key: "check_clarity", label: t("suggested_prompts.check_clarity") },
+  ];
+
+  return (
+    <div className="flex flex-col gap-1.5 px-4 py-3">
+      {prompts.map(({ key, label }) => (
+        <button
+          key={key}
+          onClick={() => on_select(label)}
+          className="w-full text-left rounded-[4px] px-3 py-2 text-ui-sm text-text-secondary border border-border-subtle hover:border-accent-ai hover:text-accent-ai hover:bg-surface transition-colors duration-100"
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main ChatPanel
+// ---------------------------------------------------------------------------
+
+/**
+ * Props for the ChatPanel component.
+ */
+interface ChatPanelProps {
+  /**
+   * UUID of the document currently open in the editor.
+   * Used when creating a new AI conversation.
+   */
+  document_id: string;
+  /**
+   * Optional plain-text snapshot of the document content passed to the AI
+   * as context for every message.
+   */
+  document_context?: string;
+}
+
+/**
+ * AI Chat Panel — 400px fixed right sidebar.
+ *
+ * Displays the Caret AI conversation history and a message input box.
+ * Streamed responses appear incrementally as they arrive via SSE.
+ *
+ * Accessibility:
+ *   - The message list region uses aria-live="polite" so screen readers
+ *     announce incoming assistant messages without interrupting the user.
+ *   - Close button returns focus to the editor area on dismiss.
+ *   - Focus is trapped within the panel while open (handled by the panel
+ *     wrapper receiving focus on mount).
+ *
+ * Design tokens:
+ *   - Accent colour: accent-ai (#8B5CF6 light / #A78BFA dark)
+ *   - Panel width: 400px (w-[400px])
+ *   - Z-index: 40 (floating UI layer per FRONTEND.md z-index table)
+ */
+export function ChatPanel({ document_id, document_context }: ChatPanelProps) {
+  const { t } = useTranslation("ai");
+
+  const { close_panel, active_conversation_id, set_conversation } =
+    use_ai_store();
+
+  const {
+    messages,
+    is_loading,
+    error,
+    send_message,
+    stop_generating,
+    load_messages,
+    clear,
+  } = use_ai_stream();
+
+  const [input_value, set_input_value] = useState("");
+  const [models, set_models] = useState<ModelInfo[]>([]);
+  const [selected_model_id, set_selected_model_id] = useState<string | undefined>(undefined);
+  const messages_end_ref = useRef<HTMLDivElement>(null);
+  const input_ref = useRef<HTMLTextAreaElement>(null);
+  const close_button_ref = useRef<HTMLButtonElement>(null);
+
+  // Fetch available models on mount and pre-select the first one.
+  useEffect(() => {
+    get_models()
+      .then((res) => {
+        set_models(res.models);
+        if (res.models.length > 0) {
+          set_selected_model_id(res.models[0].id);
+        }
+      })
+      .catch(() => {
+        // Silently fall back — the backend uses its configured default.
+      });
+  }, []);
+
+  // Load existing messages when panel opens with a pre-existing conversation.
+  useEffect(() => {
+    if (active_conversation_id && messages.length === 0) {
+      load_messages(active_conversation_id);
+    }
+  }, [active_conversation_id, load_messages, messages.length]);
+
+  // Auto-scroll to the bottom whenever messages update.
+  useEffect(() => {
+    messages_end_ref.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Focus the text input when the panel mounts.
+  useEffect(() => {
+    input_ref.current?.focus();
+  }, []);
+
+  /**
+   * Handle send button / Enter key press.
+   */
+  const handle_send = useCallback(async () => {
+    const trimmed = input_value.trim();
+    if (!trimmed || is_loading) return;
+    set_input_value("");
+    await send_message(trimmed, document_id, document_context, selected_model_id);
+  }, [input_value, is_loading, send_message, document_id, document_context, selected_model_id]);
+
+  /**
+   * Allow Shift+Enter for newlines; Enter alone sends the message.
+   */
+  const handle_key_down = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handle_send();
+      }
+    },
+    [handle_send],
+  );
+
+  /**
+   * Handle a suggested prompt chip click: pre-fill input and send immediately.
+   */
+  const handle_suggested_prompt = useCallback(
+    async (prompt: string) => {
+      set_input_value("");
+      await send_message(prompt, document_id, document_context, selected_model_id);
+    },
+    [send_message, document_id, document_context, selected_model_id],
+  );
+
+  /**
+   * Close the panel and return focus to the editor.
+   */
+  const handle_close = useCallback(() => {
+    close_panel();
+  }, [close_panel]);
+
+  /**
+   * Start a new conversation: clear local state and reset active conversation.
+   */
+  const handle_new_conversation = useCallback(async () => {
+    if (active_conversation_id) {
+      // Best-effort delete; ignore errors silently.
+      delete_conversation(active_conversation_id).catch(() => undefined);
+    }
+    set_conversation(null);
+    clear();
+  }, [active_conversation_id, set_conversation, clear]);
+
+  const has_messages = messages.length > 0;
+
+  return (
+    <aside
+      className="flex h-full w-[400px] shrink-0 flex-col border-l border-border-subtle bg-surface z-40"
+      aria-label={t("panel_title")}
+      role="complementary"
+    >
+      {/* Panel header */}
+      <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border-subtle">
+        <div className="flex items-center gap-2">
+          <Sparkles
+            className="h-4 w-4 text-accent-ai"
+            aria-hidden="true"
+            strokeWidth={2}
+          />
+          <span className="text-ui-base font-semibold text-text-primary">
+            {t("panel_title")}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {/* New conversation button — only shown when messages exist */}
+          {has_messages && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handle_new_conversation}
+              disabled={is_loading}
+              aria-label={t("new_conversation")}
+              title={t("new_conversation")}
+              className="p-1.5"
+            >
+              <RefreshCw
+                className="h-3.5 w-3.5"
+                aria-hidden="true"
+                strokeWidth={2}
+              />
+            </Button>
+          )}
+
+          {/* Close panel */}
+          <Button
+            ref={close_button_ref}
+            variant="ghost"
+            size="sm"
+            onClick={handle_close}
+            aria-label={t("close_panel")}
+            className="p-1.5"
+          >
+            <X className="h-4 w-4" aria-hidden="true" strokeWidth={2} />
+          </Button>
+        </div>
+      </div>
+
+      {/* Model selector — only shown when more than one model is available */}
+      {models.length > 1 && (
+        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-border-subtle">
+          <label
+            htmlFor="model-selector"
+            className="text-ui-xs text-text-secondary shrink-0"
+          >
+            {t("model_selector")}
+          </label>
+          <select
+            id="model-selector"
+            value={selected_model_id ?? ""}
+            onChange={(e) => set_selected_model_id(e.target.value || undefined)}
+            className="flex-1 rounded-[4px] border border-border-subtle bg-app px-2 py-1 text-ui-xs text-text-primary outline-none focus:border-accent-ai transition-colors duration-100"
+          >
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Message list — scrollable, aria-live for screen readers */}
+      <div
+        className="flex-1 overflow-y-auto px-2 py-3"
+        role="log"
+        aria-live="polite"
+        aria-label={t("messages_region")}
+      >
+        {!has_messages && (
+          <div className="flex flex-col items-center justify-center h-full min-h-[120px]">
+            <p className="text-ui-sm text-text-secondary mb-4 px-4 text-center">
+              {t("empty_state")}
+            </p>
+            <SuggestedPrompts on_select={handle_suggested_prompt} />
+          </div>
+        )}
+
+        {has_messages && (
+          <div className="flex flex-col">
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+            {/* Anchor element for auto-scroll */}
+            <div ref={messages_end_ref} />
+          </div>
+        )}
+      </div>
+
+      {/* Error banner */}
+      {error && (
+        <div
+          role="alert"
+          className="mx-3 mb-2 rounded-[4px] bg-error/10 border border-error/30 px-3 py-2 text-ui-sm text-error"
+        >
+          {t("error.unavailable")}
+        </div>
+      )}
+
+      {/* Input area */}
+      <div className="shrink-0 border-t border-border-subtle px-3 pb-3 pt-2">
+        <div className="flex items-end gap-2 rounded-[4px] border border-border-subtle bg-app px-3 py-2 focus-within:border-accent-ai transition-colors duration-100">
+          <textarea
+            ref={input_ref}
+            value={input_value}
+            onChange={(e) => set_input_value(e.target.value)}
+            onKeyDown={handle_key_down}
+            placeholder={t("input_placeholder")}
+            disabled={is_loading}
+            rows={1}
+            className="flex-1 resize-none bg-transparent text-ui-sm text-text-primary placeholder:text-text-secondary/60 outline-none leading-relaxed max-h-[120px] overflow-y-auto disabled:opacity-50"
+            aria-label={t("input_placeholder")}
+            style={{
+              // Grow textarea naturally up to max-h without layout shift.
+              height: "auto",
+            }}
+            onInput={(e) => {
+              const target = e.currentTarget;
+              target.style.height = "auto";
+              target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+            }}
+          />
+
+          {is_loading ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={stop_generating}
+              aria-label={t("stop_generating")}
+              className="shrink-0 p-1.5 text-accent-ai hover:text-accent-ai/80"
+            >
+              <Square
+                className="h-4 w-4 fill-current"
+                aria-hidden="true"
+                strokeWidth={0}
+              />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handle_send}
+              disabled={!input_value.trim()}
+              aria-label="Send message"
+              className="shrink-0 p-1.5 text-accent-ai hover:text-accent-ai/80 disabled:text-text-secondary/40"
+            >
+              <Send className="h-4 w-4" aria-hidden="true" strokeWidth={2} />
+            </Button>
+          )}
+        </div>
+
+        {/* Keyboard shortcut hint */}
+        <p className="mt-1.5 text-center text-ui-xs text-text-secondary/50">
+          {t("keyboard_hint")}
+        </p>
+      </div>
+    </aside>
+  );
+}

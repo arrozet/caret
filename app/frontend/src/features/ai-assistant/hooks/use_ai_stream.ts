@@ -1,0 +1,262 @@
+import { useState, useCallback, useRef } from "react";
+import {
+  stream_ai_response,
+  create_conversation,
+  list_messages,
+  type MessageResponse,
+} from "../api/ai_api";
+import { use_ai_store } from "../../../stores/ai_store";
+
+/** A chat message as stored in the hook's local state. */
+export interface ChatMessage {
+  /** Stable local ID (UUID from server, or a temporary client-side key). */
+  id: string;
+  /** Sender role. */
+  role: "user" | "assistant";
+  /** Full message text content. */
+  content: string;
+  /** Whether this message is currently being streamed (partial). */
+  is_streaming?: boolean;
+}
+
+/** Return value of the use_ai_stream hook. */
+export interface UseAiStreamReturn {
+  /** Ordered list of messages in the current conversation. */
+  messages: ChatMessage[];
+  /** Whether a streaming request is in flight. */
+  is_loading: boolean;
+  /** Error message from the last failed operation (null if none). */
+  error: string | null;
+  /**
+   * Send a user message and stream the AI response into `messages`.
+   * Creates a new conversation for the document if none is active.
+   * @param user_message - The text the user typed.
+   * @param document_id - Document UUID, used when creating a new conversation.
+   * @param document_context - Optional document plain text for AI context.
+   * @param model_id - Optional model override (e.g. "z-ai/glm-4.5-air:free").
+   */
+  send_message: (
+    user_message: string,
+    document_id: string,
+    document_context?: string,
+    model_id?: string,
+  ) => Promise<void>;
+  /**
+   * Abort an in-flight streaming request.
+   */
+  stop_generating: () => void;
+  /**
+   * Load existing conversation messages from the server.
+   * Called when the panel opens with an existing conversation.
+   * @param conversation_id - Conversation UUID to load.
+   */
+  load_messages: (conversation_id: string) => Promise<void>;
+  /**
+   * Clear all messages and reset conversation state.
+   */
+  clear: () => void;
+}
+
+/**
+ * Hook that manages AI chat state and streaming responses.
+ *
+ * Calls the AI service streaming endpoint and accumulates SSE delta chunks
+ * into the messages list. The streaming assistant message is updated in-place
+ * as deltas arrive, then finalised when the "done" event is received.
+ *
+ * The hook does NOT interact with Tiptap directly — it only manages the
+ * chat panel UI state. Per the FRONTEND.md spec, AI-generated document edits
+ * flow through Tiptap Transactions separately.
+ *
+ * State management: local React state (ephemeral per-panel session).
+ */
+export function use_ai_stream(): UseAiStreamReturn {
+  const [messages, set_messages] = useState<ChatMessage[]>([]);
+  const [is_loading, set_is_loading] = useState(false);
+  const [error, set_error] = useState<string | null>(null);
+
+  /** Ref to the AbortController so stop_generating can cancel inflight requests. */
+  const abort_controller_ref = useRef<AbortController | null>(null);
+
+  /** Stable reference to the streaming assistant message ID being built. */
+  const streaming_id_ref = useRef<string | null>(null);
+
+  const { active_conversation_id, set_conversation } = use_ai_store();
+
+  /**
+   * Load messages from an existing conversation into local state.
+   */
+  const load_messages = useCallback(
+    async (conversation_id: string): Promise<void> => {
+      set_error(null);
+      try {
+        const server_messages: MessageResponse[] =
+          await list_messages(conversation_id);
+        set_messages(
+          server_messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+          })),
+        );
+      } catch (err) {
+        set_error(err instanceof Error ? err.message : "Failed to load messages");
+      }
+    },
+    [],
+  );
+
+  /**
+   * Send a user message and stream the AI assistant reply.
+   *
+   * Flow:
+   * 1. If no active conversation exists, create one for the document.
+   * 2. Append the user message to local state immediately.
+   * 3. Append a placeholder assistant message with is_streaming=true.
+   * 4. Consume the SSE generator, updating the assistant message on each delta.
+   * 5. Finalise the message on "done"; surface error on "error".
+   */
+  const send_message = useCallback(
+    async (
+      user_message: string,
+      document_id: string,
+      document_context?: string,
+      model_id?: string,
+    ): Promise<void> => {
+      if (is_loading) return;
+
+      set_error(null);
+      set_is_loading(true);
+
+      // Ensure we have an active conversation.
+      let conversation_id = active_conversation_id;
+      if (!conversation_id) {
+        try {
+          const conversation = await create_conversation(document_id);
+          conversation_id = conversation.id;
+          set_conversation(conversation_id);
+        } catch (err) {
+          set_error(
+            err instanceof Error ? err.message : "Failed to create conversation",
+          );
+          set_is_loading(false);
+          return;
+        }
+      }
+
+      // Append the user's message to the local chat history.
+      const user_msg_id = `user-${Date.now()}`;
+      set_messages((prev) => [
+        ...prev,
+        { id: user_msg_id, role: "user", content: user_message },
+      ]);
+
+      // Append a streaming placeholder for the assistant reply.
+      const assistant_placeholder_id = `assistant-streaming-${Date.now()}`;
+      streaming_id_ref.current = assistant_placeholder_id;
+      set_messages((prev) => [
+        ...prev,
+        {
+          id: assistant_placeholder_id,
+          role: "assistant",
+          content: "",
+          is_streaming: true,
+        },
+      ]);
+
+      // Set up cancellation.
+      const controller = new AbortController();
+      abort_controller_ref.current = controller;
+
+      try {
+        const stream = stream_ai_response({
+          conversation_id,
+          message: user_message,
+          document_context,
+          model_id,
+          signal: controller.signal,
+        });
+
+        for await (const chunk of stream) {
+          if (chunk.type === "delta" && chunk.content) {
+            // Append the partial text to the assistant placeholder.
+            set_messages((prev) =>
+              prev.map((msg) =>
+                msg.id === streaming_id_ref.current
+                  ? { ...msg, content: msg.content + chunk.content }
+                  : msg,
+              ),
+            );
+          } else if (chunk.type === "done") {
+            // Finalise the message: mark as no longer streaming, assign server ID.
+            const final_id = chunk.message_id ?? assistant_placeholder_id;
+            set_messages((prev) =>
+              prev.map((msg) =>
+                msg.id === streaming_id_ref.current
+                  ? { ...msg, id: final_id, is_streaming: false }
+                  : msg,
+              ),
+            );
+            streaming_id_ref.current = null;
+          } else if (chunk.type === "error") {
+            set_error(chunk.error ?? "AI service error");
+            // Remove the failed placeholder.
+            set_messages((prev) =>
+              prev.filter((msg) => msg.id !== streaming_id_ref.current),
+            );
+            streaming_id_ref.current = null;
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name === "AbortError") {
+          // User cancelled — finalise whatever we accumulated.
+          set_messages((prev) =>
+            prev.map((msg) =>
+              msg.id === streaming_id_ref.current
+                ? { ...msg, is_streaming: false }
+                : msg,
+            ),
+          );
+        } else {
+          set_error(err instanceof Error ? err.message : "Streaming failed");
+          set_messages((prev) =>
+            prev.filter((msg) => msg.id !== streaming_id_ref.current),
+          );
+        }
+        streaming_id_ref.current = null;
+      } finally {
+        abort_controller_ref.current = null;
+        set_is_loading(false);
+      }
+    },
+    [is_loading, active_conversation_id, set_conversation],
+  );
+
+  /**
+   * Cancel the in-flight streaming request.
+   */
+  const stop_generating = useCallback(() => {
+    abort_controller_ref.current?.abort();
+  }, []);
+
+  /**
+   * Reset all state for a fresh conversation session.
+   */
+  const clear = useCallback(() => {
+    abort_controller_ref.current?.abort();
+    set_messages([]);
+    set_error(null);
+    set_is_loading(false);
+    streaming_id_ref.current = null;
+  }, []);
+
+  return {
+    messages,
+    is_loading,
+    error,
+    send_message,
+    stop_generating,
+    load_messages,
+    clear,
+  };
+}

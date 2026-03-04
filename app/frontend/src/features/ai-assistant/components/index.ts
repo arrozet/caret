@@ -3,4 +3,4 @@
  * Presentation layer: ChatPanel, DiffView, StreamingText, ContextDisplay.
  * Components use accent-ai (purple) as per the design system.
  */
-export {};
+export { ChatPanel } from "./ChatPanel";

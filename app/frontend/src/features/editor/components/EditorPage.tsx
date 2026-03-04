@@ -1,13 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Loader2, ArrowLeft, Check, AlertCircle } from "lucide-react";
-import type { JSONContent } from "@tiptap/react";
+import type { JSONContent, Editor } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
 import { Button } from "../../../components/ui/Button";
 import { use_document } from "../hooks/use_document";
 import { use_save_document } from "../hooks/use_save_document";
 import { use_focus_mode } from "../../../hooks/use_focus_mode";
 import { use_tabs_store } from "../../../stores/tabs_store";
+import { use_ai_store } from "../../../stores";
+
+/**
+ * Lazy-load the AI Chat Panel to keep the initial bundle lean.
+ * The panel is only rendered when the user opens it via Ctrl/Cmd+K.
+ */
+const ChatPanel = lazy(() =>
+  import("../../ai-assistant").then((m) => ({ default: m.ChatPanel })),
+);
 
 /** Debounce delay in milliseconds before autosaving after the last keystroke. */
 const AUTOSAVE_DELAY_MS = 1_000;
@@ -38,12 +47,35 @@ export function EditorPage() {
   const [is_title_focused, set_is_title_focused] = useState(false);
   const debounce_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const title_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  /** Ref to the Tiptap Editor instance, used to extract document context for AI. */
+  const editor_ref = useRef<Editor | null>(null);
 
   const { add_tab, update_tab_title } = use_tabs_store();
 
+  /** AI panel state from the global store. */
+  const { is_panel_open, toggle_panel } = use_ai_store();
+
   /** Activate focus mode: fade peripheral UI after 2s idle (FRONTEND.md §9). */
   use_focus_mode(true);
+
+  /**
+   * Global Ctrl/Cmd+K keyboard shortcut to toggle the AI chat panel.
+   * Registered at the EditorPage level so it works regardless of focus.
+   */
+  useEffect(() => {
+    function handle_keydown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        toggle_panel();
+      }
+    }
+    window.addEventListener("keydown", handle_keydown);
+    return () => window.removeEventListener("keydown", handle_keydown);
+  }, [toggle_panel]);
 
   /** Sync title from server data when document loads. */
   useEffect(() => {
@@ -227,12 +259,28 @@ export function EditorPage() {
         </div>
       </div>
 
-      {/* Editor Region */}
-      <div className="flex-1 overflow-hidden">
-        <CaretEditor
-          content={document.content_json as JSONContent | undefined}
-          on_update={handle_update}
-        />
+      {/* Main content row: editor + optional AI panel */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Editor Region */}
+        <div className="flex-1 overflow-hidden">
+          <CaretEditor
+            content={document.content_json as JSONContent | undefined}
+            on_update={handle_update}
+            on_editor_ready={(ed) => {
+              editor_ref.current = ed;
+            }}
+          />
+        </div>
+
+        {/* AI Chat Panel — rendered via React.lazy, only mounted when open */}
+        {is_panel_open && (
+          <Suspense fallback={null}>
+            <ChatPanel
+              document_id={document_id ?? ""}
+              document_context={editor_ref.current?.getText() ?? undefined}
+            />
+          </Suspense>
+        )}
       </div>
     </div>
   );

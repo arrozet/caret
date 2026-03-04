@@ -1,9 +1,15 @@
 {
-  "panel_title": "Caret",
+  "panel_title": "Caret AI",
   "input_placeholder": "Type a message...",
   "stop_generating": "Stop Generating",
   "apply": "Apply",
   "regenerate": "Regenerate",
+  "new_conversation": "New conversation",
+  "close_panel": "Close AI panel",
+  "messages_region": "AI conversation messages",
+  "empty_state": "Ask anything about your document.",
+  "keyboard_hint": "Enter to send · Shift+Enter for newline",
+  "model_selector": "Model",
   "suggested_prompts": {
     "summarize": "Summarize this document",
     "improve_intro": "Improve the introduction",
