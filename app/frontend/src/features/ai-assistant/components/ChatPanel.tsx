@@ -27,29 +27,52 @@ interface MessageBubbleProps {
 function MessageBubble({ message }: MessageBubbleProps) {
   const is_user = message.role === "user";
 
+  // Parse <think>...</think> if present (common in models like DeepSeek-R1)
+  let think_content = null;
+  let main_content = message.content;
+
+  // Usa match para capturar todo el bloque de think de manera no-greedy
+  const think_match = message.content.match(/<think>([\s\S]*?)(?:<\/think>|$)/);
+  if (think_match) {
+    think_content = think_match[1].trim();
+    // Reemplaza toda la etiqueta think completa por una cadena vacía en el texto principal
+    main_content = message.content.replace(/<think>[\s\S]*?(?:<\/think>|$)/, "").trim();
+  }
+
+  const is_animating = message.role === "assistant" && message.is_streaming === true;
+
   return (
     <div
-      className={`flex w-full ${is_user ? "justify-end" : "justify-start"} mb-3`}
+      className={`flex w-full ${is_user ? "justify-end" : "justify-start"} mb-4`}
     >
       <div
         className={[
-          "max-w-[85%] rounded-[4px] px-3 py-2 text-ui-sm leading-relaxed",
+          "max-w-[85%] px-4 py-2.5 text-ui-sm leading-relaxed transition-all duration-300 ease-out animate-in fade-in slide-in-from-bottom-2",
           is_user
-            ? "bg-accent-ai text-white"
-            : "bg-surface border border-border-subtle text-text-primary",
-          message.is_streaming ? "animate-pulse" : "",
+            ? "bg-accent-ai text-white rounded-2xl rounded-br-sm shadow-sm"
+            : "bg-surface border border-border-subtle text-text-primary rounded-2xl rounded-bl-sm shadow-sm flex flex-col gap-1.5",
         ]
           .filter(Boolean)
           .join(" ")}
       >
-        {/* Render content; for assistant show a blinking cursor while streaming */}
-        {message.content}
-        {message.is_streaming && (
-          <span
-            className="ml-0.5 inline-block h-3.5 w-0.5 bg-current opacity-75 animate-pulse"
-            aria-hidden="true"
-          />
+        {/* Render AI thoughts if present */}
+        {think_content && (
+          <div className="pl-3 py-0.5 border-l-[3px] border-border-subtle/70 text-text-secondary/80 text-ui-xs">
+            {think_content || "Pensando..."}
+          </div>
         )}
+        
+        {/* Render main content */}
+        <div className="whitespace-pre-wrap break-words">
+          {main_content}
+          {/* Animated typing cursor */}
+          {is_animating && (
+            <span
+              className="ml-1.5 inline-block h-2 w-2 rounded-full bg-current opacity-60 animate-[pulse_1s_cubic-bezier(0.4,0,0.6,1)_infinite] align-middle shadow-sm"
+              aria-hidden="true"
+            />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -81,12 +104,12 @@ function SuggestedPrompts({ on_select }: SuggestedPromptsProps) {
   ];
 
   return (
-    <div className="flex flex-col gap-1.5 px-4 py-3">
+    <div className="flex flex-col gap-2 px-4 py-3">
       {prompts.map(({ key, label }) => (
         <button
           key={key}
           onClick={() => on_select(label)}
-          className="w-full text-left rounded-[4px] px-3 py-2 text-ui-sm text-text-secondary border border-border-subtle hover:border-accent-ai hover:text-accent-ai hover:bg-surface transition-colors duration-100"
+          className="w-full text-left rounded-xl px-4 py-2.5 text-ui-sm text-text-secondary border border-border-subtle hover:border-accent-ai hover:text-accent-ai hover:bg-surface transition-all duration-200 ease-out shadow-sm hover:shadow"
         >
           {label}
         </button>
@@ -153,6 +176,8 @@ export function ChatPanel({ document_id, document_context }: ChatPanelProps) {
   const [models, set_models] = useState<ModelInfo[]>([]);
   const [selected_model_id, set_selected_model_id] = useState<string | undefined>(undefined);
   const messages_end_ref = useRef<HTMLDivElement>(null);
+  const messages_container_ref = useRef<HTMLDivElement>(null);
+  const is_user_scrolling = useRef(false);
   const input_ref = useRef<HTMLTextAreaElement>(null);
   const close_button_ref = useRef<HTMLButtonElement>(null);
 
@@ -177,9 +202,20 @@ export function ChatPanel({ document_id, document_context }: ChatPanelProps) {
     }
   }, [active_conversation_id, load_messages, messages.length]);
 
-  // Auto-scroll to the bottom whenever messages update.
+  // Handle manual scroll to detect if user scrolled up
+  const handle_scroll = useCallback(() => {
+    if (!messages_container_ref.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messages_container_ref.current;
+    // If scrolled more than 50px from the bottom, mark as user scrolling
+    const is_at_bottom = scrollHeight - scrollTop - clientHeight < 50;
+    is_user_scrolling.current = !is_at_bottom;
+  }, []);
+
+  // Auto-scroll to the bottom whenever messages update, only if user hasn't scrolled up manually
   useEffect(() => {
-    messages_end_ref.current?.scrollIntoView({ behavior: "smooth" });
+    if (!is_user_scrolling.current) {
+      messages_end_ref.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   // Focus the text input when the panel mounts.
@@ -194,6 +230,7 @@ export function ChatPanel({ document_id, document_context }: ChatPanelProps) {
     const trimmed = input_value.trim();
     if (!trimmed || is_loading) return;
     set_input_value("");
+    is_user_scrolling.current = false; // Reset manual scroll lock on new message
     await send_message(trimmed, document_id, document_context, selected_model_id);
   }, [input_value, is_loading, send_message, document_id, document_context, selected_model_id]);
 
@@ -244,7 +281,7 @@ export function ChatPanel({ document_id, document_context }: ChatPanelProps) {
 
   return (
     <aside
-      className="flex h-full w-[400px] shrink-0 flex-col border-l border-border-subtle bg-surface z-40"
+      className="flex w-[400px] shrink-0 flex-col border-l border-border-subtle bg-surface z-40 shadow-[-4px_0_24px_-8px_rgba(0,0,0,0.05)] transition-all duration-300 ease-in-out self-stretch"
       aria-label={t("panel_title")}
       role="complementary"
     >
@@ -321,7 +358,9 @@ export function ChatPanel({ document_id, document_context }: ChatPanelProps) {
 
       {/* Message list — scrollable, aria-live for screen readers */}
       <div
-        className="flex-1 overflow-y-auto px-2 py-3"
+        ref={messages_container_ref}
+        onScroll={handle_scroll}
+        className="flex-1 overflow-y-auto px-2 py-3 min-h-0"
         role="log"
         aria-live="polite"
         aria-label={t("messages_region")}
@@ -357,8 +396,8 @@ export function ChatPanel({ document_id, document_context }: ChatPanelProps) {
       )}
 
       {/* Input area */}
-      <div className="shrink-0 border-t border-border-subtle px-3 pb-3 pt-2">
-        <div className="flex items-end gap-2 rounded-[4px] border border-border-subtle bg-app px-3 py-2 focus-within:border-accent-ai transition-colors duration-100">
+      <div className="shrink-0 border-t border-border-subtle px-4 pb-4 pt-3 bg-surface">
+        <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-app px-3 py-2.5 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20 transition-all duration-200 shadow-sm">
           <textarea
             ref={input_ref}
             value={input_value}
@@ -367,7 +406,7 @@ export function ChatPanel({ document_id, document_context }: ChatPanelProps) {
             placeholder={t("input_placeholder")}
             disabled={is_loading}
             rows={1}
-            className="flex-1 resize-none bg-transparent text-ui-sm text-text-primary placeholder:text-text-secondary/60 outline-none leading-relaxed max-h-[120px] overflow-y-auto disabled:opacity-50"
+            className="flex-1 resize-none bg-transparent text-ui-sm text-text-primary placeholder:text-text-secondary/60 outline-none leading-relaxed max-h-[120px] overflow-y-auto disabled:opacity-50 py-0.5"
             aria-label={t("input_placeholder")}
             style={{
               // Grow textarea naturally up to max-h without layout shift.

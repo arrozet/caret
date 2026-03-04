@@ -72,13 +72,23 @@ def _build_model(model_id: str | None = None) -> OpenAIChatModel | AnthropicMode
     model_id is None.
 
     Priority:
-      1. OpenRouter if OPENROUTER_API_KEY is set (OpenAI Chat Completions-compatible)
-      2. OpenAI GPT-4o if OPENAI_API_KEY is set
-      3. Anthropic Claude 3.5 Sonnet if ANTHROPIC_API_KEY is set
+      1. xAI (Grok) if model_id starts with "grok-" and XAI_API_KEY is set
+      2. OpenRouter if OPENROUTER_API_KEY is set (OpenAI Chat Completions-compatible)
+      3. OpenAI GPT-4o if OPENAI_API_KEY is set
+      4. Anthropic Claude 3.5 Sonnet if ANTHROPIC_API_KEY is set
 
     Raises:
         RuntimeError if no LLM API key is configured.
     """
+    if model_id and model_id.startswith("grok-"):
+        if not settings.XAI_API_KEY:
+            raise RuntimeError("XAI_API_KEY is not configured for Grok models.")
+        provider = OpenAIProvider(
+            base_url="https://api.x.ai/v1",
+            api_key=settings.XAI_API_KEY,
+        )
+        return OpenAIChatModel(model_id, provider=provider)
+
     if settings.OPENROUTER_API_KEY:
         resolved_model = model_id or settings.OPENROUTER_MODEL
         provider = OpenAIProvider(
@@ -276,11 +286,14 @@ class AiAgentService:
         try:
             async with agent.run_stream(full_prompt) as result:
                 async for delta in result.stream_text(delta=True):
-                    full_text += delta
-                    token_count += len(delta.split())  # approximate; LLM usage may override
+                    # Check if the delta contains any characters
+                    # Sometimes models emit empty deltas at the end which shouldn't disrupt streaming
+                    if delta:
+                        full_text += delta
+                        token_count += len(delta.split())  # approximate; LLM usage may override
 
-                    delta_chunk = StreamChunk(type="delta", content=delta)
-                    yield f"data: {delta_chunk.model_dump_json()}\n\n"
+                        delta_chunk = StreamChunk(type="delta", content=delta)
+                        yield f"data: {delta_chunk.model_dump_json()}\n\n"
 
         except Exception as exc:
             logger.exception("PydanticAI streaming error: %s", exc)

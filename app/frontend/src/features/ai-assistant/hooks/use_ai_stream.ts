@@ -179,40 +179,57 @@ export function use_ai_stream(): UseAiStreamReturn {
 
         for await (const chunk of stream) {
           if (chunk.type === "delta" && chunk.content) {
+            const current_streaming_id = streaming_id_ref.current;
             // Append the partial text to the assistant placeholder.
             set_messages((prev) =>
               prev.map((msg) =>
-                msg.id === streaming_id_ref.current
+                msg.id === current_streaming_id
                   ? { ...msg, content: msg.content + chunk.content }
                   : msg,
               ),
             );
           } else if (chunk.type === "done") {
-            // Finalise the message: mark as no longer streaming, assign server ID.
-            const final_id = chunk.message_id ?? assistant_placeholder_id;
-            set_messages((prev) =>
-              prev.map((msg) =>
-                msg.id === streaming_id_ref.current
-                  ? { ...msg, id: final_id, is_streaming: false }
-                  : msg,
-              ),
-            );
+            const current_streaming_id = streaming_id_ref.current;
+            const final_id = chunk.message_id || current_streaming_id;
+            
+            set_messages((prev) => {
+              return prev.map((msg) => {
+                if (msg.id === current_streaming_id) {
+                  return { ...msg, id: final_id, is_streaming: false };
+                }
+                return msg;
+              });
+            });
             streaming_id_ref.current = null;
           } else if (chunk.type === "error") {
             set_error(chunk.error ?? "AI service error");
-            // Remove the failed placeholder.
+            const current_streaming_id = streaming_id_ref.current;
             set_messages((prev) =>
-              prev.filter((msg) => msg.id !== streaming_id_ref.current),
+              prev.filter((msg) => msg.id !== current_streaming_id),
             );
             streaming_id_ref.current = null;
           }
         }
+        
+        // If the stream ends naturally without a 'done' chunk
+        if (streaming_id_ref.current) {
+          const current_streaming_id = streaming_id_ref.current;
+          set_messages((prev) =>
+            prev.map((msg) =>
+              msg.id === current_streaming_id
+                ? { ...msg, is_streaming: false }
+                : msg,
+            ),
+          );
+          streaming_id_ref.current = null;
+        }
       } catch (err) {
+        const current_streaming_id = streaming_id_ref.current;
         if ((err as Error).name === "AbortError") {
           // User cancelled — finalise whatever we accumulated.
           set_messages((prev) =>
             prev.map((msg) =>
-              msg.id === streaming_id_ref.current
+              msg.id === current_streaming_id
                 ? { ...msg, is_streaming: false }
                 : msg,
             ),
@@ -220,7 +237,7 @@ export function use_ai_stream(): UseAiStreamReturn {
         } else {
           set_error(err instanceof Error ? err.message : "Streaming failed");
           set_messages((prev) =>
-            prev.filter((msg) => msg.id !== streaming_id_ref.current),
+            prev.filter((msg) => msg.id !== current_streaming_id),
           );
         }
         streaming_id_ref.current = null;

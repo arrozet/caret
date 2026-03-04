@@ -19,13 +19,13 @@ interface MainLayoutProps {
  */
 export function MainLayout({ children }: MainLayoutProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-app">
+    <div className="flex h-screen w-full flex-col bg-app overflow-hidden">
       <TopBar />
       {/* Offset wrapper — pushes content below the fixed 56px TopBar */}
-      <div className="flex flex-1 flex-col pt-14">
+      <div className="flex flex-1 flex-col pt-14 min-h-0">
         {/* Document tabs strip — persistent across editor and document list */}
         <DocumentTabs />
-        <main className="flex flex-1 flex-col overflow-hidden">
+        <main className="flex flex-1 flex-col overflow-hidden min-h-0">
           {children}
         </main>
       </div>

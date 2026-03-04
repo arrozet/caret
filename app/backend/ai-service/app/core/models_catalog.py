@@ -45,6 +45,38 @@ OPENROUTER_MODELS: list[ModelEntry] = [
         context_window=128_000,
         description="Lightweight, fast general-purpose model from Z.AI.",
     ),
+    ModelEntry(
+        id="stepfun/step-3.5-flash:free",
+        name="Step 3.5 Flash",
+        provider="StepFun",
+        is_free=True,
+        context_window=256_000,
+        description="Efficient MoE reasoning model, fast at long contexts.",
+    ),
+    ModelEntry(
+        id="arcee-ai/trinity-large-preview:free",
+        name="Trinity Large Preview",
+        provider="Arcee AI",
+        is_free=True,
+        context_window=131_000,
+        description="400B MoE frontier model, excels in creative writing and reasoning.",
+    ),
+    ModelEntry(
+        id="qwen/qwen3-coder:free",
+        name="Qwen3 Coder 480B (Free)",
+        provider="Qwen",
+        is_free=True,
+        context_window=262_000,
+        description="480B MoE code generation model, optimized for complex reasoning.",
+    ),
+    ModelEntry(
+        id="grok-4-1-fast-reasoning",
+        name="Grok 4.1 Fast Reasoning",
+        provider="xAI",
+        is_free=False,
+        context_window=2_000_000,
+        description="Reasoning-enabled Grok model optimized for agentic tasks.",
+    ),
 ]
 
 # Quick lookup by model id.

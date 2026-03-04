@@ -27,7 +27,7 @@ interface AiState {
  *   Global UI state -> Zustand
  */
 export const use_ai_store = create<AiState>((set) => ({
-  is_panel_open: false,
+  is_panel_open: true,
   active_conversation_id: null,
 
   toggle_panel() {
