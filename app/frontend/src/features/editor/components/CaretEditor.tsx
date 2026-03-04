@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextAlign from "@tiptap/extension-text-align";
@@ -6,8 +7,19 @@ import Highlight from "@tiptap/extension-highlight";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import FontFamily from "@tiptap/extension-font-family";
+import Underline from "@tiptap/extension-underline";
+import { Link } from "@tiptap/extension-link";
+import { Image } from "@tiptap/extension-image";
+import { TaskList } from "@tiptap/extension-task-list";
+import { TaskItem } from "@tiptap/extension-task-item";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
 import type { JSONContent, Editor } from "@tiptap/react";
 import { EditorToolbar } from "./EditorToolbar";
+import { Pagination } from "../extensions/pagination";
+import type { PaperSize } from "../extensions/pagination";
 
 /**
  * Props for the CaretEditor component.
@@ -39,6 +51,8 @@ export function CaretEditor({
   editable = true,
   on_editor_ready,
 }: CaretEditorProps) {
+  const [paper_size, set_paper_size] = useState<PaperSize>("a4");
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -57,6 +71,25 @@ export function CaretEditor({
       }),
       Placeholder.configure({
         placeholder: "Start writing...",
+      }),
+      Underline,
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+      }),
+      Image,
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Pagination.configure({
+        paper_size,
       }),
     ],
     content: content ?? {
@@ -81,14 +114,39 @@ export function CaretEditor({
     },
   });
 
-  return (
-    <div className="mx-auto w-full max-w-[var(--max-width-document)] bg-surface rounded-none shadow-subtle min-h-[60vh]">
-      {/* Formatting Toolbar */}
-      {editable && editor && <EditorToolbar editor={editor} />}
+  // Keep the Pagination extension in sync with the selected paper size.
+  useEffect(() => {
+    if (editor) {
+      editor.extensionManager.extensions
+        .filter((ext) => ext.name === "pagination")
+        .forEach((ext) => {
+          ext.options.paper_size = paper_size;
+        });
+      // Trigger a re-render of decorations by dispatching a no-op transaction.
+      editor.view.dispatch(editor.state.tr);
+    }
+  }, [paper_size, editor]);
 
-      {/* Editor Content */}
-      <div className="p-8">
-        <EditorContent editor={editor} />
+  return (
+    <div className="flex flex-col h-full w-full bg-app">
+      {/* Formatting Toolbar - Fixed at the top, full width */}
+      {editable && editor && (
+        <div className="shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle flex justify-center">
+          <div className="w-full max-w-[var(--max-width-document-wide)]">
+            <EditorToolbar 
+              editor={editor} 
+              paper_size={paper_size}
+              set_paper_size={set_paper_size}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Editor Content Area - Scrollable container for the "Paper" */}
+      <div className="flex-1 overflow-y-auto bg-app p-4 sm:p-8 md:py-12 flex flex-col items-center">
+        <div className={`editor-canvas paper-size-${paper_size} w-full flex justify-center`}>
+          <EditorContent editor={editor} className="w-full max-w-full" />
+        </div>
       </div>
     </div>
   );
