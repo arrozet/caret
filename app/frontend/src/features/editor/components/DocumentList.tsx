@@ -82,20 +82,24 @@ export function DocumentList() {
   const is_loading = workspaces_loading || documents_loading;
 
   return (
-    <div className="flex flex-1 flex-col p-8">
-      <div className="mx-auto w-full max-w-[var(--max-width-document)]">
+    <div className="flex flex-1 flex-col bg-app h-full">
+      <div className="mx-auto w-full max-w-[var(--max-width-document-wide)] p-6 md:p-10">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
-          <h1 className="font-ui text-display text-text-primary">Documents</h1>
+          <div>
+            <h1 className="font-ui text-display text-text-primary">Documents</h1>
+            <p className="text-ui-base text-text-secondary mt-1">Manage and edit your documents</p>
+          </div>
           <Button
             variant="primary"
             size="md"
             onClick={handle_create_document}
             disabled={is_creating}
             is_loading={is_creating}
+            className="shadow-sm"
           >
             <Plus className="h-4 w-4" />
-            New document
+            Blank document
           </Button>
         </div>
 
@@ -115,20 +119,32 @@ export function DocumentList() {
 
         {/* Empty state */}
         {!is_loading && !documents_error && documents?.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <FileText className="mb-4 h-8 w-8 text-text-secondary opacity-40" />
-            <p className="text-ui-lg text-text-secondary">
+          <div className="flex flex-col items-center justify-center py-20 text-center bg-surface border border-border-subtle rounded-lg shadow-sm">
+            <div className="h-16 w-16 bg-accent-main/10 text-accent-main rounded-full flex items-center justify-center mb-4">
+              <FileText className="h-8 w-8" />
+            </div>
+            <p className="text-ui-lg font-medium text-text-primary">
               No documents yet
             </p>
-            <p className="mt-1 text-ui-base text-text-secondary opacity-70">
-              Click "New document" to get started.
+            <p className="mt-1 mb-6 text-ui-base text-text-secondary max-w-sm">
+              Create your first document to start writing. Documents are synced automatically.
             </p>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handle_create_document}
+              disabled={is_creating}
+              is_loading={is_creating}
+            >
+              <Plus className="h-4 w-4" />
+              Blank document
+            </Button>
           </div>
         )}
 
-        {/* Document list */}
+        {/* Document Grid */}
         {!is_loading && documents && documents.length > 0 && (
-          <ul className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {documents.map((doc) => (
               <DocumentCard
                 key={doc.id}
@@ -136,7 +152,7 @@ export function DocumentList() {
                 on_navigate={() => navigate(`/documents/${doc.id}`)}
               />
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>
@@ -288,81 +304,92 @@ function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
 
   /* Normal document card */
   return (
-    <li className="group relative">
+    <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface shadow-sm transition-all hover:shadow-elevated hover:border-accent-main/30">
+      {/* Visual document preview area (mock) */}
       <button
         onClick={on_navigate}
-        className="flex w-full items-center gap-3 rounded-base bg-surface p-4 text-left shadow-subtle transition-shadow hover:shadow-elevated"
+        className="flex h-40 w-full items-center justify-center bg-app/50 border-b border-border-subtle relative overflow-hidden"
+        aria-label={`Open ${doc.title || "Untitled"}`}
       >
-        <FileText className="h-5 w-5 shrink-0 text-text-secondary" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-ui-lg font-medium text-text-primary">
-            {doc.title || "Untitled"}
-          </p>
-          <p className="text-ui-sm text-text-secondary">
-            Updated{" "}
-            {new Date(doc.updated_at).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </p>
+        <div className="absolute inset-0 flex flex-col p-4 opacity-30 gap-2">
+          {/* Mock text lines to make it look like a document */}
+          <div className="h-2 w-3/4 rounded bg-text-secondary"></div>
+          <div className="h-2 w-full rounded bg-text-secondary"></div>
+          <div className="h-2 w-5/6 rounded bg-text-secondary"></div>
+          <div className="h-2 w-full rounded bg-text-secondary"></div>
+          <div className="h-2 w-2/3 rounded bg-text-secondary"></div>
+          <div className="h-2 w-full rounded bg-text-secondary"></div>
         </div>
+        <FileText className="h-10 w-10 text-text-secondary opacity-50 relative z-10" />
       </button>
 
-      {/* Actions menu (visible on hover or when open) */}
-      <div
-        ref={menu_ref}
-        className={[
-          "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1",
-          show_menu ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-          "transition-opacity duration-[150ms]",
-        ].join(" ")}
-      >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            set_show_menu(!show_menu);
-          }}
-          className="p-2 rounded-[4px] text-text-secondary hover:text-text-primary hover:bg-app cursor-pointer"
-          aria-label="Document actions"
-        >
-          <MoreVertical className="h-4 w-4" />
-        </button>
+      {/* Info area */}
+      <div className="flex flex-col p-3">
+        <div className="flex items-start justify-between">
+          <div className="min-w-0 flex-1">
+            <button
+              onClick={on_navigate}
+              className="w-full truncate text-left text-ui-base font-medium text-text-primary hover:text-accent-main"
+            >
+              {doc.title || "Untitled"}
+            </button>
+            <p className="text-ui-sm text-text-secondary mt-0.5">
+              {new Date(doc.updated_at).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </p>
+          </div>
 
-        {/* Dropdown menu */}
-        {show_menu && (
-          <>
-            {/* Backdrop to close menu on outside click */}
-            <div
-              className="fixed inset-0 z-30"
-              onClick={() => set_show_menu(false)}
-            />
-            <div className="absolute right-0 top-full mt-1 z-40 min-w-[160px] rounded-md bg-surface border border-border-subtle shadow-elevated py-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  start_rename();
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-ui-base text-text-primary hover:bg-app cursor-pointer"
-              >
-                <Pencil className="h-4 w-4" />
-                Rename
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  set_show_delete_confirm(true);
-                  set_show_menu(false);
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-ui-base text-error hover:bg-error/5 cursor-pointer"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </button>
-            </div>
-          </>
-        )}
+          {/* Actions menu */}
+          <div ref={menu_ref} className="relative ml-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                set_show_menu(!show_menu);
+              }}
+              className="p-1 rounded-[4px] text-text-secondary hover:text-text-primary hover:bg-app cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label="Document actions"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+
+            {/* Dropdown menu */}
+            {show_menu && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => set_show_menu(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 z-40 w-36 rounded-md bg-surface border border-border-subtle shadow-elevated py-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      start_rename();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-ui-sm text-text-primary hover:bg-app cursor-pointer"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Rename
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      set_show_delete_confirm(true);
+                      set_show_menu(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-ui-sm text-error hover:bg-error/5 cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
-    </li>
+    </div>
   );
 }
