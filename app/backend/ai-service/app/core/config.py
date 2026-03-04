@@ -18,6 +18,11 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "thudm/glm-4.5-air"
+
+    # JWT cache TTL in seconds (default: 5 minutes)
+    JWKS_CACHE_TTL_SECONDS: int = 300
 
 
 settings = Settings()

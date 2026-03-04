@@ -1,7 +1,7 @@
 """
-FastAPI routers for the AI Service — equivalent to Controllers in the layered architecture.
-Each router function: validates the Pydantic schema, calls a Service, returns the response or SSE stream.
-
-Rule: no business logic inside routers.
-Rule: no direct Repository or SQLAlchemy imports — delegate to Services.
+FastAPI routers for the Caret AI Service.
 """
+
+from app.routers.ai_router import router as ai_router
+
+__all__ = ["ai_router"]
