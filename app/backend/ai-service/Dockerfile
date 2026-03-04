@@ -9,16 +9,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 
 WORKDIR /app
 
+# Disable uv cache to avoid home-directory writes at build time
+ENV UV_NO_CACHE=1
+
 # Install dependencies first to leverage Docker layer cache.
 # --no-dev skips test/lint tools not needed at runtime.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
+# alembic.ini must be present at WORKDIR so that `alembic -c alembic.ini`
+# resolves correctly when run via `docker compose exec`.
+COPY alembic.ini ./
 COPY app/ ./app/
 
-# Run as non-root user for security
+# Make the venv readable by all users so the non-root runner can execute it
+RUN chmod -R a+rX /app/.venv
+
+# Run as non-root user for security.
+# nobody's HOME=/nonexistent on Debian, so we bypass uv at runtime entirely
+# by invoking uvicorn directly from the pre-built venv.
 USER nobody
 
 EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
