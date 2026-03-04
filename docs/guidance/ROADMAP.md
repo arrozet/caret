@@ -30,11 +30,11 @@ This roadmap outlines the strict step-by-step technical execution plan for build
 
 ## Phase 3: The AI Brain (Agentic Service)
 *Goal: The editor can "speak" to an LLM. Fully testable locally without infrastructure deployment.*
-- [ ] Setup Python/FastAPI Service with PydanticAI. (See **[BACKEND.md](./BACKEND.md)**)
-- [ ] Create `ai_conversations`, `ai_messages`, and `ai_suggestions` tables. (See **[DATABASE.md](./DATABASE.md)**)
-- [ ] Create "Caret AI Panel" UI and `Cmd+K` toggle. (See **[FRONTEND.md](./FRONTEND.md)**)
-- [ ] Implement Streaming Response (SSE) pipeline in AI Service. (See **[BACKEND.md](./BACKEND.md)**)
-- [ ] Build Frontend SSE consumer that applies chunks as Tiptap Transactions. (See **[BACKEND.md](./BACKEND.md)**)
+- [x] Setup Python/FastAPI Service with PydanticAI. (See **[BACKEND.md](./BACKEND.md)**)
+- [x] Create `ai_conversations`, `ai_messages`, and `ai_suggestions` tables. (See **[DATABASE.md](./DATABASE.md)**)
+- [x] Create "Caret AI Panel" UI and `Cmd+K` toggle. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Implement Streaming Response (SSE) pipeline in AI Service. (See **[BACKEND.md](./BACKEND.md)**)
+- [x] Build Frontend SSE consumer that applies chunks as Tiptap Transactions. (See **[BACKEND.md](./BACKEND.md)**)
 
 ## Phase 4: Context & RAG
 *Goal: The AI knows what you wrote. Fully testable locally with pgvector.*

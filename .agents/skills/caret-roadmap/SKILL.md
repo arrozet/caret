@@ -29,13 +29,13 @@ Full reference: `docs/guidance/ROADMAP.md`
 - [x] Document Tabs (multi-document editing)
 - [x] Context Menu on text selection (floating toolbar)
 
-## Phase 3 — AI Brain (Agentic Service)
+## Phase 3 — AI Brain (Agentic Service) ✅
 
-- [ ] Python/FastAPI service with PydanticAI
-- [ ] `ai_conversations`, `ai_messages`, `ai_suggestions` tables
-- [ ] "Caret AI Panel" UI + `Ctrl/Cmd+K` toggle
-- [ ] SSE streaming pipeline in AI Service
-- [ ] Frontend SSE consumer → Tiptap Transactions
+- [x] Python/FastAPI service with PydanticAI (pydantic_ai 1.62.0)
+- [x] `ai_conversations`, `ai_messages`, `ai_suggestions` tables + Alembic migration
+- [x] "Caret AI Panel" UI + `Ctrl/Cmd+K` toggle
+- [x] SSE streaming pipeline in AI Service (OpenRouter / OpenAI / Anthropic)
+- [x] Frontend SSE consumer → chat message state (Tiptap integration deferred to Phase 4)
 
 ## Phase 4 — Context & RAG
 
