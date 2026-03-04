@@ -25,34 +25,34 @@ This roadmap outlines the strict step-by-step technical execution plan for build
 - [x] Implement document rename (editable title in editor and document list). (See **[FRONTEND.md](./FRONTEND.md)**)
 - [x] Implement document delete with confirmation dialog. (See **[FRONTEND.md](./FRONTEND.md)**)
 - [x] Build Settings page: profile info, language selector, theme preferences. (See **[FRONTEND.md](./FRONTEND.md)**)
-- [ ] Implement Document Tabs for multi-document editing. (See **[FRONTEND.md](./FRONTEND.md)**)
-- [ ] Build Context Menu on text selection (floating toolbar). (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Implement Document Tabs for multi-document editing. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Build Context Menu on text selection (floating toolbar). (See **[FRONTEND.md](./FRONTEND.md)**)
 
-## Phase 3: Real-time Collaboration
-*Goal: Multiple users can type in the same document via WebSockets.*
+## Phase 3: The AI Brain (Agentic Service)
+*Goal: The editor can "speak" to an LLM. Fully testable locally without infrastructure deployment.*
+- [ ] Setup Python/FastAPI Service with PydanticAI. (See **[BACKEND.md](./BACKEND.md)**)
+- [ ] Create `ai_conversations`, `ai_messages`, and `ai_suggestions` tables. (See **[DATABASE.md](./DATABASE.md)**)
+- [ ] Create "Caret AI Panel" UI and `Cmd+K` toggle. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [ ] Implement Streaming Response (SSE) pipeline in AI Service. (See **[BACKEND.md](./BACKEND.md)**)
+- [ ] Build Frontend SSE consumer that applies chunks as Tiptap Transactions. (See **[BACKEND.md](./BACKEND.md)**)
+
+## Phase 4: Context & RAG
+*Goal: The AI knows what you wrote. Fully testable locally with pgvector.*
+- [ ] Enable `pgvector` and create `document_embeddings` table (chunk-level embeddings). (See **[DATABASE.md](./DATABASE.md)**)
+- [ ] Create HNSW index for vector similarity search. (See **[DATABASE.md](./DATABASE.md)**)
+- [ ] Create Embedding Pipeline in Python to chunk documents. (See **[BACKEND.md](./BACKEND.md)**)
+- [ ] Implement Contextual Retrieval for chat queries. (See **[BACKEND.md](./BACKEND.md)**)
+- [ ] Add "Ghost Text" and Inline Suggestions UI. (See **[FRONTEND.md](./FRONTEND.md)**)
+
+## Phase 5: Real-time Collaboration
+*Goal: Multiple users can type in the same document via WebSockets. Requires deployed infrastructure (ECS) to test end-to-end.*
 - [ ] Setup dedicated Node.js WebSocket Server on AWS ECS (Fargate). (See **[DEPLOYMENT.md](./DEPLOYMENT.md)**)
 - [ ] Implement WebSocket JWT Authentication via query params. (See **[BACKEND.md](./BACKEND.md)**)
 - [ ] Integrate Y.js with Tiptap and WebSocket provider. (See **[BACKEND.md](./BACKEND.md)**)
 - [ ] Implement Awareness (Cursor positions, User names). (See **[FRONTEND.md](./FRONTEND.md)**)
 - [ ] Create `document_collab_updates` + `document_collab_snapshots` tables and implement Snapshot + Update Log strategy. (See **[DATABASE.md](./DATABASE.md)**)
 - [ ] Build periodic snapshot compaction job. (See **[DATABASE.md](./DATABASE.md)**)
-
-## Phase 4: The AI Brain (Agentic Service)
-*Goal: The editor can "speak" to an LLM.*
-- [ ] Setup Python/FastAPI Service with PydanticAI. (See **[BACKEND.md](./BACKEND.md)**)
-- [ ] Create `ai_conversations`, `ai_messages`, and `ai_suggestions` tables. (See **[DATABASE.md](./DATABASE.md)**)
-- [ ] Create "Caret AI Panel" UI and `Cmd+K` toggle. (See **[FRONTEND.md](./FRONTEND.md)**)
-- [ ] Implement Streaming Response (SSE) pipeline in AI Service. (See **[BACKEND.md](./BACKEND.md)**)
-- [ ] Build Frontend SSE consumer that applies chunks as Tiptap Transactions. (See **[BACKEND.md](./BACKEND.md)**)
 - [ ] Test AI streaming with Y.js to ensure CRDT consistency. (See **[TESTING.md](./TESTING.md)**)
-
-## Phase 5: Context & RAG
-*Goal: The AI knows what you wrote.*
-- [ ] Enable `pgvector` and create `document_embeddings` table (chunk-level embeddings). (See **[DATABASE.md](./DATABASE.md)**)
-- [ ] Create HNSW index for vector similarity search. (See **[DATABASE.md](./DATABASE.md)**)
-- [ ] Create Embedding Pipeline in Python to chunk documents. (See **[BACKEND.md](./BACKEND.md)**)
-- [ ] Implement Contextual Retrieval for chat queries. (See **[BACKEND.md](./BACKEND.md)**)
-- [ ] Add "Ghost Text" and Inline Suggestions UI. (See **[FRONTEND.md](./FRONTEND.md)**)
 
 ## Phase 6: Production Polish
 *Goal: Stability and Performance.*

@@ -17,7 +17,7 @@ Full reference: `docs/guidance/ROADMAP.md`
 - [x] Login/Signup with Supabase Auth
 - [x] API Gateway base routing + versioned paths `/api/v1/...`
 
-## Phase 2 — Editor Core (CRUD) 🔄
+## Phase 2 — Editor Core (CRUD) ✅
 
 - [x] Tiptap Editor with Swiss Focus typography
 - [x] Core DB tables: `workspaces`, `folders`, `documents` + RLS + indexes
@@ -26,10 +26,27 @@ Full reference: `docs/guidance/ROADMAP.md`
 - [x] Formatting toolbar: bold, italic, underline, strike, headings, lists, blockquote, code, alignment, undo/redo
 - [x] Document rename + delete with confirmation
 - [x] Settings page (profile, language, theme)
-- [ ] Document Tabs (multi-document editing)
-- [ ] Context Menu on text selection (floating toolbar)
+- [x] Document Tabs (multi-document editing)
+- [x] Context Menu on text selection (floating toolbar)
 
-## Phase 3 — Real-time Collaboration
+## Phase 3 — AI Brain (Agentic Service)
+
+- [ ] Python/FastAPI service with PydanticAI
+- [ ] `ai_conversations`, `ai_messages`, `ai_suggestions` tables
+- [ ] "Caret AI Panel" UI + `Ctrl/Cmd+K` toggle
+- [ ] SSE streaming pipeline in AI Service
+- [ ] Frontend SSE consumer → Tiptap Transactions
+
+## Phase 4 — Context & RAG
+
+- [ ] pgvector + `document_embeddings` table (chunk-level)
+- [ ] HNSW index for vector similarity
+- [ ] Embedding pipeline in Python (chunk → embed → store)
+- [ ] Contextual retrieval for chat queries
+- [ ] Ghost Text + inline suggestions UI
+
+## Phase 5 — Real-time Collaboration
+*Requires deployed infrastructure (ECS) to test end-to-end.*
 
 - [ ] WebSocket Server on AWS ECS (Fargate)
 - [ ] WebSocket JWT auth via query params
@@ -37,23 +54,7 @@ Full reference: `docs/guidance/ROADMAP.md`
 - [ ] Awareness (cursor positions, user names)
 - [ ] `document_collab_updates` + `document_collab_snapshots` tables
 - [ ] Periodic snapshot compaction job
-
-## Phase 4 — AI Brain (Agentic Service)
-
-- [ ] Python/FastAPI service with PydanticAI
-- [ ] `ai_conversations`, `ai_messages`, `ai_suggestions` tables
-- [ ] "Caret AI Panel" UI + `Ctrl/Cmd+K` toggle
-- [ ] SSE streaming pipeline in AI Service
-- [ ] Frontend SSE consumer → Tiptap Transactions
 - [ ] AI streaming + Y.js CRDT consistency test
-
-## Phase 5 — Context & RAG
-
-- [ ] pgvector + `document_embeddings` table (chunk-level)
-- [ ] HNSW index for vector similarity
-- [ ] Embedding pipeline in Python (chunk → embed → store)
-- [ ] Contextual retrieval for chat queries
-- [ ] Ghost Text + inline suggestions UI
 
 ## Phase 6 — Production Polish
 
