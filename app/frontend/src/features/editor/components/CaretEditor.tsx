@@ -18,6 +18,7 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import type { JSONContent, Editor } from "@tiptap/react";
 import { EditorToolbar } from "./EditorToolbar";
+import { SelectionMenu } from "./SelectionMenu";
 import { Pagination } from "../extensions/pagination";
 import type { PaperSize } from "../extensions/pagination";
 
@@ -141,6 +142,9 @@ export function CaretEditor({
           </div>
         </div>
       )}
+
+      {/* Floating selection menu — appears above selected text (z-40) */}
+      {editable && editor && <SelectionMenu editor={editor} />}
 
       {/* Editor Content Area - Scrollable container for the "Paper" */}
       <div className="flex-1 overflow-y-auto bg-app p-4 sm:p-8 md:py-12 flex flex-col items-center">
