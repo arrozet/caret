@@ -51,21 +51,7 @@ Nueva iteración de animaciones para aumentar personalidad sin romper el minimal
 - **Accesibilidad motion-aware:** Se incorporó `useReducedMotion` para degradar animaciones continuas cuando el sistema lo solicita.
 - **Microloop de acento:** La línea superior del hero ahora incluye un punto animado de baja intensidad como detalle de identidad.
 
-## 9. Document Tabs (multi-document editing)
-
-Implemented a persistent tab strip for opening multiple documents simultaneously:
-
-- **`src/stores/tabs_store.ts`**: New Zustand store tracking `open_tabs: { id, title }[]`. Actions: `add_tab` (idempotent — silently ignores duplicates), `update_tab_title`, `close_tab`, `close_all_tabs`. Exported via `stores/index.ts`.
-- **`src/features/editor/components/DocumentTabs.tsx`**: Horizontal tab strip rendered above the sub-header in `EditorPage`. Each tab shows a `FileText` icon, truncated title, and a hover-revealed close (×) button. Closing the active tab navigates to the nearest remaining tab or `/documents` if all are closed. A `+` button at the right navigates to `/documents`. Carries `ui-peripheral` class (fades with focus mode, z-30 chrome layer). WCAG: `role="tablist"`, `role="tab"`, `aria-selected`, `aria-label` on every interactive element.
-- **`EditorPage.tsx` integration**: Imports `DocumentTabs` and renders it at the top of the editor flex column. Calls `add_tab` and `update_tab_title` on document load and whenever the server-fetched title changes. Title save callbacks (`handle_title_change`, `handle_title_blur`) also call `update_tab_title` after a successful API write.
-
-## 10. Selection Menu / Floating Formatting Toolbar
-
-Added a compact BubbleMenu that appears over selected text:
-
-- **`src/features/editor/components/SelectionMenu.tsx`**: Wraps Tiptap v3 `BubbleMenu` (imported from `@tiptap/react/menus` — v3 moved menus to a separate sub-path using Floating UI instead of Tippy). Displays Bold, Italic, Underline, Strikethrough, Highlight, Code, and Link buttons with `aria-pressed` state and accessible labels. A vertical divider separates inline-style buttons from code/link. Carries `ui-peripheral` class (z-40 floating UI layer).
-- **`CaretEditor.tsx` integration**: `<SelectionMenu editor={editor} />` rendered between the toolbar and the scrollable editor area, guarded by `editable && editor`.
-
+## 8. Animated app mockup en el hero
 
 Se restructuró el hero en dos columnas (texto + mockup) y se creó el componente `AnimatedMockup`:
 

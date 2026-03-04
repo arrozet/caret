@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import type { Editor } from "@tiptap/react";
-import type { PaperSize } from "../extensions/pagination";
 import {
   Bold,
   Italic,
@@ -35,9 +34,9 @@ export interface EditorToolbarProps {
   /** The Tiptap editor instance to control. */
   editor: Editor;
   /** The current paper size */
-  paper_size?: PaperSize;
+  paper_size?: "a4" | "a3" | "letter";
   /** Function to change paper size */
-  set_paper_size?: (size: PaperSize) => void;
+  set_paper_size?: (size: "a4" | "a3" | "letter") => void;
 }
 
 /**
@@ -144,13 +143,13 @@ function PaperSizeSelect({
   value, 
   on_change 
 }: { 
-  value: PaperSize, 
-  on_change: (val: PaperSize) => void 
+  value: "a4" | "a3" | "letter", 
+  on_change: (val: "a4" | "a3" | "letter") => void 
 }) {
   return (
     <select
       value={value}
-      onChange={(e) => on_change(e.target.value as PaperSize)}
+      onChange={(e) => on_change(e.target.value as "a4" | "a3" | "letter")}
       className="h-8 rounded-[4px] border border-border-subtle bg-surface px-2 text-ui-sm text-text-primary cursor-pointer focus:outline-none focus:border-accent-main focus:ring-1 focus:ring-accent-main/40"
       aria-label="Paper size"
       title="Paper size"

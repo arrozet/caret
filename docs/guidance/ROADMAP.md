@@ -25,8 +25,8 @@ This roadmap outlines the strict step-by-step technical execution plan for build
 - [x] Implement document rename (editable title in editor and document list). (See **[FRONTEND.md](./FRONTEND.md)**)
 - [x] Implement document delete with confirmation dialog. (See **[FRONTEND.md](./FRONTEND.md)**)
 - [x] Build Settings page: profile info, language selector, theme preferences. (See **[FRONTEND.md](./FRONTEND.md)**)
-- [x] Implement Document Tabs for multi-document editing. (See **[FRONTEND.md](./FRONTEND.md)**)
-- [x] Build Context Menu on text selection (floating toolbar). (See **[FRONTEND.md](./FRONTEND.md)**)
+- [ ] Implement Document Tabs for multi-document editing. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [ ] Build Context Menu on text selection (floating toolbar). (See **[FRONTEND.md](./FRONTEND.md)**)
 
 ## Phase 3: Real-time Collaboration
 *Goal: Multiple users can type in the same document via WebSockets.*

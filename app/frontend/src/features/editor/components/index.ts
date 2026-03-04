@@ -7,6 +7,4 @@
 export { CaretEditor } from "./CaretEditor";
 export { EditorToolbar } from "./EditorToolbar";
 export { DocumentList } from "./DocumentList";
-export { DocumentTabs } from "./DocumentTabs";
-export { SelectionMenu } from "./SelectionMenu";
 export { EditorPage } from "./EditorPage";
