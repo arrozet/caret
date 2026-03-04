@@ -4,6 +4,7 @@ import { use_auth_store } from "../../stores/auth_store";
 import { use_theme } from "../../hooks/use_theme";
 import { use_document } from "../../features/editor/hooks/use_document";
 import { Button } from "../ui/Button";
+import { CaretLogo } from "../ui/Logo";
 import { LogOut, Sun, Moon, Monitor, Settings } from "lucide-react";
 
 /** Map theme value to its corresponding icon component. */
@@ -49,9 +50,10 @@ export function TopBar() {
       <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={() => navigate("/documents")}
-          className="shrink-0 cursor-pointer font-ui text-ui-lg font-semibold tracking-tight text-text-primary hover:text-accent-main transition-colors"
+          className="shrink-0 cursor-pointer transition-opacity hover:opacity-80"
+          aria-label="Go to documents"
         >
-          {t("app_name")}
+          <CaretLogo />
         </button>
 
         {/* Breadcrumb separator + document title for editor pages */}
