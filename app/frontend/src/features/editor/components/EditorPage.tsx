@@ -3,10 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Loader2, ArrowLeft, Check, AlertCircle } from "lucide-react";
 import type { JSONContent } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
+import { DocumentTabs } from "./DocumentTabs";
 import { Button } from "../../../components/ui/Button";
 import { use_document } from "../hooks/use_document";
 import { use_save_document } from "../hooks/use_save_document";
 import { use_focus_mode } from "../../../hooks/use_focus_mode";
+import { use_tabs_store } from "../../../stores/tabs_store";
 
 /** Debounce delay in milliseconds before autosaving after the last keystroke. */
 const AUTOSAVE_DELAY_MS = 1_000;
@@ -39,6 +41,8 @@ export function EditorPage() {
   const title_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { add_tab, update_tab_title } = use_tabs_store();
+
   /** Activate focus mode: fade peripheral UI after 2s idle (FRONTEND.md §9). */
   use_focus_mode(true);
 
@@ -48,6 +52,17 @@ export function EditorPage() {
       set_title(document.title);
     }
   }, [document?.title, is_title_focused]);
+
+  /**
+   * Register (or focus) this document as an open tab when it loads.
+   * Keeps the tab title in sync whenever the server-fetched title changes.
+   */
+  useEffect(() => {
+    if (document_id && document?.title) {
+      add_tab({ id: document_id, title: document.title });
+      update_tab_title(document_id, document.title);
+    }
+  }, [document_id, document?.title, add_tab, update_tab_title]);
 
   /** Clean up timers on unmount. */
   useEffect(() => {
@@ -122,13 +137,14 @@ export function EditorPage() {
         set_save_status("saving");
         try {
           await save_mutation.mutateAsync({ title: new_title.trim() });
+          if (document_id) update_tab_title(document_id, new_title.trim());
           show_saved();
         } catch {
           set_save_status("error");
         }
       }, TITLE_SAVE_DELAY_MS);
     },
-    [save_mutation, show_saved],
+    [save_mutation, show_saved, document_id, update_tab_title],
   );
 
   /**
@@ -144,6 +160,7 @@ export function EditorPage() {
       set_save_status("saving");
       try {
         await save_mutation.mutateAsync({ title: trimmed });
+        if (document_id) update_tab_title(document_id, trimmed);
         show_saved();
       } catch {
         set_save_status("error");
@@ -152,7 +169,7 @@ export function EditorPage() {
     if (!trimmed) {
       set_title(document?.title || "Untitled");
     }
-  }, [title, document?.title, save_mutation, show_saved]);
+  }, [title, document?.title, save_mutation, show_saved, document_id, update_tab_title]);
 
   /** Navigate back to the document list. */
   function handle_back() {
@@ -186,6 +203,9 @@ export function EditorPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-app">
+      {/* Document tabs strip */}
+      <DocumentTabs />
+
       {/* Sub-header: back button + document title + save status */}
       <div className="flex w-full shrink-0 items-center gap-3 px-4 py-2 border-b border-border-subtle bg-surface z-20">
         <Button variant="ghost" size="sm" onClick={handle_back} className="hover:bg-border-subtle/50">
