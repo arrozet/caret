@@ -1,54 +1,264 @@
 import { describe, it, expect } from "vitest";
-import { AppError, NotFoundError, UnauthorizedError, ForbiddenError, ConflictError, ValidationError } from "../../src/lib/errors.js";
+import {
+  AppError,
+  NotFoundError,
+  UnauthorizedError,
+  ForbiddenError,
+  ConflictError,
+  ValidationError,
+} from "../../src/lib/errors.js";
 
 /**
- * Unit tests for the auth-service error classes.
- * Validates that each error type maps to the correct HTTP status code
- * and carries sensible default messages.
+ * Unit tests for the auth-service error class hierarchy (`src/lib/errors.ts`).
+ *
+ * Validates that each concrete error subclass carries the correct default
+ * HTTP status code, default message, and `name` property, and that the
+ * inheritance chain is correct so `instanceof` checks work throughout the
+ * service.
  */
 describe("error classes", () => {
-  it("AppError defaults to status 500", () => {
-    const error = new AppError("something broke");
-    expect(error.message).toBe("something broke");
-    expect(error.status_code).toBe(500);
-    expect(error.name).toBe("AppError");
+  // ─── AppError (base class) ────────────────────────────────────────────────
+
+  /**
+   * AppError is the base for all typed application errors.
+   * It must accept an arbitrary message, default to HTTP 500, set its `name`
+   * to the class constructor name, and satisfy `instanceof Error`.
+   */
+  describe("AppError (base class)", () => {
+    it("stores the message passed to the constructor", () => {
+      // Arrange
+      const message = "something broke";
+
+      // Act
+      const error = new AppError(message);
+
+      // Assert
+      expect(error.message).toBe(message);
+    });
+
+    it("defaults to status_code 500 when no code is provided", () => {
+      // Arrange — no explicit status code
+
+      // Act
+      const error = new AppError("oops");
+
+      // Assert
+      expect(error.status_code).toBe(500);
+    });
+
+    it("accepts a custom status code", () => {
+      // Arrange
+      const custom_code = 409;
+
+      // Act
+      const error = new AppError("conflict", custom_code);
+
+      // Assert
+      expect(error.status_code).toBe(custom_code);
+    });
+
+    it("sets the name property to 'AppError'", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new AppError("oops");
+
+      // Assert
+      expect(error.name).toBe("AppError");
+    });
+
+    it("is an instance of the built-in Error class", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new AppError("oops");
+
+      // Assert
+      expect(error).toBeInstanceOf(Error);
+    });
   });
 
-  it("NotFoundError maps to status 404", () => {
-    const error = new NotFoundError();
-    expect(error.status_code).toBe(404);
-    expect(error.message).toBe("Resource not found");
+  // ─── NotFoundError ────────────────────────────────────────────────────────
+
+  /**
+   * NotFoundError signals that a requested resource does not exist.
+   * Maps to HTTP 404.
+   */
+  describe("NotFoundError", () => {
+    it("maps to HTTP 404", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new NotFoundError();
+
+      // Assert
+      expect(error.status_code).toBe(404);
+    });
+
+    it("uses the default 'Resource not found' message", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new NotFoundError();
+
+      // Assert
+      expect(error.message).toBe("Resource not found");
+    });
+
+    it("accepts a custom message", () => {
+      // Arrange
+      const message = "user not found";
+
+      // Act
+      const error = new NotFoundError(message);
+
+      // Assert
+      expect(error.message).toBe(message);
+    });
+
+    it("is an instance of AppError", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new NotFoundError();
+
+      // Assert
+      expect(error).toBeInstanceOf(AppError);
+    });
   });
 
-  it("UnauthorizedError maps to status 401", () => {
-    const error = new UnauthorizedError();
-    expect(error.status_code).toBe(401);
-    expect(error.message).toBe("Unauthorized");
+  // ─── UnauthorizedError ────────────────────────────────────────────────────
+
+  /**
+   * UnauthorizedError signals missing or invalid credentials.
+   * Maps to HTTP 401.
+   */
+  describe("UnauthorizedError", () => {
+    it("maps to HTTP 401", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new UnauthorizedError();
+
+      // Assert
+      expect(error.status_code).toBe(401);
+    });
+
+    it("uses the default 'Unauthorized' message", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new UnauthorizedError();
+
+      // Assert
+      expect(error.message).toBe("Unauthorized");
+    });
   });
 
-  it("ForbiddenError maps to status 403", () => {
-    const error = new ForbiddenError();
-    expect(error.status_code).toBe(403);
-    expect(error.message).toBe("Forbidden");
+  // ─── ForbiddenError ───────────────────────────────────────────────────────
+
+  /**
+   * ForbiddenError signals valid credentials but insufficient permissions.
+   * Maps to HTTP 403.
+   */
+  describe("ForbiddenError", () => {
+    it("maps to HTTP 403", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new ForbiddenError();
+
+      // Assert
+      expect(error.status_code).toBe(403);
+    });
+
+    it("uses the default 'Forbidden' message", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new ForbiddenError();
+
+      // Assert
+      expect(error.message).toBe("Forbidden");
+    });
   });
 
-  it("ConflictError maps to status 409", () => {
-    const error = new ConflictError();
-    expect(error.status_code).toBe(409);
-    expect(error.message).toBe("Resource already exists");
+  // ─── ConflictError ────────────────────────────────────────────────────────
+
+  /**
+   * ConflictError signals a uniqueness violation (e.g. duplicate resource).
+   * Maps to HTTP 409.
+   */
+  describe("ConflictError", () => {
+    it("maps to HTTP 409", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new ConflictError();
+
+      // Assert
+      expect(error.status_code).toBe(409);
+    });
+
+    it("uses the default 'Resource already exists' message", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new ConflictError();
+
+      // Assert
+      expect(error.message).toBe("Resource already exists");
+    });
   });
 
-  it("ValidationError maps to status 422", () => {
-    const error = new ValidationError();
-    expect(error.status_code).toBe(422);
-    expect(error.message).toBe("Validation failed");
+  // ─── ValidationError ──────────────────────────────────────────────────────
+
+  /**
+   * ValidationError signals that a request body or parameter failed
+   * validation rules. Maps to HTTP 422.
+   */
+  describe("ValidationError", () => {
+    it("maps to HTTP 422", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new ValidationError();
+
+      // Assert
+      expect(error.status_code).toBe(422);
+    });
+
+    it("uses the default 'Validation failed' message", () => {
+      // Arrange — no setup needed
+
+      // Act
+      const error = new ValidationError();
+
+      // Assert
+      expect(error.message).toBe("Validation failed");
+    });
   });
 
-  it("allows custom messages on all error types", () => {
-    expect(new NotFoundError("user not found").message).toBe("user not found");
-    expect(new UnauthorizedError("bad token").message).toBe("bad token");
-    expect(new ForbiddenError("no access").message).toBe("no access");
-    expect(new ConflictError("duplicate email").message).toBe("duplicate email");
-    expect(new ValidationError("invalid input").message).toBe("invalid input");
+  // ─── custom messages ──────────────────────────────────────────────────────
+
+  /**
+   * All subclasses must forward a custom message to the base Error constructor
+   * so callers can provide context-specific error text.
+   */
+  describe("all subtypes accept custom messages", () => {
+    it.each([
+      [new NotFoundError("user not found"), "user not found"],
+      [new UnauthorizedError("bad token"), "bad token"],
+      [new ForbiddenError("no access"), "no access"],
+      [new ConflictError("duplicate email"), "duplicate email"],
+      [new ValidationError("invalid input"), "invalid input"],
+    ])("error.message equals the custom message passed at construction", (error, expected) => {
+      // Arrange — error already constructed in the table above
+
+      // Act — read the message property
+
+      // Assert
+      expect(error.message).toBe(expected);
+    });
   });
 });
