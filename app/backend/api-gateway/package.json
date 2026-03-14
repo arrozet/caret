@@ -8,7 +8,11 @@
     "build": "tsc",
     "start": "node dist/app.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format:check": "prettier --check src",
+    "format:write": "prettier --write src"
   },
   "dependencies": {
     "express": "^5.1.0",
@@ -18,12 +22,17 @@
     "dotenv": "^16.5.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.3",
+    "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.3",
     "@types/express-http-proxy": "^1.6.6",
     "@types/node": "^22.0.0",
-    "typescript": "^5.8.0",
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
     "tsx": "^4.19.4",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.57.0",
     "vitest": "^3.1.4"
   }
 }
