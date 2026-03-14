@@ -7,7 +7,8 @@ This document defines the testing strategy for Caret across frontend, backend, d
 - **Fast feedback**: tests must be runnable locally and finish quickly in CI for day-to-day work.
 - **Deterministic**: avoid flakiness. Prefer fakes and controlled clocks over real time, random values, or external dependencies.
 - **Boundaries matter**: validate behavior at the edges (API contracts, auth/RLS, CRDT sync, SSE streaming), and keep internals unit-tested.
-- **Consistent structure**: use the **AAA pattern (Arrange, Act, Assert)** for unit tests, and apply it to integration/E2E tests where it improves clarity.
+- **Consistent structure**: use the **AAA pattern (Arrange, Act, Assert)** in every test, and always mark each phase with an inline comment (`// Arrange`, `// Act`, `// Assert` in TS/JS; `# Arrange`, `# Act`, `# Assert` in Python).
+- **Docstrings everywhere**: every test file, describe/class block, and individual test must have a docstring (JSDoc `/** */` in TypeScript, `"""..."""` in Python) explaining *what* is being validated and *why*.
 - **No secrets in tests**: CI uses GitHub Secrets; production/staging use managed secrets (see `DEPLOYMENT.md`).
 
 ## What we test (by layer)
@@ -29,7 +30,10 @@ This document defines the testing strategy for Caret across frontend, backend, d
 **Rules of thumb**
 - Keep unit tests **network-free**. Use dependency injection and mocks for HTTP, DB, WebSocket, and LLM clients.
 - Prefer **table-driven** tests for protocol/state-machine logic (CRDT merges, streaming, retries).
-- Use the **AAA pattern (Arrange, Act, Assert)** to structure unit tests (and integration/E2E tests when applicable) so intent is obvious and diffs stay readable.
+- Use the **AAA pattern (Arrange, Act, Assert)** in every test — always mark each phase with an inline comment.
+- Write **docstrings on every test file, describe/class block, and individual test** explaining what is validated and why:
+  - TypeScript: `/** JSDoc block comment */` on describe and it blocks.
+  - Python: `"""docstring"""` on every test class and every test function.
 
 ### 2) Integration tests (selective)
 **Goal**: verify components work together with real serialization, real HTTP, and realistic auth boundaries.

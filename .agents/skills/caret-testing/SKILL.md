@@ -10,10 +10,50 @@ Full reference: `docs/guidance/TESTING.md`
 ## Principles
 
 - **Pyramid**: unit (majority) → integration (selective) → E2E (few, critical)
-- **AAA pattern**: Arrange / Act / Assert in every test
+- **AAA pattern**: every test must be structured as Arrange / Act / Assert and each phase must be marked with an inline comment (`// Arrange`, `// Act`, `// Assert` in TS/JS; `# Arrange`, `# Act`, `# Assert` in Python)
+- **Docstrings everywhere**: every test file, every `describe`/class block, and every individual `it`/test function must have a docstring explaining *what* is validated and *why* (JSDoc `/** */` in TypeScript, `"""..."""` in Python)
 - **Deterministic**: no real time, random values, or external dependencies in unit tests
 - **Network-free unit tests**: mock HTTP, DB, WebSocket, and LLM clients
 - **No secrets in tests**: use GitHub Secrets (CI) or managed secrets (staging/prod)
+
+## AAA Pattern & Docstring Convention
+
+### TypeScript (Vitest)
+```ts
+/** Unit tests for <module>. Validates <what and why>. */
+describe("<subject>", () => {
+  /** <what this group tests> */
+  describe("<scenario>", () => {
+    it("<expected behaviour>", () => {
+      // Arrange
+      const input = ...;
+
+      // Act
+      const result = fn(input);
+
+      // Assert
+      expect(result).toBe(...);
+    });
+  });
+});
+```
+
+### Python (Pytest)
+```python
+class TestSomething:
+    """Unit tests for Something. Validates <what and why>."""
+
+    def test_something(self):
+        """Verifies that <expected behaviour> when <condition>."""
+        # Arrange
+        value = ...
+
+        # Act
+        result = fn(value)
+
+        # Assert
+        assert result == ...
+```
 
 ## Test Tools by Layer
 
