@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+**/.venv
+**/bun.lock
+**/uv.lock
+**/__pycache__
+**/drizzle
+**/coverage
