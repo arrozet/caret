@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# pre-push hook — runs the FULL test suite across ALL microservices
+# before every push to any remote. Blocks the push if any test fails.
+#
+# Install once with:  git config core.hooksPath .githooks
+
+set -euo pipefail
+
+# ─── Colour helpers ────────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# ─── Paths ─────────────────────────────────────────────────────────────────────
+ROOT="$(git rev-parse --show-toplevel)"
+BACKEND="$ROOT/app/backend"
+
+# ─── Node.js service runner (Vitest) ───────────────────────────────────────────
+run_node_tests() {
+  local service="$1"
+  local dir="$BACKEND/$service"
+
+  echo -e "  ${CYAN}▶ $service${NC}"
+  if (cd "$dir" && bun run test --run 2>&1); then
+    echo -e "  ${GREEN}✓ $service passed${NC}"
+  else
+    echo -e "  ${RED}✗ $service FAILED — push blocked${NC}"
+    return 1
+  fi
+}
+
+# ─── Python service runner (Pytest) ────────────────────────────────────────────
+run_python_tests() {
+  local service="$1"
+  local dir="$BACKEND/$service"
+
+  echo -e "  ${CYAN}▶ $service${NC}"
+  if (cd "$dir" && uv run pytest tests/ -q 2>&1); then
+    echo -e "  ${GREEN}✓ $service passed${NC}"
+  else
+    echo -e "  ${RED}✗ $service FAILED — push blocked${NC}"
+    return 1
+  fi
+}
+
+# ─── Main ───────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${CYAN}╔══════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║          pre-push · Caret tests          ║${NC}"
+echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
+echo -e "  Running full suite before push…"
+echo ""
+
+failed=0
+
+run_node_tests   "auth-service"      || failed=1
+run_node_tests   "document-service"  || failed=1
+run_node_tests   "api-gateway"       || failed=1
+run_node_tests   "collab-service"    || failed=1
+run_python_tests "ai-service"        || failed=1
+
+echo ""
+if [ "$failed" -eq 1 ]; then
+  echo -e "${RED}✗ Push blocked. Fix the failing tests first.${NC}"
+  echo -e "  To bypass (discouraged): git push --no-verify"
+  echo ""
+  exit 1
+fi
+
+echo -e "${GREEN}✓ All tests passed. Pushing…${NC}"
+echo ""
+exit 0
