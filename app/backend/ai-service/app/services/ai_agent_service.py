@@ -13,18 +13,19 @@ SSE event format (NDJSON over text/event-stream):
   data: {"type": "error", "content": "<message>"}
 """
 
-import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
 
 from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.models_catalog import DEFAULT_MODEL_ID, MODELS_BY_ID
 from app.models.ai import AiMessageRole
 from app.repositories.ai_repository import (
     AiConversationRepository,
@@ -33,6 +34,7 @@ from app.repositories.ai_repository import (
 )
 from app.schemas.ai import (
     ConversationResponse,
+    DocumentChangePayload,
     MessageListResponse,
     MessageResponse,
     StreamChunk,
@@ -65,45 +67,71 @@ Guidelines:
 
 def _build_model(model_id: str | None = None) -> OpenAIChatModel | AnthropicModel:
     """
-    Return the best available LLM model based on configured API keys.
+    Return the correct LLM client for the requested model.
 
-    If `model_id` is provided and OPENROUTER_API_KEY is set, the specified
-    model is used on OpenRouter.  Falls back to the server default model when
-    model_id is None.
+    Routing is driven by the `gateway` field on the model's catalog entry,
+    not by string-prefix heuristics.  This makes it safe to add new models
+    from any provider without touching this function.
 
-    Priority:
-      1. xAI (Grok) if model_id starts with "grok-" and XAI_API_KEY is set
-      2. OpenRouter if OPENROUTER_API_KEY is set (OpenAI Chat Completions-compatible)
-      3. OpenAI GPT-4o if OPENAI_API_KEY is set
-      4. Anthropic Claude 3.5 Sonnet if ANTHROPIC_API_KEY is set
+    Priority when model_id is None or not found in the catalog:
+      1. OpenRouter  if OPENROUTER_API_KEY is set
+      2. OpenAI      if OPENAI_API_KEY is set
+      3. Anthropic   if ANTHROPIC_API_KEY is set
+
+    Args:
+        model_id: Optional model slug from the catalog.  When omitted the
+                  server default (OPENROUTER_MODEL / DEFAULT_MODEL_ID) is used.
 
     Raises:
-        RuntimeError if no LLM API key is configured.
+        RuntimeError: If the required API key for the requested model is missing,
+                      or if no API key at all is configured.
     """
-    if model_id and model_id.startswith("grok-"):
-        if not settings.XAI_API_KEY:
-            raise RuntimeError("XAI_API_KEY is not configured for Grok models.")
-        provider = OpenAIProvider(
-            base_url="https://api.x.ai/v1",
-            api_key=settings.XAI_API_KEY,
-        )
-        return OpenAIChatModel(model_id, provider=provider)
+    entry = MODELS_BY_ID.get(model_id or DEFAULT_MODEL_ID) if model_id else None
 
+    # Route to the gateway declared in the catalog entry.
+    if entry is not None:
+        if entry.gateway == "xai":
+            if not settings.XAI_API_KEY:
+                raise RuntimeError(
+                    f"XAI_API_KEY is required for model '{entry.name}' but is not configured."
+                )
+            provider = OpenAIProvider(
+                base_url="https://api.x.ai/v1",
+                api_key=settings.XAI_API_KEY,
+            )
+            return OpenAIChatModel(entry.id, provider=provider)
+
+        if entry.gateway == "openrouter":
+            if not settings.OPENROUTER_API_KEY:
+                raise RuntimeError(
+                    f"OPENROUTER_API_KEY is required for model '{entry.name}'"
+                    " but is not configured."
+                )
+            provider = OpenAIProvider(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=settings.OPENROUTER_API_KEY,
+            )
+            return OpenAIChatModel(entry.id, provider=provider)
+
+    # Fallback: model_id not in catalog — try available keys in priority order.
     if settings.OPENROUTER_API_KEY:
-        resolved_model = model_id or settings.OPENROUTER_MODEL
+        resolved = model_id or settings.OPENROUTER_MODEL
         provider = OpenAIProvider(
             base_url="https://openrouter.ai/api/v1",
             api_key=settings.OPENROUTER_API_KEY,
         )
-        return OpenAIChatModel(resolved_model, provider=provider)
+        return OpenAIChatModel(resolved, provider=provider)
     if settings.OPENAI_API_KEY:
         provider = OpenAIProvider(api_key=settings.OPENAI_API_KEY)
         return OpenAIChatModel("gpt-4o", provider=provider)
     if settings.ANTHROPIC_API_KEY:
-        return AnthropicModel("claude-3-5-sonnet-latest", api_key=settings.ANTHROPIC_API_KEY)
+        return AnthropicModel(
+            "claude-3-5-sonnet-latest",
+            provider=AnthropicProvider(api_key=settings.ANTHROPIC_API_KEY),
+        )
     raise RuntimeError(
         "No LLM API key configured. "
-        "Set OPENROUTER_API_KEY, OPENAI_API_KEY or ANTHROPIC_API_KEY in the environment."
+        "Set OPENROUTER_API_KEY, OPENAI_API_KEY, XAI_API_KEY or ANTHROPIC_API_KEY."
     )
 
 
@@ -209,6 +237,53 @@ class AiAgentService:
         return MessageListResponse(items=items, total=len(items))
 
     # ------------------------------------------------------------------
+    # RAG retrieval
+    # ------------------------------------------------------------------
+
+    async def _retrieve_rag_context(
+        self,
+        document_id: uuid.UUID,
+        query: str,
+        top_k: int = 5,
+    ) -> str:
+        """
+        Retrieve the most relevant document chunks for `query` using vector
+        similarity search and format them as a context block for the system prompt.
+
+        Returns an empty string if no embeddings are stored for the document
+        (graceful degradation — RAG is optional, not required).
+
+        Args:
+            document_id: Document whose embeddings to search.
+            query: The user's message text used as the search query.
+            top_k: Maximum number of chunks to retrieve.
+
+        Returns:
+            A formatted multi-line string with ranked context chunks, or "" if
+            no embeddings are found or an error occurs.
+        """
+        try:
+            # Lazy import to avoid circular dependency between services.
+            from app.services.embedding_service import EmbeddingService  # noqa: PLC0415
+
+            emb_service = EmbeddingService(self._session)
+            chunks = await emb_service.search_similar_chunks(
+                query=query,
+                document_id=document_id,
+                top_k=top_k,
+            )
+            if not chunks:
+                return ""
+            lines = ["--- Relevant document context (RAG) ---"]
+            for i, chunk in enumerate(chunks, 1):
+                lines.append(f"[{i}] {chunk.chunk_text}")
+            lines.append("--- End of context ---")
+            return "\n".join(lines)
+        except Exception:
+            logger.warning("RAG retrieval failed; continuing without context.", exc_info=True)
+            return ""
+
+    # ------------------------------------------------------------------
     # SSE streaming
     # ------------------------------------------------------------------
 
@@ -218,6 +293,8 @@ class AiAgentService:
         user_message: str,
         document_context: str | None = None,
         model_id: str | None = None,
+        document_id: uuid.UUID | None = None,
+        agent_type: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """
         Persist the user message, run the PydanticAI agent with streaming,
@@ -227,14 +304,29 @@ class AiAgentService:
             ``data: <JSON>\\n\\n``
 
         Chunk types:
-            - delta : partial LLM token(s)
-            - done  : final sentinel with full text and persisted message_id
-            - error : unrecoverable error description
+            - delta           : partial LLM token(s)
+            - done            : final sentinel with full text and persisted message_id
+            - error           : unrecoverable error description
+            - document_change : agent-proposed document edit (agentic mode only)
+
+        When `agent_type` is ``"general"``, the general PydanticAI agent is used
+        instead of the plain chat agent.  After text streaming completes, any
+        proposed document changes accumulated in the agent's deps are emitted as
+        ``document_change`` SSE events before the ``done`` event.
+
+        When `document_id` is provided the method calls `_retrieve_rag_context`
+        to fetch semantically similar document chunks and appends them to the
+        system prompt.  If retrieval fails or returns no results the prompt is
+        unchanged (graceful degradation).
 
         Args:
             conversation_id: The conversation to append messages to.
             user_message: Text submitted by the user.
             document_context: Optional plain-text document snapshot for context.
+            model_id: Optional LLM model slug to override the server default.
+            document_id: Optional document UUID for RAG chunk retrieval.
+            agent_type: Optional agent type; ``"general"`` activates the agentic
+                        document-editing mode.  Defaults to plain chat mode.
 
         Yields:
             SSE-formatted strings to be sent directly to the client.
@@ -252,9 +344,18 @@ class AiAgentService:
         # Build the PydanticAI message list (system + history + new user msg)
         system_prompt = _SYSTEM_PROMPT
         if document_context:
-            system_prompt += (
-                f"\n\n--- Current document context ---\n{document_context}\n---"
+            system_prompt += f"\n\n--- Current document context ---\n{document_context}\n---"
+
+        # 2b. Optionally inject RAG context from document embeddings -----------
+        # This runs only when a document_id is supplied.  Failure is silently
+        # swallowed by _retrieve_rag_context so streaming is never blocked.
+        if document_id is not None:
+            rag_context = await self._retrieve_rag_context(
+                document_id=document_id,
+                query=user_message,
             )
+            if rag_context:
+                system_prompt += f"\n\n{rag_context}"
 
         # Format history as a single string prompt (simplified for initial version)
         # A full implementation would use pydantic_ai.messages for structured history
@@ -274,32 +375,101 @@ class AiAgentService:
             yield f"data: {error_chunk.model_dump_json()}\n\n"
             return
 
-        agent: Agent[None, str] = Agent(
-            model=model,
-            system_prompt=system_prompt,
-            output_type=str,
-        )
-
         full_text = ""
         token_count = 0
 
-        try:
-            async with agent.run_stream(full_prompt) as result:
-                async for delta in result.stream_text(delta=True):
-                    # Check if the delta contains any characters
-                    # Sometimes models emit empty deltas at the end which shouldn't disrupt streaming
-                    if delta:
-                        full_text += delta
-                        token_count += len(delta.split())  # approximate; LLM usage may override
+        if agent_type == "general":
+            # ----------------------------------------------------------------
+            # Agentic mode: use build_general_agent() with document read/edit tools.
+            # A fresh agent is created per request to avoid shared state and to
+            # ensure the correct per-request model is used.
+            # ----------------------------------------------------------------
+            from app.agents.general_agent import (  # noqa: PLC0415
+                GeneralAgentDeps,
+                build_general_agent,
+            )
 
-                        delta_chunk = StreamChunk(type="delta", content=delta)
-                        yield f"data: {delta_chunk.model_dump_json()}\n\n"
+            deps = GeneralAgentDeps(document_content=document_context)
+            agent_instance = build_general_agent(model)
 
-        except Exception as exc:
-            logger.exception("PydanticAI streaming error: %s", exc)
-            error_chunk = StreamChunk(type="error", content="AI service error. Please try again.")
-            yield f"data: {error_chunk.model_dump_json()}\n\n"
-            return
+            try:
+                async with agent_instance.run_stream(full_prompt, deps=deps) as result:
+                    async for delta in result.stream_text(delta=True):
+                        if delta:
+                            full_text += delta
+                            token_count += len(delta.split())
+                            delta_chunk = StreamChunk(type="delta", content=delta)
+                            yield f"data: {delta_chunk.model_dump_json()}\n\n"
+
+                    # Still inside the async with block — emit tool_call events
+                    # from message history so the frontend can display which tools
+                    # the agent invoked during this request.
+                    from pydantic_ai.messages import ToolCallPart  # noqa: PLC0415
+
+                    for msg in result.all_messages():
+                        if hasattr(msg, "parts"):
+                            for part in msg.parts:
+                                # ToolCallPart has tool_name and args attributes
+                                # (confirmed via BaseToolCallPart inspection).
+                                if isinstance(part, ToolCallPart):
+                                    tool_chunk = StreamChunk(
+                                        type="tool_call",
+                                        content="",
+                                        tool_name=part.tool_name,
+                                    )
+                                    yield f"data: {tool_chunk.model_dump_json()}\n\n"
+
+            except Exception as exc:
+                logger.exception("General agent streaming error: %s", exc)
+                error_chunk = StreamChunk(
+                    type="error", content="AI service error. Please try again."
+                )
+                yield f"data: {error_chunk.model_dump_json()}\n\n"
+                return
+
+            # Emit document_change SSE events for each proposed edit, before done.
+            for change in deps.proposed_changes:
+                change_payload = DocumentChangePayload(
+                    operation=change["operation"],
+                    proposed_text=change["proposed_text"],
+                    original_text=change["original_text"],
+                )
+                change_chunk = StreamChunk(
+                    type="document_change",
+                    content="",
+                    document_change=change_payload,
+                )
+                yield f"data: {change_chunk.model_dump_json()}\n\n"
+
+        else:
+            # ----------------------------------------------------------------
+            # Plain chat mode: stateless Agent[None, str] with no tools
+            # ----------------------------------------------------------------
+            agent: Agent[None, str] = Agent(
+                model=model,
+                system_prompt=system_prompt,
+                output_type=str,
+            )
+
+            try:
+                async with agent.run_stream(full_prompt) as result:
+                    async for delta in result.stream_text(delta=True):
+                        # Check if the delta contains any characters; sometimes models emit
+                        # empty deltas at the end which shouldn't disrupt streaming
+                        if delta:
+                            full_text += delta
+                            token_count += len(delta.split())  # approximate; LLM usage may override
+
+                            delta_chunk = StreamChunk(type="delta", content=delta)
+                            yield f"data: {delta_chunk.model_dump_json()}\n\n"
+
+            except Exception as exc:
+                logger.exception("PydanticAI streaming error: %s", exc)
+                error_chunk = StreamChunk(
+                    type="error", content="AI service error. Please try again."
+                )
+                yield f"data: {error_chunk.model_dump_json()}\n\n"
+                return
 
         # 4. Persist the completed assistant message ---------------------------
         assistant_msg = await self._msg_repo.create(

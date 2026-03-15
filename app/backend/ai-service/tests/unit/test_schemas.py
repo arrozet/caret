@@ -6,7 +6,7 @@ required fields, and custom validators — without touching the database or LLMs
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -14,24 +14,19 @@ from pydantic import ValidationError
 from app.models.ai import AiMessageRole, AiSuggestionStatus
 from app.schemas.ai import (
     ConversationCreate,
-    ConversationListResponse,
-    ConversationResponse,
     MessageCreate,
-    MessageListResponse,
-    MessageResponse,
     ModelInfo,
     ModelsResponse,
     StreamChunk,
     StreamRequest,
     SuggestionCreate,
-    SuggestionResponse,
     SuggestionStatusUpdate,
 )
 
 
 def _utcnow() -> datetime:
     """Return the current UTC datetime for use in test fixtures."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -365,7 +360,9 @@ class TestModelInfo:
             id="z-ai/glm-4.5-air:free",
             name="GLM-4.5 Air",
             provider="Z.AI",
+            gateway="openrouter",
             is_free=True,
+            is_stealth=False,
             context_window=128_000,
             description="Fast general-purpose model.",
         )
@@ -381,7 +378,9 @@ class TestModelInfo:
             id="z-ai/glm-4.5-air:free",
             name="GLM-4.5 Air",
             provider="Z.AI",
+            gateway="openrouter",
             is_free=True,
+            is_stealth=False,
             context_window=128_000,
             description="desc",
         )

@@ -20,7 +20,11 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     XAI_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "thudm/glm-4.5-air"
+    OPENROUTER_MODEL: str = "openrouter/healer-alpha"
+
+    # Embedding model settings for RAG (Phase 4)
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_DIMENSIONS: int = 1536
 
     # JWT cache TTL in seconds (default: 5 minutes)
     JWKS_CACHE_TTL_SECONDS: int = 300

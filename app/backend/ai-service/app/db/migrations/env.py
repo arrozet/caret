@@ -21,17 +21,16 @@ _project_root = Path(__file__).parents[3]
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from sqlalchemy import pool
-from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import create_async_engine
-
-from alembic import context
+from alembic import context  # noqa: E402
+from sqlalchemy import pool  # noqa: E402
+from sqlalchemy.engine import Connection  # noqa: E402
+from sqlalchemy.ext.asyncio import create_async_engine  # noqa: E402
 
 # Import application settings (DATABASE_URL) and the ORM Base for
 # autogenerate support.
-from app.core.config import settings
-from app.db.session import _normalize_database_url
-from app.models.ai import Base  # noqa: F401 — registers all ORM models
+from app.core.config import settings  # noqa: E402
+from app.db.session import _normalize_database_url  # noqa: E402
+from app.models.ai import Base  # noqa: F401, E402 — registers all ORM models
 
 # ---------------------------------------------------------------------------
 # Alembic Config object (gives access to values from alembic.ini)
@@ -61,8 +60,7 @@ def _get_url_and_connect_args() -> tuple[str, dict]:
     url = settings.DATABASE_URL
     if not url:
         raise RuntimeError(
-            "DATABASE_URL is not set. "
-            "Export it as an environment variable before running Alembic."
+            "DATABASE_URL is not set. Export it as an environment variable before running Alembic."
         )
     return _normalize_database_url(url)
 

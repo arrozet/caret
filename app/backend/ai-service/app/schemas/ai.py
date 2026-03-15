@@ -17,7 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.ai import AiMessageRole, AiSuggestionStatus
 
-
 # ---------------------------------------------------------------------------
 # Shared config
 # ---------------------------------------------------------------------------
@@ -149,10 +148,21 @@ class SuggestionResponse(_TimestampedResponse):
 class ModelInfo(BaseModel):
     """A single selectable LLM model returned by GET /ai/models."""
 
-    id: str = Field(..., description="OpenRouter model slug (e.g. 'z-ai/glm-4.5-air:free').")
+    id: str = Field(..., description="Model slug used when calling the target gateway.")
     name: str = Field(..., description="Human-readable display name.")
     provider: str = Field(..., description="Upstream provider name.")
-    is_free: bool = Field(..., description="True when the model has no API cost on OpenRouter.")
+    gateway: str = Field(
+        ...,
+        description="Which upstream API endpoint handles this model: 'openrouter' or 'xai'.",
+    )
+    is_free: bool = Field(..., description="True when the model has no API cost.")
+    is_stealth: bool = Field(
+        ...,
+        description=(
+            "True when the AI lab behind the model has not been publicly disclosed "
+            "(anonymous release on OpenRouter). The real creator is unknown."
+        ),
+    )
     context_window: int = Field(..., description="Maximum context window in tokens.")
     description: str = Field(..., description="Short one-line description.")
 
@@ -195,6 +205,52 @@ class StreamRequest(BaseModel):
             "Falls back to the server default when omitted."
         ),
     )
+    document_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Optional document UUID. When provided, the service retrieves "
+            "semantically similar chunks from the document_embeddings table "
+            "and injects them into the system prompt for RAG-enhanced responses."
+        ),
+    )
+    agent_type: str | None = Field(
+        default=None,
+        description=(
+            "Optional agent type to use for this request. "
+            "When set to 'general', the agentic general agent is used instead of "
+            "the plain chat agent. The general agent has tools to read and propose "
+            "edits to the current document."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Document change (agentic edits)
+# ---------------------------------------------------------------------------
+
+
+class DocumentChangePayload(BaseModel):
+    """
+    Represents a proposed document edit emitted by an agentic AI run.
+
+    The frontend receives this payload as part of a 'document_change' SSE event
+    and shows an accept/reject banner to the user.  On accept, the editor
+    replaces its content with `proposed_text`; on reject, nothing changes.
+    """
+
+    operation: str = Field(
+        ...,
+        description=(
+            "The edit operation type.  Currently only 'replace_full' is supported, "
+            "which replaces the entire document content with `proposed_text`."
+        ),
+    )
+    proposed_text: str = Field(
+        ..., description="The full replacement document text proposed by the agent."
+    )
+    original_text: str = Field(
+        ..., description="The document text at the time the agent was invoked (for diffing)."
+    )
 
 
 class StreamChunk(BaseModel):
@@ -202,14 +258,24 @@ class StreamChunk(BaseModel):
     A single SSE data payload sent during a streaming response.
 
     type values:
-      "delta"  — partial text token from the LLM
-      "done"   — final sentinel; includes the full accumulated text
-      "error"  — something went wrong; includes an error message
+      "delta"           — partial text token from the LLM
+      "done"            — final sentinel; includes the full accumulated text
+      "error"           — something went wrong; includes an error message
+      "document_change" — the agent proposed a document edit (agentic mode only)
+      "tool_call"       — the agent invoked a tool (agentic mode only)
     """
 
-    type: str = Field(..., pattern=r"^(delta|done|error)$")
+    type: str = Field(..., pattern=r"^(delta|done|error|document_change|tool_call)$")
     content: str = Field(default="")
     message_id: uuid.UUID | None = Field(
         default=None,
         description="Set on the 'done' event once the message is persisted.",
+    )
+    document_change: DocumentChangePayload | None = Field(
+        default=None,
+        description="Populated on 'document_change' events when the agent proposes an edit.",
+    )
+    tool_name: str | None = Field(
+        default=None,
+        description="Set on 'tool_call' events — the name of the tool being invoked.",
     )

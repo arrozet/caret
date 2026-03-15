@@ -13,13 +13,16 @@ Rule: never return SQLAlchemy models directly from a Router — map to Pydantic 
 import enum
 import uuid
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
-    Enum as SAEnum,
     ForeignKey,
     Integer,
     Text,
     text,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 
 # NOTE: the `documents` table is owned by the document-service and is not
@@ -31,7 +34,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.types import TIMESTAMP
-
 
 # ---------------------------------------------------------------------------
 # Declarative base
@@ -47,7 +49,7 @@ class Base(DeclarativeBase):
 # ---------------------------------------------------------------------------
 
 
-class AiMessageRole(str, enum.Enum):
+class AiMessageRole(enum.StrEnum):
     """Allowed roles for ai_messages.role (maps to PostgreSQL ENUM)."""
 
     system = "system"
@@ -56,7 +58,7 @@ class AiMessageRole(str, enum.Enum):
     tool = "tool"
 
 
-class AiSuggestionStatus(str, enum.Enum):
+class AiSuggestionStatus(enum.StrEnum):
     """Lifecycle states for ai_suggestions.status (maps to PostgreSQL ENUM)."""
 
     proposed = "proposed"
@@ -253,4 +255,63 @@ class AiSuggestion(Base):
     message: Mapped["AiMessage | None"] = relationship(
         "AiMessage",
         back_populates="suggestion",
+    )
+
+
+# ---------------------------------------------------------------------------
+# document_embeddings
+# ---------------------------------------------------------------------------
+
+
+class DocumentEmbedding(Base):
+    """
+    Stores a single text chunk from a document with its vector embedding.
+
+    The document is split into overlapping chunks; each chunk is embedded
+    via the OpenAI text-embedding-3-small model and stored as a pgvector
+    Vector(1536) column.  The HNSW index on `embedding` enables sub-linear
+    approximate nearest-neighbour (ANN) search for RAG retrieval.
+
+    Columns:
+        id           : UUID primary key.
+        document_id  : FK to documents.id (enforced in DB, omitted from ORM).
+        chunk_index  : Zero-based position of this chunk in the document.
+        chunk_text   : The raw text of the chunk.
+        embedding    : 1536-dimensional float32 vector (pgvector).
+        created_at   : Row creation timestamp.
+        updated_at   : Row last-update timestamp.
+    """
+
+    __tablename__ = "document_embeddings"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+    chunk_index: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+    chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector(1536),
+        nullable=False,
+    )
+
+    created_at: Mapped[TIMESTAMP] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[TIMESTAMP] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )

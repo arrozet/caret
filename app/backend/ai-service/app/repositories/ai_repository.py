@@ -21,8 +21,8 @@ from app.models.ai import (
     AiMessageRole,
     AiSuggestion,
     AiSuggestionStatus,
+    DocumentEmbedding,
 )
-
 
 # ---------------------------------------------------------------------------
 # AiConversationRepository
@@ -98,9 +98,8 @@ class AiConversationRepository:
         Returns:
             A (rows, total_count) tuple.
         """
-        base_where = (
-            (AiConversation.document_id == document_id)
-            & (AiConversation.user_id == user_id)
+        base_where = (AiConversation.document_id == document_id) & (
+            AiConversation.user_id == user_id
         )
 
         count_result = await self._session.execute(
@@ -206,9 +205,7 @@ class AiMessageRepository:
             token_count: Final token count from the LLM response.
         """
         await self._session.execute(
-            update(AiMessage)
-            .where(AiMessage.id == message_id)
-            .values(token_count=token_count)
+            update(AiMessage).where(AiMessage.id == message_id).values(token_count=token_count)
         )
 
 
@@ -286,9 +283,7 @@ class AiSuggestionRepository:
             The updated AiSuggestion, or None if not found.
         """
         await self._session.execute(
-            update(AiSuggestion)
-            .where(AiSuggestion.id == suggestion_id)
-            .values(status=status)
+            update(AiSuggestion).where(AiSuggestion.id == suggestion_id).values(status=status)
         )
         return await self.get_by_id(suggestion_id)
 
@@ -317,3 +312,102 @@ class AiSuggestionRepository:
 
         result = await self._session.execute(stmt)
         return result.scalars().all()
+
+
+# ---------------------------------------------------------------------------
+# DocumentEmbeddingRepository
+# ---------------------------------------------------------------------------
+
+
+class DocumentEmbeddingRepository:
+    """
+    Data-access layer for the document_embeddings table.
+
+    Provides chunk upsert, bulk insert, cosine-similarity vector search,
+    and document-level delete operations.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def bulk_insert(
+        self,
+        document_id: uuid.UUID,
+        chunks: list[tuple[int, str, list[float]]],
+    ) -> int:
+        """
+        Insert multiple embedding chunks for a document in one operation.
+
+        Existing embeddings for the document are deleted first so re-indexing
+        is idempotent (delete-then-insert pattern).
+
+        Args:
+            document_id: Target document UUID.
+            chunks: List of (chunk_index, chunk_text, embedding_vector) tuples.
+
+        Returns:
+            Number of chunks inserted.
+        """
+        # Delete existing chunks for idempotent re-indexing
+        await self.delete_for_document(document_id)
+
+        rows = [
+            DocumentEmbedding(
+                document_id=document_id,
+                chunk_index=index,
+                chunk_text=text,
+                embedding=vector,
+            )
+            for index, text, vector in chunks
+        ]
+        self._session.add_all(rows)
+        await self._session.flush()
+        return len(rows)
+
+    async def search(
+        self,
+        query_embedding: list[float],
+        document_id: uuid.UUID,
+        top_k: int = 5,
+    ) -> list[tuple["DocumentEmbedding", float]]:
+        """
+        Find the top-k most similar chunks using cosine distance (pgvector).
+
+        Args:
+            query_embedding: The embedded query vector (1536 dims).
+            document_id: Restrict search to this document.
+            top_k: Maximum number of results to return.
+
+        Returns:
+            List of (DocumentEmbedding, cosine_distance) tuples, closest first.
+        """
+        from pgvector.sqlalchemy import Vector
+        from sqlalchemy import cast
+
+        distance_col = DocumentEmbedding.embedding.cosine_distance(
+            cast(query_embedding, Vector(1536))
+        )
+        result = await self._session.execute(
+            select(DocumentEmbedding, distance_col.label("distance"))
+            .where(DocumentEmbedding.document_id == document_id)
+            .order_by(distance_col)
+            .limit(top_k)
+        )
+        return [(row.DocumentEmbedding, row.distance) for row in result.all()]
+
+    async def delete_for_document(self, document_id: uuid.UUID) -> int:
+        """
+        Delete all embedding chunks for a document.
+
+        Args:
+            document_id: Target document UUID.
+
+        Returns:
+            Number of rows deleted.
+        """
+        from sqlalchemy import delete as sql_delete
+
+        result = await self._session.execute(
+            sql_delete(DocumentEmbedding).where(DocumentEmbedding.document_id == document_id)
+        )
+        return result.rowcount

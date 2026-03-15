@@ -11,8 +11,8 @@ Route map (relative to the /ai prefix registered in main.py):
 Rule: NO business logic here. Validate input → call Service → return DTO.
 """
 
-import uuid
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AuthUser, get_current_user
 from app.core.dependencies import get_db_session
-from app.core.models_catalog import OPENROUTER_MODELS, DEFAULT_MODEL_ID, ModelEntry
+from app.core.models_catalog import DEFAULT_MODEL_ID, OPENROUTER_MODELS, ModelEntry
 from app.schemas.ai import (
     ConversationCreate,
     ConversationResponse,
@@ -77,7 +77,9 @@ async def list_models() -> ModelsResponse:
             id=entry.id,
             name=entry.name,
             provider=entry.provider,
+            gateway=entry.gateway,
             is_free=entry.is_free,
+            is_stealth=entry.is_stealth,
             context_window=entry.context_window,
             description=entry.description,
         )
@@ -224,7 +226,9 @@ async def delete_conversation(
     description=(
         "Persists the user message, runs the PydanticAI agent, and streams "
         "the assistant reply as Server-Sent Events (text/event-stream).\n\n"
-        "Each event has the shape: ``data: {\\\"type\\\": \\\"delta\\\"|\\\"done\\\"|\\\"error\\\", \\\"content\\\": \\\"...\\\"}``"
+        "Each event has the shape: "
+        '``data: {\\"type\\": \\"delta\\"|\\"done\\"|\\"error\\",'
+        ' \\"content\\": \\"...\\"}``'
     ),
     response_class=StreamingResponse,
 )
@@ -277,6 +281,8 @@ async def stream_ai_response(
             user_message=body.message,
             document_context=body.document_context,
             model_id=body.model_id,
+            document_id=body.document_id,  # Pass optional document_id for RAG retrieval
+            agent_type=body.agent_type,  # Pass optional agent_type for agentic mode
         ),
         media_type="text/event-stream",
         headers={

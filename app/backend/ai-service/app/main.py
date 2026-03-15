@@ -1,12 +1,14 @@
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.db.session import engine
-from app.routers.ai_router import router as ai_router, meta_router as ai_meta_router
+from app.routers.ai_router import meta_router as ai_meta_router
+from app.routers.ai_router import router as ai_router
+from app.routers.embedding_router import router as embedding_router
 
 
 @asynccontextmanager
@@ -44,6 +46,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 app.include_router(ai_router, prefix="/ai", tags=["ai"])
 app.include_router(ai_meta_router, prefix="/ai", tags=["ai"])
+app.include_router(embedding_router, prefix="", tags=["embeddings"])
 
 
 # ---------------------------------------------------------------------------
@@ -55,4 +58,3 @@ app.include_router(ai_meta_router, prefix="/ai", tags=["ai"])
 async def health_check() -> dict[str, str]:
     """Health check endpoint used by ECS Fargate task health checks."""
     return {"status": "ok", "env": settings.APP_ENV}
-
