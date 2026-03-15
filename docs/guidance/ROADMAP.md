@@ -36,13 +36,14 @@ This roadmap outlines the strict step-by-step technical execution plan for build
 - [x] Implement Streaming Response (SSE) pipeline in AI Service. (See **[BACKEND.md](./BACKEND.md)**)
 - [x] Build Frontend SSE consumer that applies chunks as Tiptap Transactions. (See **[BACKEND.md](./BACKEND.md)**)
 
-## Phase 4: Context & RAG
+## Phase 4: Context & RAG ✅
 *Goal: The AI knows what you wrote. Fully testable locally with pgvector.*
-- [ ] Enable `pgvector` and create `document_embeddings` table (chunk-level embeddings). (See **[DATABASE.md](./DATABASE.md)**)
-- [ ] Create HNSW index for vector similarity search. (See **[DATABASE.md](./DATABASE.md)**)
-- [ ] Create Embedding Pipeline in Python to chunk documents. (See **[BACKEND.md](./BACKEND.md)**)
-- [ ] Implement Contextual Retrieval for chat queries. (See **[BACKEND.md](./BACKEND.md)**)
-- [ ] Add "Ghost Text" and Inline Suggestions UI. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Enable `pgvector` and create `document_embeddings` table (chunk-level embeddings). (See **[DATABASE.md](./DATABASE.md)**)
+- [x] Create HNSW index for vector similarity search. (See **[DATABASE.md](./DATABASE.md)**)
+- [x] Create Embedding Pipeline in Python to chunk documents. (See **[BACKEND.md](./BACKEND.md)**)
+- [x] Implement Contextual Retrieval for chat queries. (See **[BACKEND.md](./BACKEND.md)**)
+- [x] Add "Ghost Text" and Inline Suggestions UI. (See **[FRONTEND.md](./FRONTEND.md)**)
+- [x] Implement Agentic document editing (Agent mode, tool call visibility, accept/reject banner). (See **[BACKEND.md](./BACKEND.md)**)
 
 ## Phase 5: Real-time Collaboration
 *Goal: Multiple users can type in the same document via WebSockets. Requires deployed infrastructure (ECS) to test end-to-end.*
