@@ -5,8 +5,6 @@ Verifies that the URL normalisation logic correctly transforms connection string
 for asyncpg compatibility, including scheme rewriting and sslmode handling.
 """
 
-import pytest
-
 from app.db.session import _normalize_database_url
 
 

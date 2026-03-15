@@ -9,7 +9,7 @@ dependency_overrides mechanism — the correct approach for testing FastAPI apps
 import json
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,7 +20,6 @@ from app.core.auth import get_current_user
 from app.core.dependencies import get_db_session
 from app.main import app
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -28,7 +27,7 @@ from app.main import app
 
 def _utcnow() -> datetime:
     """Return the current UTC datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _make_mock_session() -> MagicMock:
@@ -505,9 +504,7 @@ class TestStreamAiResponse:
         # Assert
         assert response.status_code == 422
 
-    async def test_stream_returns_event_stream_content_type(
-        self, client_with_auth_and_db
-    ) -> None:
+    async def test_stream_returns_event_stream_content_type(self, client_with_auth_and_db) -> None:
         """POST /ai/conversations/{id}/stream should return text/event-stream content-type."""
         # Arrange
         conv_id = uuid.uuid4()
@@ -550,7 +547,7 @@ class TestStreamAiResponse:
 
         async def _fake_stream(*args, **kwargs):
             """Yields a delta chunk followed by a done chunk."""
-            yield f'data: {{"type": "delta", "content": "Hello", "message_id": null}}\n\n'
+            yield 'data: {"type": "delta", "content": "Hello", "message_id": null}\n\n'
             yield (
                 f'data: {{"type": "done", "content": "Hello", '
                 f'"message_id": "{assistant_msg_id}"}}\n\n'
@@ -579,8 +576,8 @@ class TestStreamAiResponse:
         raw_text = response.text
         lines = [ln for ln in raw_text.splitlines() if ln.startswith("data:")]
         assert len(lines) == 2
-        delta = json.loads(lines[0][len("data: "):])
-        done = json.loads(lines[1][len("data: "):])
+        delta = json.loads(lines[0][len("data: ") :])
+        done = json.loads(lines[1][len("data: ") :])
         assert delta["type"] == "delta"
         assert done["type"] == "done"
         assert done["message_id"] == str(assistant_msg_id)

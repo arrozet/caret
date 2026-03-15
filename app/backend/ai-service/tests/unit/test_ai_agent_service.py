@@ -8,14 +8,13 @@ without any external dependencies (no DB, no LLM API keys needed).
 import json
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.models.ai import AiMessageRole
 from app.services.ai_agent_service import AiAgentService, _build_model
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -43,8 +42,8 @@ def _make_mock_conversation(
     conv.document_id = doc_id or uuid.uuid4()
     conv.user_id = user_id or uuid.uuid4()
     conv.title = "Test conversation"
-    conv.created_at = datetime.now(timezone.utc)
-    conv.updated_at = datetime.now(timezone.utc)
+    conv.created_at = datetime.now(UTC)
+    conv.updated_at = datetime.now(UTC)
     return conv
 
 
@@ -60,8 +59,8 @@ def _make_mock_message(
     msg.role = role
     msg.content = content
     msg.token_count = None
-    msg.created_at = datetime.now(timezone.utc)
-    msg.updated_at = datetime.now(timezone.utc)
+    msg.created_at = datetime.now(UTC)
+    msg.updated_at = datetime.now(UTC)
     return msg
 
 
@@ -686,7 +685,7 @@ class TestBuildModel:
             mock_model_cls.return_value = MagicMock()
 
             # Act
-            result = _build_model()
+            _build_model()
 
             # Assert
             mock_provider_cls.assert_called_once_with(

@@ -16,12 +16,11 @@ from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core.auth import (
     AuthUser,
-    _JwksCache,
     _fetch_jwks,
     _get_jwks,
+    _JwksCache,
     get_current_user,
 )
-
 
 # ---------------------------------------------------------------------------
 # AuthUser dataclass
