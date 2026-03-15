@@ -226,9 +226,7 @@ describe("proxy routing — proxyErrorHandler", () => {
     error_handler(err, {}, mock_next);
 
     // Assert
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining("upstream timeout"),
-    );
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("upstream timeout"));
   });
 
   /**
@@ -303,5 +301,23 @@ describe("proxy routing — target assignment", () => {
     // Assert
     const ai_proxy = captured_proxy_calls.find((c) => c.target === "http://ai:8000");
     expect(ai_proxy).toBeDefined();
+  });
+
+  /**
+   * Verifies that /api/v1/embeddings routes are also proxied to the AI service.
+   * The embedding router lives in the ai-service but is mounted under a separate
+   * /embeddings prefix, so the gateway needs a dedicated rule for it.
+   */
+  it("should_proxy_embeddings_routes_to_ai_service_url", async () => {
+    // Arrange
+    const { register_routes } = await import("../../src/routes/index.js");
+    const mock_app = { use: vi.fn(), get: vi.fn() };
+
+    // Act
+    register_routes(mock_app as never);
+
+    // Assert — at least two proxies should point to the AI service (ai + embeddings)
+    const ai_proxies = captured_proxy_calls.filter((c) => c.target === "http://ai:8000");
+    expect(ai_proxies.length).toBeGreaterThanOrEqual(2);
   });
 });

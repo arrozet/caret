@@ -34,44 +34,40 @@ function create_proxy(target_url: string): ReturnType<typeof proxy> {
  *   /api/v1/workspaces/*   → document-service (port 3002)
  *   /api/v1/folders/*      → document-service (port 3002)
  *   /api/v1/ai/*           → ai-service       (port 8000)
+ *   /api/v1/embeddings/*   → ai-service       (port 8000)
  */
 export function register_routes(app: Express): void {
   /* --- Auth Service --- */
-  app.use(
-    "/api/v1/auth",
-    create_proxy(config.AUTH_SERVICE_URL),
-  );
+  app.use("/api/v1/auth", create_proxy(config.AUTH_SERVICE_URL));
 
   /* --- Document Service --- */
-  app.use(
-    "/api/v1/documents",
-    create_proxy(config.DOCUMENT_SERVICE_URL),
-  );
+  app.use("/api/v1/documents", create_proxy(config.DOCUMENT_SERVICE_URL));
 
   /* --- Workspaces (handled by document-service) --- */
-  app.use(
-    "/api/v1/workspaces",
-    create_proxy(config.DOCUMENT_SERVICE_URL),
-  );
+  app.use("/api/v1/workspaces", create_proxy(config.DOCUMENT_SERVICE_URL));
 
   /* --- Folders (handled by document-service) --- */
-  app.use(
-    "/api/v1/folders",
-    create_proxy(config.DOCUMENT_SERVICE_URL),
-  );
+  app.use("/api/v1/folders", create_proxy(config.DOCUMENT_SERVICE_URL));
 
   /* --- AI Service --- */
-  app.use(
-    "/api/v1/ai",
-    create_proxy(config.AI_SERVICE_URL),
-  );
+  app.use("/api/v1/ai", create_proxy(config.AI_SERVICE_URL));
+
+  /* --- Embeddings (handled by ai-service, separate path prefix) --- */
+  app.use("/api/v1/embeddings", create_proxy(config.AI_SERVICE_URL));
 
   /* --- API info endpoint --- */
   app.get("/api/v1", (_req: Request, res: Response) => {
     res.json({
       service: "caret-api-gateway",
       version: "v1",
-      endpoints: ["/api/v1/auth", "/api/v1/documents", "/api/v1/workspaces", "/api/v1/folders", "/api/v1/ai"],
+      endpoints: [
+        "/api/v1/auth",
+        "/api/v1/documents",
+        "/api/v1/workspaces",
+        "/api/v1/folders",
+        "/api/v1/ai",
+        "/api/v1/embeddings",
+      ],
     });
   });
 }
