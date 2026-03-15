@@ -21,6 +21,7 @@ import { EditorToolbar } from "./EditorToolbar";
 import { SelectionMenu } from "./SelectionMenu";
 import { Pagination } from "../extensions/pagination";
 import type { PaperSize } from "../extensions/pagination";
+import { GhostText } from "../extensions/ghost_text";
 
 /**
  * Props for the CaretEditor component.
@@ -98,6 +99,7 @@ export function CaretEditor({
       Pagination.configure({
         paper_size,
       }),
+      GhostText,
     ],
     content: content ?? {
       type: "doc",

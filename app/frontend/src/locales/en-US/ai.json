@@ -10,6 +10,11 @@
   "empty_state": "Ask anything about your document.",
   "keyboard_hint": "Enter to send · Shift+Enter for newline",
   "model_selector": "Model",
+  "model_group_free": "Free",
+  "model_group_paid": "Paid",
+  "model_stealth_label": "Stealth",
+  "model_stealth_tooltip": "Anonymous model — the AI lab behind it has not been publicly disclosed.",
+  "model_stealth_notice": "The creator of this model has not been publicly disclosed.",
   "suggested_prompts": {
     "summarize": "Summarize this document",
     "improve_intro": "Improve the introduction",

@@ -4,6 +4,7 @@ import {
   create_conversation,
   list_messages,
   type MessageResponse,
+  type DocumentChangePayload,
 } from "../api/ai_api";
 import { use_ai_store } from "../../../stores/ai_store";
 
@@ -27,6 +28,10 @@ export interface UseAiStreamReturn {
   is_loading: boolean;
   /** Error message from the last failed operation (null if none). */
   error: string | null;
+  /** A pending document change proposed by the agent (null if none). */
+  pending_change: DocumentChangePayload | null;
+  /** List of tool names called during the current/last agent run. */
+  tool_calls: string[];
   /**
    * Send a user message and stream the AI response into `messages`.
    * Creates a new conversation for the document if none is active.
@@ -34,12 +39,14 @@ export interface UseAiStreamReturn {
    * @param document_id - Document UUID, used when creating a new conversation.
    * @param document_context - Optional document plain text for AI context.
    * @param model_id - Optional model override (e.g. "z-ai/glm-4.5-air:free").
+   * @param agent_type - Optional agent type slug (e.g. "general"). Only sent in agent mode.
    */
   send_message: (
     user_message: string,
     document_id: string,
     document_context?: string,
     model_id?: string,
+    agent_type?: string,
   ) => Promise<void>;
   /**
    * Abort an in-flight streaming request.
@@ -55,6 +62,10 @@ export interface UseAiStreamReturn {
    * Clear all messages and reset conversation state.
    */
   clear: () => void;
+  /**
+   * Clear the pending document change (called after accept or reject).
+   */
+  clear_pending_change: () => void;
 }
 
 /**
@@ -74,6 +85,8 @@ export function use_ai_stream(): UseAiStreamReturn {
   const [messages, set_messages] = useState<ChatMessage[]>([]);
   const [is_loading, set_is_loading] = useState(false);
   const [error, set_error] = useState<string | null>(null);
+  const [pending_change, set_pending_change] = useState<DocumentChangePayload | null>(null);
+  const [tool_calls, set_tool_calls] = useState<string[]>([]);
 
   /** Ref to the AbortController so stop_generating can cancel inflight requests. */
   const abort_controller_ref = useRef<AbortController | null>(null);
@@ -86,25 +99,21 @@ export function use_ai_stream(): UseAiStreamReturn {
   /**
    * Load messages from an existing conversation into local state.
    */
-  const load_messages = useCallback(
-    async (conversation_id: string): Promise<void> => {
-      set_error(null);
-      try {
-        const server_messages: MessageResponse[] =
-          await list_messages(conversation_id);
-        set_messages(
-          server_messages.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-          })),
-        );
-      } catch (err) {
-        set_error(err instanceof Error ? err.message : "Failed to load messages");
-      }
-    },
-    [],
-  );
+  const load_messages = useCallback(async (conversation_id: string): Promise<void> => {
+    set_error(null);
+    try {
+      const server_messages: MessageResponse[] = await list_messages(conversation_id);
+      set_messages(
+        server_messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+        })),
+      );
+    } catch (err) {
+      set_error(err instanceof Error ? err.message : "Failed to load messages");
+    }
+  }, []);
 
   /**
    * Send a user message and stream the AI assistant reply.
@@ -114,7 +123,8 @@ export function use_ai_stream(): UseAiStreamReturn {
    * 2. Append the user message to local state immediately.
    * 3. Append a placeholder assistant message with is_streaming=true.
    * 4. Consume the SSE generator, updating the assistant message on each delta.
-   * 5. Finalise the message on "done"; surface error on "error".
+   * 5. On "document_change" events, store the payload as pending_change.
+   * 6. Finalise the message on "done"; surface error on "error".
    */
   const send_message = useCallback(
     async (
@@ -122,11 +132,13 @@ export function use_ai_stream(): UseAiStreamReturn {
       document_id: string,
       document_context?: string,
       model_id?: string,
+      agent_type?: string,
     ): Promise<void> => {
       if (is_loading) return;
 
       set_error(null);
       set_is_loading(true);
+      set_tool_calls([]);
 
       // Ensure we have an active conversation.
       let conversation_id = active_conversation_id;
@@ -136,9 +148,7 @@ export function use_ai_stream(): UseAiStreamReturn {
           conversation_id = conversation.id;
           set_conversation(conversation_id);
         } catch (err) {
-          set_error(
-            err instanceof Error ? err.message : "Failed to create conversation",
-          );
+          set_error(err instanceof Error ? err.message : "Failed to create conversation");
           set_is_loading(false);
           return;
         }
@@ -146,10 +156,7 @@ export function use_ai_stream(): UseAiStreamReturn {
 
       // Append the user's message to the local chat history.
       const user_msg_id = `user-${Date.now()}`;
-      set_messages((prev) => [
-        ...prev,
-        { id: user_msg_id, role: "user", content: user_message },
-      ]);
+      set_messages((prev) => [...prev, { id: user_msg_id, role: "user", content: user_message }]);
 
       // Append a streaming placeholder for the assistant reply.
       const assistant_placeholder_id = `assistant-streaming-${Date.now()}`;
@@ -174,6 +181,7 @@ export function use_ai_stream(): UseAiStreamReturn {
           message: user_message,
           document_context,
           model_id,
+          agent_type,
           signal: controller.signal,
         });
 
@@ -188,10 +196,20 @@ export function use_ai_stream(): UseAiStreamReturn {
                   : msg,
               ),
             );
+          } else if (chunk.type === "document_change" && chunk.document_change) {
+            // Store the proposed document edit for the accept/reject banner.
+            set_pending_change(chunk.document_change);
+          } else if (chunk.type === "tool_call" && chunk.tool_name) {
+            // Accumulate tool names invoked during the agent run.
+            set_tool_calls((prev) => [...prev, chunk.tool_name!]);
           } else if (chunk.type === "done") {
             const current_streaming_id = streaming_id_ref.current;
-            const final_id = chunk.message_id || current_streaming_id;
-            
+            // Prefer the server-assigned message_id; fall back to the temporary
+            // streaming id. Both current_streaming_id and chunk.message_id may
+            // be null/undefined, so ensure we always produce a string.
+            const final_id: string =
+              chunk.message_id ?? current_streaming_id ?? crypto.randomUUID();
+
             set_messages((prev) => {
               return prev.map((msg) => {
                 if (msg.id === current_streaming_id) {
@@ -204,21 +222,17 @@ export function use_ai_stream(): UseAiStreamReturn {
           } else if (chunk.type === "error") {
             set_error(chunk.error ?? "AI service error");
             const current_streaming_id = streaming_id_ref.current;
-            set_messages((prev) =>
-              prev.filter((msg) => msg.id !== current_streaming_id),
-            );
+            set_messages((prev) => prev.filter((msg) => msg.id !== current_streaming_id));
             streaming_id_ref.current = null;
           }
         }
-        
+
         // If the stream ends naturally without a 'done' chunk
         if (streaming_id_ref.current) {
           const current_streaming_id = streaming_id_ref.current;
           set_messages((prev) =>
             prev.map((msg) =>
-              msg.id === current_streaming_id
-                ? { ...msg, is_streaming: false }
-                : msg,
+              msg.id === current_streaming_id ? { ...msg, is_streaming: false } : msg,
             ),
           );
           streaming_id_ref.current = null;
@@ -229,16 +243,12 @@ export function use_ai_stream(): UseAiStreamReturn {
           // User cancelled — finalise whatever we accumulated.
           set_messages((prev) =>
             prev.map((msg) =>
-              msg.id === current_streaming_id
-                ? { ...msg, is_streaming: false }
-                : msg,
+              msg.id === current_streaming_id ? { ...msg, is_streaming: false } : msg,
             ),
           );
         } else {
           set_error(err instanceof Error ? err.message : "Streaming failed");
-          set_messages((prev) =>
-            prev.filter((msg) => msg.id !== current_streaming_id),
-          );
+          set_messages((prev) => prev.filter((msg) => msg.id !== current_streaming_id));
         }
         streaming_id_ref.current = null;
       } finally {
@@ -264,16 +274,28 @@ export function use_ai_stream(): UseAiStreamReturn {
     set_messages([]);
     set_error(null);
     set_is_loading(false);
+    set_pending_change(null);
+    set_tool_calls([]);
     streaming_id_ref.current = null;
+  }, []);
+
+  /**
+   * Clear the pending document change (called after accept or reject).
+   */
+  const clear_pending_change = useCallback(() => {
+    set_pending_change(null);
   }, []);
 
   return {
     messages,
     is_loading,
     error,
+    pending_change,
+    tool_calls,
     send_message,
     stop_generating,
     load_messages,
     clear,
+    clear_pending_change,
   };
 }

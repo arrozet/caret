@@ -26,47 +26,71 @@ const mock_send_message = vi.fn();
 const mock_stop_generating = vi.fn();
 const mock_load_messages = vi.fn();
 const mock_clear = vi.fn();
+const mock_clear_pending_change = vi.fn();
 
-let mock_messages: Array<{ id: string; role: "user" | "assistant"; content: string; is_streaming?: boolean }> =
-  [];
+let mock_messages: Array<{
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  is_streaming?: boolean;
+}> = [];
 let mock_is_loading = false;
 let mock_error: string | null = null;
 
 vi.mock("../hooks/use_ai_stream", () => ({
   use_ai_stream: () => ({
-    get messages() { return mock_messages; },
-    get is_loading() { return mock_is_loading; },
-    get error() { return mock_error; },
+    get messages() {
+      return mock_messages;
+    },
+    get is_loading() {
+      return mock_is_loading;
+    },
+    get error() {
+      return mock_error;
+    },
+    pending_change: null,
     send_message: mock_send_message,
     stop_generating: mock_stop_generating,
     load_messages: mock_load_messages,
     clear: mock_clear,
+    clear_pending_change: mock_clear_pending_change,
   }),
 }));
 
 /**
- * Mock the Zustand ai_store.
+ * Mock the Zustand ai_store, including all new fields added for agent mode.
  */
 const mock_close_panel = vi.fn();
 const mock_set_conversation = vi.fn();
+const mock_set_ai_mode = vi.fn();
+const mock_set_selected_agent_type = vi.fn();
+const mock_set_selected_model_id = vi.fn();
 
 vi.mock("../../../stores/ai_store", () => ({
   use_ai_store: () => ({
     is_panel_open: true,
     active_conversation_id: null,
+    ai_mode: "ask",
+    selected_agent_type: "general",
+    selected_model_id: undefined,
     close_panel: mock_close_panel,
     set_conversation: mock_set_conversation,
+    set_ai_mode: mock_set_ai_mode,
+    set_selected_agent_type: mock_set_selected_agent_type,
+    set_selected_model_id: mock_set_selected_model_id,
   }),
 }));
 
 /**
- * Mock delete_conversation to avoid real network calls.
+ * Mock ai_api to avoid real network calls.
+ * get_models is included so the component's useEffect does not throw on mount.
  */
 vi.mock("../api/ai_api", () => ({
   delete_conversation: vi.fn().mockResolvedValue(undefined),
   create_conversation: vi.fn(),
   list_messages: vi.fn(),
   stream_ai_response: vi.fn(),
+  get_models: vi.fn().mockResolvedValue({ models: [], default_model_id: "" }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -116,9 +140,7 @@ describe("ChatPanel", () => {
   it("does not render suggested prompts when messages exist", () => {
     mock_messages = [{ id: "m1", role: "user", content: "Hello" }];
     render(<ChatPanel document_id="doc-1" />);
-    expect(
-      screen.queryByText("suggested_prompts.summarize"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("suggested_prompts.summarize")).not.toBeInTheDocument();
   });
 
   it("renders user and assistant messages", () => {
@@ -139,6 +161,8 @@ describe("ChatPanel", () => {
     expect(mock_send_message).toHaveBeenCalledWith(
       "Test message",
       "doc-1",
+      undefined,
+      undefined,
       undefined,
     );
   });
@@ -194,6 +218,8 @@ describe("ChatPanel", () => {
     expect(mock_send_message).toHaveBeenCalledWith(
       "suggested_prompts.summarize",
       "doc-1",
+      undefined,
+      undefined,
       undefined,
     );
   });

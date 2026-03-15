@@ -7,6 +7,9 @@ import { api_fetch } from "../../../lib/api_client";
  */
 const AI_BASE = "/ai";
 
+/** Base URL for embedding service endpoints. */
+const EMBEDDINGS_BASE = "/embeddings";
+
 // ---------------------------------------------------------------------------
 // Response shape types (mirrors the Python Pydantic DTOs)
 // ---------------------------------------------------------------------------
@@ -41,31 +44,52 @@ export interface MessageResponse {
   created_at: string;
 }
 
+/** A proposed document edit emitted by the agentic AI. */
+export interface DocumentChangePayload {
+  /** Edit operation type. Currently only "replace_full" is supported. */
+  operation: string;
+  /** Full replacement document text proposed by the agent. */
+  proposed_text: string;
+  /** Document text at invocation time (for diffing). */
+  original_text: string;
+}
+
 /**
  * A parsed SSE chunk from the AI streaming endpoint.
  * The backend emits newline-delimited JSON objects in the event data.
  */
 export interface StreamChunk {
-  /** The type of event: "delta" for partial text, "done" when finished, "error" on failure. */
-  type: "delta" | "done" | "error";
+  /** The type of event: "delta" for partial text, "done" when finished, "error" on failure, "document_change" for agent edits, "tool_call" when the agent invokes a tool. */
+  type: "delta" | "done" | "error" | "document_change" | "tool_call";
   /** Partial text content (present when type === "delta"). */
   content?: string;
   /** Error message (present when type === "error"). */
   error?: string;
   /** Final full message ID assigned by the backend (present when type === "done"). */
   message_id?: string;
+  /** Populated on "document_change" events — contains the proposed document edit. */
+  document_change?: DocumentChangePayload;
+  /** Set on "tool_call" events — the name of the tool being invoked. */
+  tool_name?: string;
 }
 
 /** A single selectable LLM model returned by GET /ai/models. */
 export interface ModelInfo {
-  /** OpenRouter model slug, e.g. 'z-ai/glm-4.5-air:free'. */
+  /** Model slug used when calling the target gateway. */
   id: string;
   /** Human-readable display name. */
   name: string;
   /** Upstream provider name. */
   provider: string;
-  /** True when the model has no API cost on OpenRouter. */
+  /** Which upstream API endpoint handles this model: 'openrouter' | 'xai'. */
+  gateway: "openrouter" | "xai";
+  /** True when the model has no API cost. */
   is_free: boolean;
+  /**
+   * True when the AI lab behind the model has not been publicly disclosed.
+   * These are anonymous releases on OpenRouter where the real creator is unknown.
+   */
+  is_stealth: boolean;
   /** Maximum context window in tokens. */
   context_window: number;
   /** Short one-line description. */
@@ -95,9 +119,7 @@ export function get_models(): Promise<ModelsResponse> {
  * @param document_id - UUID of the document to associate the conversation with.
  * @returns The newly created conversation.
  */
-export function create_conversation(
-  document_id: string,
-): Promise<ConversationResponse> {
+export function create_conversation(document_id: string): Promise<ConversationResponse> {
   return api_fetch<ConversationResponse>(`${AI_BASE}/conversations`, {
     method: "POST",
     body: JSON.stringify({ document_id }),
@@ -109,12 +131,8 @@ export function create_conversation(
  * @param conversation_id - Conversation UUID.
  * @returns Ordered array of messages (oldest first).
  */
-export function list_messages(
-  conversation_id: string,
-): Promise<MessageResponse[]> {
-  return api_fetch<MessageResponse[]>(
-    `${AI_BASE}/conversations/${conversation_id}/messages`,
-  );
+export function list_messages(conversation_id: string): Promise<MessageResponse[]> {
+  return api_fetch<MessageResponse[]>(`${AI_BASE}/conversations/${conversation_id}/messages`);
 }
 
 /**
@@ -143,6 +161,8 @@ export interface StreamRequestOptions {
   document_context?: string;
   /** Optional OpenRouter model slug to use for this request. */
   model_id?: string;
+  /** Optional agent type slug (e.g. "general"). Only sent when using agent mode. */
+  agent_type?: string;
   /** AbortSignal to cancel the stream. */
   signal?: AbortSignal;
 }
@@ -163,37 +183,29 @@ export interface StreamRequestOptions {
 export async function* stream_ai_response(
   options: StreamRequestOptions,
 ): AsyncGenerator<StreamChunk> {
-  const { conversation_id, message, document_context, model_id, signal } = options;
+  const { conversation_id, message, document_context, model_id, agent_type, signal } = options;
 
   // Retrieve the current auth session to attach the Bearer token.
   const {
     data: { session },
   } = await supabase_client.auth.getSession();
 
-  const api_base =
-    (import.meta.env.VITE_API_BASE_URL as string) ||
-    "http://localhost:3000/api/v1";
+  const api_base = (import.meta.env.VITE_API_BASE_URL as string) || "http://localhost:3000/api/v1";
 
-  const response = await fetch(
-    `${api_base}${AI_BASE}/conversations/${conversation_id}/stream`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(session?.access_token
-          ? { Authorization: `Bearer ${session.access_token}` }
-          : {}),
-      },
-      body: JSON.stringify({ message, document_context, model_id }),
-      signal,
+  const response = await fetch(`${api_base}${AI_BASE}/conversations/${conversation_id}/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
     },
-  );
+    body: JSON.stringify({ message, document_context, model_id, agent_type }),
+    signal,
+  });
 
   if (!response.ok) {
     const error_body = await response.json().catch(() => ({}));
     const message_text =
-      (error_body as { error?: string }).error ||
-      `AI stream error: ${response.status}`;
+      (error_body as { error?: string }).error || `AI stream error: ${response.status}`;
     throw new Error(message_text);
   }
 
@@ -220,9 +232,7 @@ export async function* stream_ai_response(
 
       for (const event of events) {
         // Each SSE event may contain multiple lines; find the "data:" line.
-        const data_line = event
-          .split("\n")
-          .find((line) => line.startsWith("data:"));
+        const data_line = event.split("\n").find((line) => line.startsWith("data:"));
 
         if (!data_line) continue;
 
@@ -248,4 +258,38 @@ export async function* stream_ai_response(
   } finally {
     reader.releaseLock();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Embedding / RAG
+// ---------------------------------------------------------------------------
+
+/** Response from the embedding index endpoint. */
+export interface IndexEmbeddingsResponse {
+  /** UUID of the document that was indexed. */
+  document_id: string;
+  /** Number of chunks that were embedded and stored. */
+  chunks_indexed: number;
+}
+
+/**
+ * Index (or re-index) a document's content into the vector store.
+ *
+ * Splits the plain-text content into overlapping chunks, embeds each chunk
+ * via the AI service, and stores the result in `document_embeddings`.
+ * Safe to call repeatedly — existing embeddings for the document are
+ * replaced atomically.
+ *
+ * @param document_id - UUID of the document to index.
+ * @param content - Plain-text content of the document.
+ * @returns Summary of the indexing operation.
+ */
+export function index_document_embeddings(
+  document_id: string,
+  content: string,
+): Promise<IndexEmbeddingsResponse> {
+  return api_fetch<IndexEmbeddingsResponse>(`${EMBEDDINGS_BASE}/index`, {
+    method: "POST",
+    body: JSON.stringify({ document_id, content }),
+  });
 }

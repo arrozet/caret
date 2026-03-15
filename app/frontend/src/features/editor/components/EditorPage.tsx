@@ -9,14 +9,14 @@ import { use_save_document } from "../hooks/use_save_document";
 import { use_focus_mode } from "../../../hooks/use_focus_mode";
 import { use_tabs_store } from "../../../stores/tabs_store";
 import { use_ai_store } from "../../../stores";
+import { useGhostText } from "../hooks/use_ghost_text";
+import { index_document_embeddings } from "../../ai-assistant/api/ai_api";
 
 /**
  * Lazy-load the AI Chat Panel to keep the initial bundle lean.
  * The panel is only rendered when the user opens it via Ctrl/Cmd+K.
  */
-const ChatPanel = lazy(() =>
-  import("../../ai-assistant").then((m) => ({ default: m.ChatPanel })),
-);
+const ChatPanel = lazy(() => import("../../ai-assistant").then((m) => ({ default: m.ChatPanel })));
 
 /** Debounce delay in milliseconds before autosaving after the last keystroke. */
 const AUTOSAVE_DELAY_MS = 1_000;
@@ -47,17 +47,34 @@ export function EditorPage() {
   const [is_title_focused, set_is_title_focused] = useState(false);
   const debounce_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const title_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Ref to the Tiptap Editor instance, used to extract document context for AI. */
   const editor_ref = useRef<Editor | null>(null);
 
+  /**
+   * Plain-text snapshot of the document, captured when the AI panel opens.
+   * Using state (not a ref read during render) to avoid the react-hooks/refs lint rule.
+   */
+  const [document_context, set_document_context] = useState<string | undefined>(undefined);
+
+  /**
+   * State-tracked Tiptap editor instance, needed for the useGhostText hook
+   * which must re-register keyboard listeners whenever the editor changes.
+   */
+  const [editor_instance, set_editor_instance] = useState<Editor | null>(null);
+
   const { add_tab, update_tab_title } = use_tabs_store();
 
-  /** AI panel state from the global store. */
-  const { is_panel_open, toggle_panel } = use_ai_store();
+  /** AI panel state and active conversation from the global store. */
+  const { is_panel_open, toggle_panel, active_conversation_id } = use_ai_store();
+
+  /** Wire up the ghost text (inline AI completion) feature for the editor. */
+  useGhostText({
+    editor: editor_instance,
+    conversation_id: active_conversation_id,
+    document_id: document_id ?? "",
+  });
 
   /** Activate focus mode: fade peripheral UI after 2s idle (FRONTEND.md §9). */
   use_focus_mode(true);
@@ -65,11 +82,15 @@ export function EditorPage() {
   /**
    * Global Ctrl/Cmd+K keyboard shortcut to toggle the AI chat panel.
    * Registered at the EditorPage level so it works regardless of focus.
+   * Captures a plain-text snapshot of the document when opening the panel so
+   * the AI has context without needing to read the ref during render.
    */
   useEffect(() => {
     function handle_keydown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
+        // Capture document text now (inside the event handler, not during render)
+        set_document_context(editor_ref.current?.getText() ?? undefined);
         toggle_panel();
       }
     }
@@ -80,6 +101,8 @@ export function EditorPage() {
   /** Sync title from server data when document loads. */
   useEffect(() => {
     if (document?.title && !is_title_focused) {
+      // Deliberately calling setState inside effect to sync server → local state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       set_title(document.title);
     }
   }, [document?.title, is_title_focused]);
@@ -127,6 +150,9 @@ export function EditorPage() {
    * Handle editor content changes with debounced autosave.
    * Resets the debounce timer on every keystroke, then saves
    * after AUTOSAVE_DELAY_MS of inactivity.
+   * After a successful save, re-indexes the document in the vector store
+   * so RAG context stays up-to-date (fire-and-forget; errors are silenced
+   * to avoid disrupting the editing experience).
    */
   const handle_update = useCallback(
     (json: JSONContent, text: string) => {
@@ -143,12 +169,19 @@ export function EditorPage() {
             content_text: text,
           });
           show_saved();
+
+          // Re-index embeddings in the background; never block the UI on this.
+          if (document_id && text.trim()) {
+            index_document_embeddings(document_id, text).catch(() => {
+              // Silently ignore embedding errors — RAG is best-effort.
+            });
+          }
         } catch {
           set_save_status("error");
         }
       }, AUTOSAVE_DELAY_MS);
     },
-    [save_mutation, show_saved],
+    [save_mutation, show_saved, document_id],
   );
 
   /**
@@ -221,9 +254,7 @@ export function EditorPage() {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <AlertCircle className="h-8 w-8 text-error" />
-        <p className="text-ui-base text-error">
-          {error?.message ?? "Document not found"}
-        </p>
+        <p className="text-ui-base text-error">{error?.message ?? "Document not found"}</p>
         <Button variant="ghost" size="md" onClick={handle_back}>
           <ArrowLeft className="h-4 w-4" />
           Back to documents
@@ -236,7 +267,12 @@ export function EditorPage() {
     <div className="flex flex-1 flex-col overflow-hidden bg-app">
       {/* Sub-header: back button + document title + save status */}
       <div className="flex w-full shrink-0 items-center gap-3 px-4 py-2 border-b border-border-subtle bg-surface z-20">
-        <Button variant="ghost" size="sm" onClick={handle_back} className="hover:bg-border-subtle/50">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handle_back}
+          className="hover:bg-border-subtle/50"
+        >
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Documents</span>
         </Button>
@@ -268,6 +304,7 @@ export function EditorPage() {
             on_update={handle_update}
             on_editor_ready={(ed) => {
               editor_ref.current = ed;
+              set_editor_instance(ed);
             }}
           />
         </div>
@@ -277,7 +314,12 @@ export function EditorPage() {
           <Suspense fallback={null}>
             <ChatPanel
               document_id={document_id ?? ""}
-              document_context={editor_ref.current?.getText() ?? undefined}
+              document_context={document_context}
+              on_apply_change={(proposed_text) => {
+                if (editor_ref.current && !editor_ref.current.isDestroyed) {
+                  editor_ref.current.commands.setContent(proposed_text);
+                }
+              }}
             />
           </Suspense>
         )}
