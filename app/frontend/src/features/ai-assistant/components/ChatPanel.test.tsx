@@ -49,6 +49,7 @@ vi.mock("../hooks/use_ai_stream", () => ({
       return mock_error;
     },
     pending_change: null,
+    tool_calls: [],
     send_message: mock_send_message,
     stop_generating: mock_stop_generating,
     load_messages: mock_load_messages,
@@ -58,13 +59,10 @@ vi.mock("../hooks/use_ai_stream", () => ({
 }));
 
 /**
- * Mock the Zustand ai_store, including all new fields added for agent mode.
+ * Mock the Zustand ai_store.
  */
 const mock_close_panel = vi.fn();
 const mock_set_conversation = vi.fn();
-const mock_set_ai_mode = vi.fn();
-const mock_set_selected_agent_type = vi.fn();
-const mock_set_selected_model_id = vi.fn();
 
 vi.mock("../../../stores/ai_store", () => ({
   use_ai_store: () => ({
@@ -75,9 +73,8 @@ vi.mock("../../../stores/ai_store", () => ({
     selected_model_id: undefined,
     close_panel: mock_close_panel,
     set_conversation: mock_set_conversation,
-    set_ai_mode: mock_set_ai_mode,
-    set_selected_agent_type: mock_set_selected_agent_type,
-    set_selected_model_id: mock_set_selected_model_id,
+    set_ai_mode: vi.fn(),
+    set_selected_model_id: vi.fn(),
   }),
 }));
 
@@ -89,6 +86,7 @@ vi.mock("../api/ai_api", () => ({
   delete_conversation: vi.fn().mockResolvedValue(undefined),
   create_conversation: vi.fn(),
   list_messages: vi.fn(),
+  list_conversations: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   stream_ai_response: vi.fn(),
   get_models: vi.fn().mockResolvedValue({ models: [], default_model_id: "" }),
 }));

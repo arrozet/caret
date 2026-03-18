@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Send, Square, RefreshCw, Sparkles } from "lucide-react";
+import { X, Send, Square, RefreshCw, Sparkles, Check } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { use_ai_store } from "../../../stores/ai_store";
 import { use_ai_stream } from "../hooks/use_ai_stream";
 import type { ChatMessage } from "../hooks/use_ai_stream";
-import { delete_conversation, get_models } from "../api/ai_api";
+import { delete_conversation, get_models, list_conversations } from "../api/ai_api";
 import type { ModelInfo } from "../api/ai_api";
 
 // ---------------------------------------------------------------------------
@@ -31,11 +31,9 @@ function MessageBubble({ message }: MessageBubbleProps) {
   let think_content = null;
   let main_content = message.content;
 
-  // Usa match para capturar todo el bloque de think de manera no-greedy
   const think_match = message.content.match(/<think>([\s\S]*?)(?:<\/think>|$)/);
   if (think_match) {
     think_content = think_match[1].trim();
-    // Reemplaza toda la etiqueta think completa por una cadena vacía en el texto principal
     main_content = message.content.replace(/<think>[\s\S]*?(?:<\/think>|$)/, "").trim();
   }
 
@@ -76,33 +74,143 @@ function MessageBubble({ message }: MessageBubbleProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Tool call badge
+// ---------------------------------------------------------------------------
+
 /**
  * Props for a single tool call badge shown during/after an agent run.
  */
 interface ToolCallBadgeProps {
   /** The name of the tool that was called. */
   tool_name: string;
+  /** Whether the agent run has finished and this tool call is resolved. */
+  is_completed?: boolean;
 }
 
 /**
  * Displays a small pill badge showing a tool name called by the agent.
- * Shown in the message area when the agent is operating in agentic mode.
+ * Shows a pulsing dot while the agent is still running, and a checkmark
+ * once the run completes.
  */
-function ToolCallBadge({ tool_name }: ToolCallBadgeProps) {
-  /** Map raw tool names to user-friendly labels. */
-  const label_map: Record<string, string> = {
+function ToolCallBadge({ tool_name, is_completed = false }: ToolCallBadgeProps) {
+  const label_map_pending: Record<string, string> = {
     get_document_content: "Reading document...",
     propose_document_replacement: "Proposing edit...",
   };
-  const label = label_map[tool_name] ?? `Tool: ${tool_name}`;
+  const label_map_done: Record<string, string> = {
+    get_document_content: "Read document",
+    propose_document_replacement: "Proposed edit",
+  };
+
+  const label = is_completed
+    ? (label_map_done[tool_name] ?? `Tool: ${tool_name}`)
+    : (label_map_pending[tool_name] ?? `Tool: ${tool_name}...`);
 
   return (
     <div className="flex items-center gap-1.5 px-2 py-1 mb-2 rounded-lg bg-accent-ai/8 border border-accent-ai/20 w-fit text-ui-xs text-accent-ai">
-      <span
-        className="inline-block h-1.5 w-1.5 rounded-full bg-accent-ai/60 animate-pulse"
-        aria-hidden="true"
-      />
+      {is_completed ? (
+        <Check className="h-2.5 w-2.5 shrink-0" aria-hidden="true" strokeWidth={2.5} />
+      ) : (
+        <span
+          className="inline-block h-1.5 w-1.5 rounded-full bg-accent-ai/60 animate-pulse shrink-0"
+          aria-hidden="true"
+        />
+      )}
       {label}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Diff utilities
+// ---------------------------------------------------------------------------
+
+/** A single line entry in a computed diff. */
+interface DiffLine {
+  type: "equal" | "removed" | "added";
+  text: string;
+}
+
+/**
+ * Compute a line-level diff between two plain-text strings using the LCS
+ * (Longest Common Subsequence) algorithm.
+ */
+function compute_line_diff(original: string, proposed: string): DiffLine[] {
+  const a = original.split("\n");
+  const b = proposed.split("\n");
+  const m = a.length;
+  const n = b.length;
+
+  // Build LCS table.
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] =
+        a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+
+  // Backtrack to produce the diff sequence.
+  const result: DiffLine[] = [];
+  let i = m;
+  let j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
+      result.unshift({ type: "equal", text: a[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({ type: "added", text: b[j - 1] });
+      j--;
+    } else {
+      result.unshift({ type: "removed", text: a[i - 1] });
+      i--;
+    }
+  }
+
+  return result;
+}
+
+/** Props for the inline diff viewer. */
+interface DiffViewerProps {
+  original_text: string;
+  proposed_text: string;
+}
+
+/**
+ * Renders a git-style line diff between two plain-text strings.
+ * Removed lines are shown in red with a "-" prefix; added lines in green
+ * with a "+"; unchanged lines are shown dimmed.
+ */
+function DiffViewer({ original_text, proposed_text }: DiffViewerProps) {
+  const diff = compute_line_diff(original_text, proposed_text);
+
+  const has_changes = diff.some((l) => l.type !== "equal");
+  if (!has_changes) {
+    return <p className="text-ui-xs text-text-secondary/60 italic">No changes detected.</p>;
+  }
+
+  return (
+    <div className="max-h-[220px] overflow-y-auto rounded-md border border-border-subtle bg-app font-mono text-[11px] leading-relaxed">
+      {diff.map((line, idx) => (
+        <div
+          key={idx}
+          className={[
+            "flex gap-2 px-3 py-px whitespace-pre-wrap break-all",
+            line.type === "removed"
+              ? "bg-error/10 text-error"
+              : line.type === "added"
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "text-text-secondary/50",
+          ].join(" ")}
+        >
+          <span className="select-none w-3 shrink-0 text-center">
+            {line.type === "removed" ? "-" : line.type === "added" ? "+" : " "}
+          </span>
+          <span>{line.text || "\u00a0"}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -121,7 +229,7 @@ interface SuggestedPromptsProps {
 
 /**
  * Horizontal strip of quick-action prompt chips shown when there are no
- * messages yet, giving users a starting point.
+ * messages yet.
  */
 function SuggestedPrompts({ on_select }: SuggestedPromptsProps) {
   const { t } = useTranslation("ai");
@@ -161,13 +269,15 @@ interface ChatPanelProps {
    */
   document_id: string;
   /**
-   * Optional plain-text snapshot of the document content passed to the AI
-   * as context for every message.
+   * Callback that returns the current plain-text content of the editor on
+   * demand. Called immediately before each message is sent so the AI always
+   * receives an up-to-date document snapshot, regardless of when the panel
+   * was opened or how the document has changed since.
    */
-  document_context?: string;
+  get_document_context?: () => string | undefined;
   /**
-   * Optional callback invoked when the user accepts an agent-proposed document
-   * edit. Receives the full replacement text and should apply it to the editor.
+   * Callback invoked when the user accepts an agent-proposed document edit.
+   * Receives the full replacement text and should apply it to the editor.
    */
   on_apply_change?: (proposed_text: string) => void;
 }
@@ -177,20 +287,15 @@ interface ChatPanelProps {
  *
  * Displays the Caret AI conversation history and a message input box.
  * Streamed responses appear incrementally as they arrive via SSE.
- *
- * Accessibility:
- *   - The message list region uses aria-live="polite" so screen readers
- *     announce incoming assistant messages without interrupting the user.
- *   - Close button returns focus to the editor area on dismiss.
- *   - Focus is trapped within the panel while open (handled by the panel
- *     wrapper receiving focus on mount).
+ * In Agent mode the panel exposes tool call traces and a diff viewer for
+ * proposed document edits.
  *
  * Design tokens:
  *   - Accent colour: accent-ai (#8B5CF6 light / #A78BFA dark)
  *   - Panel width: 400px (w-[400px])
  *   - Z-index: 40 (floating UI layer per FRONTEND.md z-index table)
  */
-export function ChatPanel({ document_id, document_context, on_apply_change }: ChatPanelProps) {
+export function ChatPanel({ document_id, get_document_context, on_apply_change }: ChatPanelProps) {
   const { t } = useTranslation("ai");
 
   const {
@@ -219,6 +324,9 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
 
   const [input_value, set_input_value] = useState("");
   const [models, set_models] = useState<ModelInfo[]>([]);
+  const [recent_conversations, set_recent_conversations] = useState<
+    Array<{ id: string; title: string | null }>
+  >([]);
   const messages_end_ref = useRef<HTMLDivElement>(null);
   const messages_container_ref = useRef<HTMLDivElement>(null);
   const is_user_scrolling = useRef(false);
@@ -230,8 +338,6 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
     get_models()
       .then((res) => {
         set_models(res.models);
-        // Prefer the server-declared default; fall back to the first in the list.
-        // Only set the default if no model has been chosen yet.
         const default_id = res.default_model_id ?? res.models[0]?.id;
         if (default_id && !selected_model_id) set_selected_model_id(default_id);
       })
@@ -248,16 +354,34 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
     }
   }, [active_conversation_id, load_messages, messages.length]);
 
-  // Handle manual scroll to detect if user scrolled up
+  const load_recent_conversations = useCallback(async () => {
+    try {
+      const response = await list_conversations(document_id);
+      set_recent_conversations(response.items.map((item) => ({ id: item.id, title: item.title })));
+    } catch {
+      set_recent_conversations([]);
+    }
+  }, [document_id]);
+
+  useEffect(() => {
+    load_recent_conversations();
+  }, [load_recent_conversations]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      load_recent_conversations();
+    }
+  }, [messages.length, load_recent_conversations]);
+
+  // Handle manual scroll to detect if user scrolled up.
   const handle_scroll = useCallback(() => {
     if (!messages_container_ref.current) return;
     const { scrollTop, scrollHeight, clientHeight } = messages_container_ref.current;
-    // If scrolled more than 50px from the bottom, mark as user scrolling
     const is_at_bottom = scrollHeight - scrollTop - clientHeight < 50;
     is_user_scrolling.current = !is_at_bottom;
   }, []);
 
-  // Auto-scroll to the bottom whenever messages update, only if user hasn't scrolled up manually
+  // Auto-scroll to the bottom whenever messages update.
   useEffect(() => {
     if (!is_user_scrolling.current) {
       messages_end_ref.current?.scrollIntoView({ behavior: "smooth" });
@@ -271,26 +395,23 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
 
   /**
    * Handle send button / Enter key press.
+   * Reads the document context fresh via the callback so the AI always
+   * receives the current document state at the exact moment of sending.
    */
   const handle_send = useCallback(async () => {
     const trimmed = input_value.trim();
     if (!trimmed || is_loading) return;
     set_input_value("");
-    is_user_scrolling.current = false; // Reset manual scroll lock on new message
+    is_user_scrolling.current = false;
     const agent_type_to_use = ai_mode === "agent" ? selected_agent_type : undefined;
-    await send_message(
-      trimmed,
-      document_id,
-      document_context,
-      selected_model_id,
-      agent_type_to_use,
-    );
+    const current_context = get_document_context?.();
+    await send_message(trimmed, document_id, current_context, selected_model_id, agent_type_to_use);
   }, [
     input_value,
     is_loading,
     send_message,
     document_id,
-    document_context,
+    get_document_context,
     selected_model_id,
     ai_mode,
     selected_agent_type,
@@ -310,21 +431,29 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
   );
 
   /**
-   * Handle a suggested prompt chip click: pre-fill input and send immediately.
+   * Handle a suggested prompt chip click — send immediately with fresh context.
    */
   const handle_suggested_prompt = useCallback(
     async (prompt: string) => {
       set_input_value("");
       const agent_type_to_use = ai_mode === "agent" ? selected_agent_type : undefined;
+      const current_context = get_document_context?.();
       await send_message(
         prompt,
         document_id,
-        document_context,
+        current_context,
         selected_model_id,
         agent_type_to_use,
       );
     },
-    [send_message, document_id, document_context, selected_model_id, ai_mode, selected_agent_type],
+    [
+      send_message,
+      document_id,
+      get_document_context,
+      selected_model_id,
+      ai_mode,
+      selected_agent_type,
+    ],
   );
 
   /**
@@ -339,12 +468,22 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
    */
   const handle_new_conversation = useCallback(async () => {
     if (active_conversation_id) {
-      // Best-effort delete; ignore errors silently.
       delete_conversation(active_conversation_id).catch(() => undefined);
     }
     set_conversation(null);
     clear();
+    set_recent_conversations((prev) => prev.filter((item) => item.id !== active_conversation_id));
   }, [active_conversation_id, set_conversation, clear]);
+
+  const handle_select_conversation = useCallback(
+    async (conversation_id: string) => {
+      if (conversation_id === active_conversation_id) return;
+      set_conversation(conversation_id);
+      clear();
+      await load_messages(conversation_id);
+    },
+    [active_conversation_id, set_conversation, clear, load_messages],
+  );
 
   const has_messages = messages.length > 0;
 
@@ -391,124 +530,6 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
         </div>
       </div>
 
-      {/* Model selector — only shown when more than one model is available */}
-      {models.length > 1 && (
-        <div className="shrink-0 px-4 py-2 border-b border-border-subtle">
-          <div className="flex items-center gap-2">
-            <label htmlFor="model-selector" className="text-ui-xs text-text-secondary shrink-0">
-              {t("model_selector")}
-            </label>
-            <select
-              id="model-selector"
-              value={selected_model_id ?? ""}
-              onChange={(e) => set_selected_model_id(e.target.value || undefined)}
-              className="flex-1 rounded-[4px] border border-border-subtle bg-app px-2 py-1 text-ui-xs text-text-primary outline-none focus:border-accent-ai transition-colors duration-100"
-            >
-              {/* Free models group */}
-              {models.some((m) => m.is_free) && (
-                <optgroup label={t("model_group_free")}>
-                  {models
-                    .filter((m) => m.is_free)
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                </optgroup>
-              )}
-              {/* Paid models group */}
-              {models.some((m) => !m.is_free) && (
-                <optgroup label={t("model_group_paid")}>
-                  {models
-                    .filter((m) => !m.is_free)
-                    .map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                </optgroup>
-              )}
-            </select>
-          </div>
-          {/* Badges for the selected model */}
-          {selected_model_id !== undefined &&
-            (() => {
-              const selected = models.find((m) => m.id === selected_model_id);
-              if (!selected) return null;
-              return (
-                <div className="mt-1.5 flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5">
-                    {/* Free / Paid tier badge */}
-                    <span
-                      className={[
-                        "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none",
-                        selected.is_free
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
-                      ].join(" ")}
-                    >
-                      {selected.is_free ? t("model_group_free") : t("model_group_paid")}
-                    </span>
-                    {/* Stealth badge */}
-                    {selected.is_stealth && (
-                      <span
-                        className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                        title={t("model_stealth_tooltip")}
-                      >
-                        {t("model_stealth_label")}
-                      </span>
-                    )}
-                    {selected.description && (
-                      <span className="text-[10px] text-text-secondary/60 truncate">
-                        {selected.description}
-                      </span>
-                    )}
-                  </div>
-                  {/* Stealth notice */}
-                  {selected.is_stealth && (
-                    <p className="text-[10px] text-text-secondary/50 leading-snug">
-                      {t("model_stealth_notice")}
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
-        </div>
-      )}
-
-      {/* Ask / Agent mode toggle */}
-      <div className="shrink-0 px-4 py-2 border-b border-border-subtle">
-        <div className="flex items-center gap-1 bg-app rounded-lg p-0.5 w-fit">
-          <button
-            onClick={() => set_ai_mode("ask")}
-            className={[
-              "px-3 py-1 rounded-md text-ui-xs font-medium transition-all duration-150",
-              ai_mode === "ask"
-                ? "bg-surface text-text-primary shadow-sm"
-                : "text-text-secondary hover:text-text-primary",
-            ].join(" ")}
-          >
-            Ask
-          </button>
-          <button
-            onClick={() => set_ai_mode("agent")}
-            className={[
-              "px-3 py-1 rounded-md text-ui-xs font-medium transition-all duration-150",
-              ai_mode === "agent"
-                ? "bg-surface text-text-primary shadow-sm"
-                : "text-text-secondary hover:text-text-primary",
-            ].join(" ")}
-          >
-            Agent
-          </button>
-        </div>
-        {ai_mode === "agent" && (
-          <p className="mt-1 text-ui-xs text-text-secondary/60">
-            Agent can read and propose edits to your document.
-          </p>
-        )}
-      </div>
-
       {/* Message list — scrollable, aria-live for screen readers */}
       <div
         ref={messages_container_ref}
@@ -524,6 +545,32 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
               {t("empty_state")}
             </p>
             <SuggestedPrompts on_select={handle_suggested_prompt} />
+            {recent_conversations.length > 0 && (
+              <div className="mt-4 w-full px-4">
+                <p className="mb-2 text-ui-xs font-medium text-text-secondary/80">
+                  Recent conversations
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {recent_conversations.map((conversation, index) => (
+                    <button
+                      key={conversation.id}
+                      type="button"
+                      onClick={() => handle_select_conversation(conversation.id)}
+                      className={[
+                        "w-full rounded-lg border px-3 py-2 text-left text-ui-sm transition-colors",
+                        conversation.id === active_conversation_id
+                          ? "border-accent-ai/50 bg-accent-ai/5 text-text-primary"
+                          : "border-border-subtle text-text-secondary hover:border-accent-ai/40 hover:text-text-primary",
+                      ].join(" ")}
+                    >
+                      {conversation.title && conversation.title.trim().length > 0
+                        ? conversation.title
+                        : `Conversation ${index + 1}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -532,11 +579,15 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-            {/* Tool call trace — shown in agent mode after an agentic run */}
+            {/* Tool call trace — shown in agent mode during/after an agentic run */}
             {ai_mode === "agent" && tool_calls.length > 0 && (
               <div className="px-2 py-1 mb-1">
                 {tool_calls.map((tool_name, idx) => (
-                  <ToolCallBadge key={`${tool_name}-${idx}`} tool_name={tool_name} />
+                  <ToolCallBadge
+                    key={`${tool_name}-${idx}`}
+                    tool_name={tool_name}
+                    is_completed={!is_loading}
+                  />
                 ))}
               </div>
             )}
@@ -546,13 +597,15 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
         )}
       </div>
 
-      {/* Pending change accept/reject banner */}
+      {/* Pending change — diff view with accept / reject */}
       {pending_change !== null && (
-        <div className="mx-3 mb-2 rounded-lg border border-accent-ai/30 bg-accent-ai/5 px-3 py-2.5">
-          <p className="text-ui-xs font-medium text-accent-ai mb-2">
-            Agent proposed a document edit
-          </p>
-          <div className="flex gap-2">
+        <div className="mx-3 mb-2 rounded-lg border border-accent-ai/30 bg-accent-ai/5 px-3 py-2.5 flex flex-col gap-2">
+          <p className="text-ui-xs font-semibold text-accent-ai">Proposed changes</p>
+          <DiffViewer
+            original_text={pending_change.original_text ?? ""}
+            proposed_text={pending_change.proposed_text}
+          />
+          <div className="flex gap-2 mt-1">
             <button
               onClick={() => {
                 on_apply_change?.(pending_change.proposed_text);
@@ -582,6 +635,69 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
         </div>
       )}
 
+      {/* Bottom controls: Ask/Agent toggle + model selector — same row */}
+      <div className="shrink-0 px-3 py-2 border-t border-border-subtle bg-surface flex items-center gap-2">
+        {/* Ask / Agent mode toggle */}
+        <div className="flex items-center gap-0.5 bg-app rounded-lg p-0.5 shrink-0">
+          <button
+            onClick={() => set_ai_mode("ask")}
+            className={[
+              "px-2.5 py-1 rounded-md text-ui-xs font-medium transition-all duration-150",
+              ai_mode === "ask"
+                ? "bg-surface text-text-primary shadow-sm"
+                : "text-text-secondary hover:text-text-primary",
+            ].join(" ")}
+          >
+            Ask
+          </button>
+          <button
+            onClick={() => set_ai_mode("agent")}
+            className={[
+              "px-2.5 py-1 rounded-md text-ui-xs font-medium transition-all duration-150",
+              ai_mode === "agent"
+                ? "bg-surface text-text-primary shadow-sm"
+                : "text-text-secondary hover:text-text-primary",
+            ].join(" ")}
+          >
+            Agent
+          </button>
+        </div>
+
+        {/* Model selector — only when more than one model is available */}
+        {models.length > 1 && (
+          <select
+            id="model-selector"
+            value={selected_model_id ?? ""}
+            onChange={(e) => set_selected_model_id(e.target.value || undefined)}
+            aria-label={t("model_selector")}
+            className="flex-1 min-w-0 rounded-[4px] border border-border-subtle bg-app px-2 py-1 text-ui-xs text-text-primary outline-none focus:border-accent-ai transition-colors duration-100"
+          >
+            {models.some((m) => m.is_free) && (
+              <optgroup label={t("model_group_free")}>
+                {models
+                  .filter((m) => m.is_free)
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+            {models.some((m) => !m.is_free) && (
+              <optgroup label={t("model_group_paid")}>
+                {models
+                  .filter((m) => !m.is_free)
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
+        )}
+      </div>
+
       {/* Input area */}
       <div className="shrink-0 border-t border-border-subtle px-4 pb-4 pt-3 bg-surface">
         <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-app px-3 py-2.5 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20 transition-all duration-200 shadow-sm">
@@ -596,7 +712,6 @@ export function ChatPanel({ document_id, document_context, on_apply_change }: Ch
             className="flex-1 resize-none bg-transparent text-ui-sm text-text-primary placeholder:text-text-secondary/60 outline-none leading-relaxed max-h-[120px] overflow-y-auto disabled:opacity-50 py-0.5"
             aria-label={t("input_placeholder")}
             style={{
-              // Grow textarea naturally up to max-h without layout shift.
               height: "auto",
             }}
             onInput={(e) => {

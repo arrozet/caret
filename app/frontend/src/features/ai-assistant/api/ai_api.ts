@@ -30,6 +30,28 @@ export interface ConversationResponse {
   updated_at: string;
 }
 
+/** Compact conversation entry used by the recent-conversations list. */
+export interface ConversationListItemResponse {
+  /** Conversation UUID. */
+  id: string;
+  /** Document this conversation belongs to. */
+  document_id: string;
+  /** Optional display title. */
+  title: string | null;
+  /** ISO 8601 creation timestamp. */
+  created_at: string;
+  /** ISO 8601 last-update timestamp. */
+  updated_at: string;
+}
+
+/** Paginated list envelope for conversations. */
+export interface ConversationListResponse {
+  /** Ordered conversations (newest first). */
+  items: ConversationListItemResponse[];
+  /** Total count available server-side. */
+  total: number;
+}
+
 /** A single chat message within a conversation. */
 export interface MessageResponse {
   /** Message UUID. */
@@ -42,6 +64,14 @@ export interface MessageResponse {
   content: string;
   /** ISO 8601 creation timestamp. */
   created_at: string;
+}
+
+/** Paginated list envelope for messages. */
+export interface MessageListResponse {
+  /** Ordered messages (oldest first). */
+  items: MessageResponse[];
+  /** Total count available server-side. */
+  total: number;
 }
 
 /** A proposed document edit emitted by the agentic AI. */
@@ -59,7 +89,7 @@ export interface DocumentChangePayload {
  * The backend emits newline-delimited JSON objects in the event data.
  */
 export interface StreamChunk {
-  /** The type of event: "delta" for partial text, "done" when finished, "error" on failure, "document_change" for agent edits, "tool_call" when the agent invokes a tool. */
+  /** The type of event. */
   type: "delta" | "done" | "error" | "document_change" | "tool_call";
   /** Partial text content (present when type === "delta"). */
   content?: string;
@@ -127,12 +157,24 @@ export function create_conversation(document_id: string): Promise<ConversationRe
 }
 
 /**
+ * List persisted conversations for a specific document.
+ * @param document_id - Document UUID.
+ * @returns Conversation list ordered by most recent activity.
+ */
+export function list_conversations(document_id: string): Promise<ConversationListResponse> {
+  const query = new URLSearchParams({ document_id }).toString();
+  return api_fetch<ConversationListResponse>(`${AI_BASE}/conversations?${query}`);
+}
+
+/**
  * Fetch all messages in a conversation.
  * @param conversation_id - Conversation UUID.
  * @returns Ordered array of messages (oldest first).
  */
 export function list_messages(conversation_id: string): Promise<MessageResponse[]> {
-  return api_fetch<MessageResponse[]>(`${AI_BASE}/conversations/${conversation_id}/messages`);
+  return api_fetch<MessageListResponse>(
+    `${AI_BASE}/conversations/${conversation_id}/messages`,
+  ).then((response) => response.items);
 }
 
 /**
@@ -161,7 +203,10 @@ export interface StreamRequestOptions {
   document_context?: string;
   /** Optional OpenRouter model slug to use for this request. */
   model_id?: string;
-  /** Optional agent type slug (e.g. "general"). Only sent when using agent mode. */
+  /**
+   * Optional agent type slug (e.g. "general"). When provided, the backend
+   * uses the agentic mode with document read/edit tools instead of plain chat.
+   */
   agent_type?: string;
   /** AbortSignal to cancel the stream. */
   signal?: AbortSignal;
