@@ -3,6 +3,7 @@ AI router — HTTP boundary for all AI conversation endpoints.
 
 Route map (relative to the /ai prefix registered in main.py):
   GET    /models                               — List available LLM models
+  GET    /conversations?document_id=<uuid>     — List conversation history
   POST   /conversations                        — Create a new conversation
   GET    /conversations/{id}/messages          — List messages in a conversation
   DELETE /conversations/{id}                   — Delete a conversation
@@ -23,6 +24,7 @@ from app.core.dependencies import get_db_session
 from app.core.models_catalog import DEFAULT_MODEL_ID, OPENROUTER_MODELS, ModelEntry
 from app.schemas.ai import (
     ConversationCreate,
+    ConversationListByDocumentResponse,
     ConversationResponse,
     MessageListResponse,
     ModelInfo,
@@ -129,6 +131,44 @@ async def create_conversation(
     )
 
 
+@router.get(
+    "",
+    response_model=ConversationListByDocumentResponse,
+    summary="List conversations for a document",
+    description=(
+        "Returns persisted conversations for the authenticated user filtered "
+        "by document_id, ordered by most recently updated."
+    ),
+)
+async def list_conversations(
+    document_id: uuid.UUID,
+    limit: int = 50,
+    offset: int = 0,
+    user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ConversationListByDocumentResponse:
+    """
+    List conversation history for one document owned by the authenticated user.
+
+    Args:
+        document_id: Document UUID used to scope the list.
+        limit: Maximum rows to return.
+        offset: Number of rows to skip.
+        user: Authenticated user injected by JWT dependency.
+        session: Request-scoped database session.
+
+    Returns:
+        Paginated conversation list ordered by updated_at descending.
+    """
+    service = _get_service(session)
+    return await service.list_conversations_for_document(
+        document_id=document_id,
+        user_id=uuid.UUID(user.user_id),
+        limit=limit,
+        offset=offset,
+    )
+
+
 # ---------------------------------------------------------------------------
 # GET /conversations/{conversation_id}/messages  — list messages
 # ---------------------------------------------------------------------------
@@ -166,7 +206,10 @@ async def list_messages(
     from app.repositories.ai_repository import AiConversationRepository
 
     conv_repo = AiConversationRepository(session)
-    conversation = await conv_repo.get_by_id(conversation_id)
+    conversation = await conv_repo.get_by_id_for_user(
+        conversation_id=conversation_id,
+        user_id=uuid.UUID(user.user_id),
+    )
     if conversation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -207,6 +250,16 @@ async def delete_conversation(
     from app.repositories.ai_repository import AiConversationRepository
 
     conv_repo = AiConversationRepository(session)
+    conversation = await conv_repo.get_by_id_for_user(
+        conversation_id=conversation_id,
+        user_id=uuid.UUID(user.user_id),
+    )
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found.",
+        )
+
     deleted = await conv_repo.delete(conversation_id)
     if not deleted:
         raise HTTPException(
@@ -227,8 +280,8 @@ async def delete_conversation(
         "Persists the user message, runs the PydanticAI agent, and streams "
         "the assistant reply as Server-Sent Events (text/event-stream).\n\n"
         "Each event has the shape: "
-        '``data: {\\"type\\": \\"delta\\"|\\"done\\"|\\"error\\",'
-        ' \\"content\\": \\"...\\"}``'
+        '``data: {\\"type\\": \\"delta\\"|\\"done\\"|'
+        '\\"error\\", \\"content\\": \\"...\\"}``'
     ),
     response_class=StreamingResponse,
 )
@@ -266,7 +319,10 @@ async def stream_ai_response(
     from app.repositories.ai_repository import AiConversationRepository
 
     conv_repo = AiConversationRepository(session)
-    conversation = await conv_repo.get_by_id(conversation_id)
+    conversation = await conv_repo.get_by_id_for_user(
+        conversation_id=conversation_id,
+        user_id=uuid.UUID(user.user_id),
+    )
     if conversation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

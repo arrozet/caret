@@ -5,8 +5,11 @@ These are the only types that cross the HTTP boundary.
 
 from app.schemas.ai import (
     ConversationCreate,
+    ConversationListByDocumentResponse,
+    ConversationListItemResponse,
     ConversationListResponse,
     ConversationResponse,
+    DocumentChangePayload,
     MessageCreate,
     MessageListResponse,
     MessageResponse,
@@ -19,7 +22,10 @@ from app.schemas.ai import (
 
 __all__ = [
     "ConversationCreate",
+    "ConversationListByDocumentResponse",
+    "ConversationListItemResponse",
     "ConversationListResponse",
+    "DocumentChangePayload",
     "ConversationResponse",
     "MessageCreate",
     "MessageListResponse",

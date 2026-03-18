@@ -20,7 +20,6 @@ from collections.abc import AsyncGenerator
 from pydantic_ai import Agent
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +32,8 @@ from app.repositories.ai_repository import (
     AiSuggestionRepository,
 )
 from app.schemas.ai import (
+    ConversationListByDocumentResponse,
+    ConversationListItemResponse,
     ConversationResponse,
     DocumentChangePayload,
     MessageListResponse,
@@ -104,8 +105,8 @@ def _build_model(model_id: str | None = None) -> OpenAIChatModel | AnthropicMode
         if entry.gateway == "openrouter":
             if not settings.OPENROUTER_API_KEY:
                 raise RuntimeError(
-                    f"OPENROUTER_API_KEY is required for model '{entry.name}'"
-                    " but is not configured."
+                    "OPENROUTER_API_KEY is required for model "
+                    f"'{entry.name}' but is not configured."
                 )
             provider = OpenAIProvider(
                 base_url="https://openrouter.ai/api/v1",
@@ -125,10 +126,7 @@ def _build_model(model_id: str | None = None) -> OpenAIChatModel | AnthropicMode
         provider = OpenAIProvider(api_key=settings.OPENAI_API_KEY)
         return OpenAIChatModel("gpt-4o", provider=provider)
     if settings.ANTHROPIC_API_KEY:
-        return AnthropicModel(
-            "claude-3-5-sonnet-latest",
-            provider=AnthropicProvider(api_key=settings.ANTHROPIC_API_KEY),
-        )
+        return AnthropicModel("claude-3-5-sonnet-latest")
     raise RuntimeError(
         "No LLM API key configured. "
         "Set OPENROUTER_API_KEY, OPENAI_API_KEY, XAI_API_KEY or ANTHROPIC_API_KEY."
@@ -236,6 +234,34 @@ class AiAgentService:
         items = [MessageResponse.model_validate(m) for m in messages]
         return MessageListResponse(items=items, total=len(items))
 
+    async def list_conversations_for_document(
+        self,
+        document_id: uuid.UUID,
+        user_id: uuid.UUID,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ConversationListByDocumentResponse:
+        """
+        List persisted conversations for a document owned by the given user.
+
+        Args:
+            document_id: Document UUID to scope conversation history.
+            user_id: Authenticated owner user UUID.
+            limit: Maximum rows to return.
+            offset: Number of rows to skip.
+
+        Returns:
+            ConversationListByDocumentResponse sorted by updated_at desc.
+        """
+        rows, total = await self._conv_repo.list_for_document(
+            document_id=document_id,
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+        )
+        items = [ConversationListItemResponse.model_validate(row) for row in rows]
+        return ConversationListByDocumentResponse(items=items, total=total)
+
     # ------------------------------------------------------------------
     # RAG retrieval
     # ------------------------------------------------------------------
@@ -308,9 +334,10 @@ class AiAgentService:
             - done            : final sentinel with full text and persisted message_id
             - error           : unrecoverable error description
             - document_change : agent-proposed document edit (agentic mode only)
+            - tool_call       : agent tool usage marker (agentic mode only)
 
         When `agent_type` is ``"general"``, the general PydanticAI agent is used
-        instead of the plain chat agent.  After text streaming completes, any
+        instead of the plain chat agent. After text streaming completes, any
         proposed document changes accumulated in the agent's deps are emitted as
         ``document_change`` SSE events before the ``done`` event.
 
@@ -326,7 +353,7 @@ class AiAgentService:
             model_id: Optional LLM model slug to override the server default.
             document_id: Optional document UUID for RAG chunk retrieval.
             agent_type: Optional agent type; ``"general"`` activates the agentic
-                        document-editing mode.  Defaults to plain chat mode.
+                        document-editing mode. Defaults to plain chat mode.
 
         Yields:
             SSE-formatted strings to be sent directly to the client.
@@ -337,6 +364,7 @@ class AiAgentService:
             role=AiMessageRole.user,
             content=user_message,
         )
+        await self._conv_repo.touch_updated_at(conversation_id)
 
         # 2. Build history for the agent's context window ----------------------
         history_messages = await self._msg_repo.list_for_conversation(conversation_id)
@@ -379,11 +407,6 @@ class AiAgentService:
         token_count = 0
 
         if agent_type == "general":
-            # ----------------------------------------------------------------
-            # Agentic mode: use build_general_agent() with document read/edit tools.
-            # A fresh agent is created per request to avoid shared state and to
-            # ensure the correct per-request model is used.
-            # ----------------------------------------------------------------
             from app.agents.general_agent import (  # noqa: PLC0415
                 GeneralAgentDeps,
                 build_general_agent,
@@ -401,16 +424,11 @@ class AiAgentService:
                             delta_chunk = StreamChunk(type="delta", content=delta)
                             yield f"data: {delta_chunk.model_dump_json()}\n\n"
 
-                    # Still inside the async with block — emit tool_call events
-                    # from message history so the frontend can display which tools
-                    # the agent invoked during this request.
                     from pydantic_ai.messages import ToolCallPart  # noqa: PLC0415
 
                     for msg in result.all_messages():
                         if hasattr(msg, "parts"):
                             for part in msg.parts:
-                                # ToolCallPart has tool_name and args attributes
-                                # (confirmed via BaseToolCallPart inspection).
                                 if isinstance(part, ToolCallPart):
                                     tool_chunk = StreamChunk(
                                         type="tool_call",
@@ -427,7 +445,6 @@ class AiAgentService:
                 yield f"data: {error_chunk.model_dump_json()}\n\n"
                 return
 
-            # Emit document_change SSE events for each proposed edit, before done.
             for change in deps.proposed_changes:
                 change_payload = DocumentChangePayload(
                     operation=change["operation"],
@@ -442,9 +459,6 @@ class AiAgentService:
                 yield f"data: {change_chunk.model_dump_json()}\n\n"
 
         else:
-            # ----------------------------------------------------------------
-            # Plain chat mode: stateless Agent[None, str] with no tools
-            # ----------------------------------------------------------------
             agent: Agent[None, str] = Agent(
                 model=model,
                 system_prompt=system_prompt,
@@ -454,8 +468,6 @@ class AiAgentService:
             try:
                 async with agent.run_stream(full_prompt) as result:
                     async for delta in result.stream_text(delta=True):
-                        # Check if the delta contains any characters; sometimes models emit
-                        # empty deltas at the end which shouldn't disrupt streaming
                         if delta:
                             full_text += delta
                             token_count += len(delta.split())  # approximate; LLM usage may override
@@ -478,6 +490,7 @@ class AiAgentService:
             content=full_text,
             token_count=token_count,
         )
+        await self._conv_repo.touch_updated_at(conversation_id)
 
         done_chunk = StreamChunk(
             type="done",

@@ -70,6 +70,23 @@ class ConversationListResponse(BaseModel):
     total: int
 
 
+class ConversationListItemResponse(_TimestampedResponse):
+    """Compact conversation item for sidebar/history listings."""
+
+    id: uuid.UUID
+    document_id: uuid.UUID
+    title: str | None
+
+
+class ConversationListByDocumentResponse(BaseModel):
+    """Paginated list of conversations for one document and user."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    items: list[ConversationListItemResponse]
+    total: int
+
+
 # ---------------------------------------------------------------------------
 # ai_messages
 # ---------------------------------------------------------------------------
@@ -234,14 +251,14 @@ class DocumentChangePayload(BaseModel):
     Represents a proposed document edit emitted by an agentic AI run.
 
     The frontend receives this payload as part of a 'document_change' SSE event
-    and shows an accept/reject banner to the user.  On accept, the editor
+    and shows an accept/reject banner to the user. On accept, the editor
     replaces its content with `proposed_text`; on reject, nothing changes.
     """
 
     operation: str = Field(
         ...,
         description=(
-            "The edit operation type.  Currently only 'replace_full' is supported, "
+            "The edit operation type. Currently only 'replace_full' is supported, "
             "which replaces the entire document content with `proposed_text`."
         ),
     )

@@ -168,7 +168,7 @@ class TestListModels:
         assert len(data["models"]) > 0
 
     async def test_list_models_each_model_has_required_fields(self, client) -> None:
-        """Every model entry must contain id, name, provider, is_free, context_window, description."""
+        """Every model entry must contain all required metadata fields."""
         # Arrange
         required_keys = {"id", "name", "provider", "is_free", "context_window", "description"}
 
@@ -203,6 +203,41 @@ class TestListModels:
 
         # Assert
         assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# GET /ai/conversations
+# ---------------------------------------------------------------------------
+
+
+class TestListConversations:
+    """Test conversation listing by document for authenticated users."""
+
+    async def test_list_conversations_requires_auth(self, client) -> None:
+        """GET /ai/conversations without auth must return 401."""
+        response = await client.get(f"/ai/conversations?document_id={uuid.uuid4()}")
+        assert response.status_code == 401
+
+    async def test_list_conversations_returns_items(self, client_with_auth_and_db) -> None:
+        """GET /ai/conversations returns paginated list ordered by recency."""
+        doc_id = uuid.uuid4()
+        conv = _make_mock_conv(doc_id=doc_id)
+
+        with patch(
+            "app.services.ai_agent_service.AiConversationRepository.list_for_document",
+            new_callable=AsyncMock,
+            return_value=([conv], 1),
+        ):
+            response = await client_with_auth_and_db.get(
+                f"/ai/conversations?document_id={doc_id}",
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["items"][0]["id"] == str(conv.id)
+        assert data["items"][0]["document_id"] == str(doc_id)
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +367,7 @@ class TestListMessages:
         """GET /ai/conversations/{id}/messages returns 404 when conversation missing."""
         # Arrange
         with patch(
-            "app.repositories.ai_repository.AiConversationRepository.get_by_id",
+            "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -354,7 +389,7 @@ class TestListMessages:
 
         with (
             patch(
-                "app.repositories.ai_repository.AiConversationRepository.get_by_id",
+                "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
                 new_callable=AsyncMock,
                 return_value=mock_conv,
             ),
@@ -406,15 +441,20 @@ class TestDeleteConversation:
         conv_id = uuid.uuid4()
 
         with patch(
-            "app.repositories.ai_repository.AiConversationRepository.delete",
+            "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
             new_callable=AsyncMock,
-            return_value=True,
+            return_value=_make_mock_conv(),
         ):
-            # Act
-            response = await client_with_auth_and_db.delete(
-                f"/ai/conversations/{conv_id}",
-                headers={"Authorization": "Bearer fake-token"},
-            )
+            with patch(
+                "app.repositories.ai_repository.AiConversationRepository.delete",
+                new_callable=AsyncMock,
+                return_value=True,
+            ):
+                # Act
+                response = await client_with_auth_and_db.delete(
+                    f"/ai/conversations/{conv_id}",
+                    headers={"Authorization": "Bearer fake-token"},
+                )
 
         # Assert
         assert response.status_code == 204
@@ -423,9 +463,9 @@ class TestDeleteConversation:
         """DELETE /ai/conversations/{id} should return 404 when conversation not found."""
         # Arrange
         with patch(
-            "app.repositories.ai_repository.AiConversationRepository.delete",
+            "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
             new_callable=AsyncMock,
-            return_value=False,
+            return_value=None,
         ):
             # Act
             response = await client_with_auth_and_db.delete(
@@ -476,7 +516,7 @@ class TestStreamAiResponse:
         """POST /ai/conversations/{id}/stream returns 404 when conversation not found."""
         # Arrange
         with patch(
-            "app.repositories.ai_repository.AiConversationRepository.get_by_id",
+            "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -517,7 +557,7 @@ class TestStreamAiResponse:
 
         with (
             patch(
-                "app.repositories.ai_repository.AiConversationRepository.get_by_id",
+                "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
                 new_callable=AsyncMock,
                 return_value=mock_conv,
             ),
@@ -555,7 +595,7 @@ class TestStreamAiResponse:
 
         with (
             patch(
-                "app.repositories.ai_repository.AiConversationRepository.get_by_id",
+                "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
                 new_callable=AsyncMock,
                 return_value=mock_conv,
             ),

@@ -79,6 +79,28 @@ class AiConversationRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_id_for_user(
+        self,
+        conversation_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> AiConversation | None:
+        """
+        Fetch a single conversation by id, scoped to an owner user.
+
+        Args:
+            conversation_id: Conversation UUID.
+            user_id: Owner user UUID.
+
+        Returns:
+            AiConversation when found and owned by the user, otherwise None.
+        """
+        result = await self._session.execute(
+            select(AiConversation).where(
+                (AiConversation.id == conversation_id) & (AiConversation.user_id == user_id)
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def list_for_document(
         self,
         document_id: uuid.UUID,
@@ -129,6 +151,18 @@ class AiConversationRepository:
             return False
         await self._session.delete(conversation)
         return True
+
+    async def touch_updated_at(self, conversation_id: uuid.UUID) -> None:
+        """
+        Update the conversation updated_at timestamp to now().
+
+        Called whenever a new message is appended so ordering by recency works.
+        """
+        await self._session.execute(
+            update(AiConversation)
+            .where(AiConversation.id == conversation_id)
+            .values(updated_at=func.now())
+        )
 
 
 # ---------------------------------------------------------------------------
