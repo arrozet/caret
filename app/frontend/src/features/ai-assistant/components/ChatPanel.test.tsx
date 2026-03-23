@@ -38,7 +38,7 @@ let mock_is_loading = false;
 let mock_error: string | null = null;
 
 vi.mock("../hooks/use_ai_stream", () => ({
-  use_ai_stream: () => ({
+  useAiStream: () => ({
     get messages() {
       return mock_messages;
     },

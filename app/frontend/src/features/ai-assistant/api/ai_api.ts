@@ -149,10 +149,13 @@ export function get_models(): Promise<ModelsResponse> {
  * @param document_id - UUID of the document to associate the conversation with.
  * @returns The newly created conversation.
  */
-export function create_conversation(document_id: string): Promise<ConversationResponse> {
+export function create_conversation(
+  document_id: string,
+  title?: string,
+): Promise<ConversationResponse> {
   return api_fetch<ConversationResponse>(`${AI_BASE}/conversations`, {
     method: "POST",
-    body: JSON.stringify({ document_id }),
+    body: JSON.stringify({ document_id, title }),
   });
 }
 

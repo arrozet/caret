@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { use_ai_stream } from "./use_ai_stream";
+import { useAiStream } from "./use_ai_stream";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -22,21 +22,19 @@ vi.mock("../api/ai_api", () => ({
  * We provide a minimal implementation that tracks active_conversation_id.
  */
 const mock_set_conversation = vi.fn();
+const mock_set_pending_document_change = vi.fn();
 let mock_conversation_id: string | null = null;
 
 vi.mock("../../../stores/ai_store", () => ({
   use_ai_store: () => ({
     active_conversation_id: mock_conversation_id,
     set_conversation: mock_set_conversation,
+    set_pending_document_change: mock_set_pending_document_change,
   }),
 }));
 
 // Import after mocking so we get the mocked versions.
-import {
-  create_conversation,
-  list_messages,
-  stream_ai_response,
-} from "../api/ai_api";
+import { create_conversation, list_messages, stream_ai_response } from "../api/ai_api";
 
 // ---------------------------------------------------------------------------
 // Helper: build a fake AsyncIterable that yields the given chunks.
@@ -45,8 +43,13 @@ import {
 // ---------------------------------------------------------------------------
 
 async function* make_stream(
-  chunks: Array<{ type: "delta" | "done" | "error"; content?: string; error?: string; message_id?: string }>,
-): AsyncGenerator<typeof chunks[number]> {
+  chunks: Array<{
+    type: "delta" | "done" | "error";
+    content?: string;
+    error?: string;
+    message_id?: string;
+  }>,
+): AsyncGenerator<(typeof chunks)[number]> {
   for (const chunk of chunks) {
     yield chunk;
   }
@@ -63,7 +66,7 @@ describe("use_ai_stream", () => {
   });
 
   it("initialises with empty state", () => {
-    const { result } = renderHook(() => use_ai_stream());
+    const { result } = renderHook(() => useAiStream());
 
     expect(result.current.messages).toEqual([]);
     expect(result.current.is_loading).toBe(false);
@@ -73,12 +76,18 @@ describe("use_ai_stream", () => {
   it("loads messages from an existing conversation", async () => {
     const mock_messages = [
       { id: "m1", conversation_id: "c1", role: "user" as const, content: "Hello", created_at: "" },
-      { id: "m2", conversation_id: "c1", role: "assistant" as const, content: "Hi!", created_at: "" },
+      {
+        id: "m2",
+        conversation_id: "c1",
+        role: "assistant" as const,
+        content: "Hi!",
+        created_at: "",
+      },
     ];
 
     vi.mocked(list_messages).mockResolvedValueOnce(mock_messages);
 
-    const { result } = renderHook(() => use_ai_stream());
+    const { result } = renderHook(() => useAiStream());
 
     await act(async () => {
       await result.current.load_messages("c1");
@@ -86,7 +95,11 @@ describe("use_ai_stream", () => {
 
     expect(result.current.messages).toHaveLength(2);
     expect(result.current.messages[0]).toMatchObject({ id: "m1", role: "user", content: "Hello" });
-    expect(result.current.messages[1]).toMatchObject({ id: "m2", role: "assistant", content: "Hi!" });
+    expect(result.current.messages[1]).toMatchObject({
+      id: "m2",
+      role: "assistant",
+      content: "Hi!",
+    });
     expect(list_messages).toHaveBeenCalledWith("c1");
   });
 
@@ -107,13 +120,13 @@ describe("use_ai_stream", () => {
       ]),
     );
 
-    const { result } = renderHook(() => use_ai_stream());
+    const { result } = renderHook(() => useAiStream());
 
     await act(async () => {
       await result.current.send_message("Hello", "doc1");
     });
 
-    expect(create_conversation).toHaveBeenCalledWith("doc1");
+    expect(create_conversation).toHaveBeenCalledWith("doc1", "Hello");
     expect(mock_set_conversation).toHaveBeenCalledWith("new-convo");
   });
 
@@ -124,7 +137,7 @@ describe("use_ai_stream", () => {
       make_stream([{ type: "done", message_id: "m1" }]),
     );
 
-    const { result } = renderHook(() => use_ai_stream());
+    const { result } = renderHook(() => useAiStream());
 
     await act(async () => {
       await result.current.send_message("My question", "doc1");
@@ -146,7 +159,7 @@ describe("use_ai_stream", () => {
       ]),
     );
 
-    const { result } = renderHook(() => use_ai_stream());
+    const { result } = renderHook(() => useAiStream());
 
     await act(async () => {
       await result.current.send_message("Hi", "doc1");
@@ -161,9 +174,7 @@ describe("use_ai_stream", () => {
     );
 
     // The assistant message placeholder should exist.
-    const assistant_messages = result.current.messages.filter(
-      (m) => m.role === "assistant",
-    );
+    const assistant_messages = result.current.messages.filter((m) => m.role === "assistant");
     expect(assistant_messages).toHaveLength(1);
 
     // After streaming completes, loading should be false.
@@ -174,12 +185,10 @@ describe("use_ai_stream", () => {
     mock_conversation_id = "convo-err";
 
     vi.mocked(stream_ai_response).mockReturnValueOnce(
-      make_stream([
-        { type: "error", error: "Something went wrong" },
-      ]),
+      make_stream([{ type: "error", error: "Something went wrong" }]),
     );
 
-    const { result } = renderHook(() => use_ai_stream());
+    const { result } = renderHook(() => useAiStream());
 
     await act(async () => {
       await result.current.send_message("Trigger error", "doc1");
@@ -204,7 +213,7 @@ describe("use_ai_stream", () => {
       ]),
     );
 
-    const { result } = renderHook(() => use_ai_stream());
+    const { result } = renderHook(() => useAiStream());
 
     await act(async () => {
       await result.current.send_message("msg", "doc1");
@@ -228,7 +237,7 @@ describe("use_ai_stream", () => {
       make_stream([{ type: "done", message_id: "m1" }]),
     );
 
-    const { result } = renderHook(() => use_ai_stream());
+    const { result } = renderHook(() => useAiStream());
 
     await act(async () => {
       await result.current.send_message("test", "doc1");

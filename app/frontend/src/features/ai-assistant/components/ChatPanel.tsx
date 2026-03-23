@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { X, Send, Square, RefreshCw, Sparkles, Check } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { use_ai_store } from "../../../stores/ai_store";
-import { use_ai_stream } from "../hooks/use_ai_stream";
+import { useAiStream } from "../hooks/use_ai_stream";
 import type { ChatMessage } from "../hooks/use_ai_stream";
 import { delete_conversation, get_models, list_conversations } from "../api/ai_api";
 import type { ModelInfo } from "../api/ai_api";
@@ -123,99 +123,6 @@ function ToolCallBadge({ tool_name, is_completed = false }: ToolCallBadgeProps) 
 }
 
 // ---------------------------------------------------------------------------
-// Diff utilities
-// ---------------------------------------------------------------------------
-
-/** A single line entry in a computed diff. */
-interface DiffLine {
-  type: "equal" | "removed" | "added";
-  text: string;
-}
-
-/**
- * Compute a line-level diff between two plain-text strings using the LCS
- * (Longest Common Subsequence) algorithm.
- */
-function compute_line_diff(original: string, proposed: string): DiffLine[] {
-  const a = original.split("\n");
-  const b = proposed.split("\n");
-  const m = a.length;
-  const n = b.length;
-
-  // Build LCS table.
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] =
-        a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
-    }
-  }
-
-  // Backtrack to produce the diff sequence.
-  const result: DiffLine[] = [];
-  let i = m;
-  let j = n;
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
-      result.unshift({ type: "equal", text: a[i - 1] });
-      i--;
-      j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      result.unshift({ type: "added", text: b[j - 1] });
-      j--;
-    } else {
-      result.unshift({ type: "removed", text: a[i - 1] });
-      i--;
-    }
-  }
-
-  return result;
-}
-
-/** Props for the inline diff viewer. */
-interface DiffViewerProps {
-  original_text: string;
-  proposed_text: string;
-}
-
-/**
- * Renders a git-style line diff between two plain-text strings.
- * Removed lines are shown in red with a "-" prefix; added lines in green
- * with a "+"; unchanged lines are shown dimmed.
- */
-function DiffViewer({ original_text, proposed_text }: DiffViewerProps) {
-  const diff = compute_line_diff(original_text, proposed_text);
-
-  const has_changes = diff.some((l) => l.type !== "equal");
-  if (!has_changes) {
-    return <p className="text-ui-xs text-text-secondary/60 italic">No changes detected.</p>;
-  }
-
-  return (
-    <div className="max-h-[220px] overflow-y-auto rounded-md border border-border-subtle bg-app font-mono text-[11px] leading-relaxed">
-      {diff.map((line, idx) => (
-        <div
-          key={idx}
-          className={[
-            "flex gap-2 px-3 py-px whitespace-pre-wrap break-all",
-            line.type === "removed"
-              ? "bg-error/10 text-error"
-              : line.type === "added"
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : "text-text-secondary/50",
-          ].join(" ")}
-        >
-          <span className="select-none w-3 shrink-0 text-center">
-            {line.type === "removed" ? "-" : line.type === "added" ? "+" : " "}
-          </span>
-          <span>{line.text || "\u00a0"}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Suggested prompts strip
 // ---------------------------------------------------------------------------
 
@@ -276,10 +183,10 @@ interface ChatPanelProps {
    */
   get_document_context?: () => string | undefined;
   /**
-   * Callback invoked when the user accepts an agent-proposed document edit.
-   * Receives the full replacement text and should apply it to the editor.
+   * Increment this token whenever the parent resolves a pending change.
+   * The panel will clear its local pending state when this value changes.
    */
-  on_apply_change?: (proposed_text: string) => void;
+  resolve_pending_change_token?: number;
 }
 
 /**
@@ -287,15 +194,19 @@ interface ChatPanelProps {
  *
  * Displays the Caret AI conversation history and a message input box.
  * Streamed responses appear incrementally as they arrive via SSE.
- * In Agent mode the panel exposes tool call traces and a diff viewer for
- * proposed document edits.
+ * In Agent mode the panel exposes tool call traces and forwards proposed
+ * document edits to the editor-area review overlay.
  *
  * Design tokens:
  *   - Accent colour: accent-ai (#8B5CF6 light / #A78BFA dark)
  *   - Panel width: 400px (w-[400px])
  *   - Z-index: 40 (floating UI layer per FRONTEND.md z-index table)
  */
-export function ChatPanel({ document_id, get_document_context, on_apply_change }: ChatPanelProps) {
+export function ChatPanel({
+  document_id,
+  get_document_context,
+  resolve_pending_change_token,
+}: ChatPanelProps) {
   const { t } = useTranslation("ai");
 
   const {
@@ -320,7 +231,7 @@ export function ChatPanel({ document_id, get_document_context, on_apply_change }
     load_messages,
     clear,
     clear_pending_change,
-  } = use_ai_stream();
+  } = useAiStream();
 
   const [input_value, set_input_value] = useState("");
   const [models, set_models] = useState<ModelInfo[]>([]);
@@ -485,6 +396,23 @@ export function ChatPanel({ document_id, get_document_context, on_apply_change }
     [active_conversation_id, set_conversation, clear, load_messages],
   );
 
+  /**
+   * Allow parent-owned accept/reject controls (outside this panel) to clear
+   * the pending change stored in the streaming hook.
+   */
+  const last_resolve_token_ref = useRef<number | undefined>(resolve_pending_change_token);
+  useEffect(() => {
+    if (resolve_pending_change_token === undefined) return;
+    if (last_resolve_token_ref.current === undefined) {
+      last_resolve_token_ref.current = resolve_pending_change_token;
+      return;
+    }
+    if (resolve_pending_change_token !== last_resolve_token_ref.current) {
+      clear_pending_change();
+      last_resolve_token_ref.current = resolve_pending_change_token;
+    }
+  }, [resolve_pending_change_token, clear_pending_change]);
+
   const has_messages = messages.length > 0;
 
   return (
@@ -550,18 +478,23 @@ export function ChatPanel({ document_id, get_document_context, on_apply_change }
                 <p className="mb-2 text-ui-xs font-medium text-text-secondary/80">
                   Recent conversations
                 </p>
-                <div className="flex flex-col gap-1.5">
-                  {recent_conversations.map((conversation, index) => (
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {recent_conversations.slice(0, 5).map((conversation, index) => (
                     <button
                       key={conversation.id}
                       type="button"
                       onClick={() => handle_select_conversation(conversation.id)}
                       className={[
-                        "w-full rounded-lg border px-3 py-2 text-left text-ui-sm transition-colors",
+                        "shrink-0 min-w-[120px] max-w-[150px] rounded-lg border px-3 py-2 text-left text-ui-sm transition-colors truncate",
                         conversation.id === active_conversation_id
                           ? "border-accent-ai/50 bg-accent-ai/5 text-text-primary"
                           : "border-border-subtle text-text-secondary hover:border-accent-ai/40 hover:text-text-primary",
                       ].join(" ")}
+                      title={
+                        conversation.title && conversation.title.trim().length > 0
+                          ? conversation.title
+                          : `Conversation ${index + 1}`
+                      }
                     >
                       {conversation.title && conversation.title.trim().length > 0
                         ? conversation.title
@@ -597,31 +530,10 @@ export function ChatPanel({ document_id, get_document_context, on_apply_change }
         )}
       </div>
 
-      {/* Pending change — diff view with accept / reject */}
+      {/* Pending change hint — actual review UI lives over the document canvas */}
       {pending_change !== null && (
-        <div className="mx-3 mb-2 rounded-lg border border-accent-ai/30 bg-accent-ai/5 px-3 py-2.5 flex flex-col gap-2">
-          <p className="text-ui-xs font-semibold text-accent-ai">Proposed changes</p>
-          <DiffViewer
-            original_text={pending_change.original_text ?? ""}
-            proposed_text={pending_change.proposed_text}
-          />
-          <div className="flex gap-2 mt-1">
-            <button
-              onClick={() => {
-                on_apply_change?.(pending_change.proposed_text);
-                clear_pending_change();
-              }}
-              className="flex-1 rounded-md bg-accent-ai text-white text-ui-xs font-medium py-1.5 hover:bg-accent-ai/90 transition-colors"
-            >
-              Accept
-            </button>
-            <button
-              onClick={clear_pending_change}
-              className="flex-1 rounded-md border border-border-subtle text-text-secondary text-ui-xs font-medium py-1.5 hover:bg-surface transition-colors"
-            >
-              Reject
-            </button>
-          </div>
+        <div className="mx-3 mb-2 rounded-lg border border-accent-ai/30 bg-accent-ai/5 px-3 py-2 text-ui-xs text-accent-ai">
+          Proposed edit ready. Review and accept/reject it in the document area.
         </div>
       )}
 

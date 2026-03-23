@@ -38,7 +38,7 @@ export interface UseAiStreamReturn {
    * @param user_message - The text the user typed.
    * @param document_id - Document UUID, used when creating a new conversation.
    * @param document_context - Optional document plain text for AI context.
-   * @param model_id - Optional model override (e.g. "z-ai/glm-4.5-air:free").
+   * @param model_id - Optional model override.
    * @param agent_type - Optional agent type slug (e.g. "general"). Only sent in agent mode.
    */
   send_message: (
@@ -54,7 +54,6 @@ export interface UseAiStreamReturn {
   stop_generating: () => void;
   /**
    * Load existing conversation messages from the server.
-   * Called when the panel opens with an existing conversation.
    * @param conversation_id - Conversation UUID to load.
    */
   load_messages: (conversation_id: string) => Promise<void>;
@@ -75,17 +74,13 @@ export interface UseAiStreamReturn {
  * into the messages list. The streaming assistant message is updated in-place
  * as deltas arrive, then finalised when the "done" event is received.
  *
- * The hook does NOT interact with Tiptap directly — it only manages the
- * chat panel UI state. Per the FRONTEND.md spec, AI-generated document edits
- * flow through Tiptap Transactions separately.
- *
- * State management: local React state (ephemeral per-panel session).
+ * Also handles "tool_call" and "document_change" SSE events emitted by the
+ * general agent in agentic mode.
  */
-export function use_ai_stream(): UseAiStreamReturn {
+export function useAiStream(): UseAiStreamReturn {
   const [messages, set_messages] = useState<ChatMessage[]>([]);
   const [is_loading, set_is_loading] = useState(false);
   const [error, set_error] = useState<string | null>(null);
-  const [pending_change, set_pending_change] = useState<DocumentChangePayload | null>(null);
   const [tool_calls, set_tool_calls] = useState<string[]>([]);
 
   /** Ref to the AbortController so stop_generating can cancel inflight requests. */
@@ -94,7 +89,13 @@ export function use_ai_stream(): UseAiStreamReturn {
   /** Stable reference to the streaming assistant message ID being built. */
   const streaming_id_ref = useRef<string | null>(null);
 
-  const { active_conversation_id, set_conversation } = use_ai_store();
+  const {
+    active_conversation_id,
+    set_conversation,
+    pending_document_change,
+    set_pending_document_change,
+  } = use_ai_store();
+  const pending_change = pending_document_change;
 
   /**
    * Load messages from an existing conversation into local state.
@@ -123,8 +124,9 @@ export function use_ai_stream(): UseAiStreamReturn {
    * 2. Append the user message to local state immediately.
    * 3. Append a placeholder assistant message with is_streaming=true.
    * 4. Consume the SSE generator, updating the assistant message on each delta.
-   * 5. On "document_change" events, store the payload as pending_change.
-   * 6. Finalise the message on "done"; surface error on "error".
+   * 5. On "tool_call" events, accumulate tool names for the badge trace.
+   * 6. On "document_change" events, store the payload as pending_change.
+   * 7. Finalise the message on "done"; surface error on "error".
    */
   const send_message = useCallback(
     async (
@@ -144,7 +146,9 @@ export function use_ai_stream(): UseAiStreamReturn {
       let conversation_id = active_conversation_id;
       if (!conversation_id) {
         try {
-          const conversation = await create_conversation(document_id);
+          const generated_title =
+            user_message.length > 40 ? user_message.substring(0, 40) + "..." : user_message;
+          const conversation = await create_conversation(document_id, generated_title);
           conversation_id = conversation.id;
           set_conversation(conversation_id);
         } catch (err) {
@@ -163,12 +167,7 @@ export function use_ai_stream(): UseAiStreamReturn {
       streaming_id_ref.current = assistant_placeholder_id;
       set_messages((prev) => [
         ...prev,
-        {
-          id: assistant_placeholder_id,
-          role: "assistant",
-          content: "",
-          is_streaming: true,
-        },
+        { id: assistant_placeholder_id, role: "assistant", content: "", is_streaming: true },
       ]);
 
       // Set up cancellation.
@@ -188,7 +187,6 @@ export function use_ai_stream(): UseAiStreamReturn {
         for await (const chunk of stream) {
           if (chunk.type === "delta" && chunk.content) {
             const current_streaming_id = streaming_id_ref.current;
-            // Append the partial text to the assistant placeholder.
             set_messages((prev) =>
               prev.map((msg) =>
                 msg.id === current_streaming_id
@@ -196,28 +194,23 @@ export function use_ai_stream(): UseAiStreamReturn {
                   : msg,
               ),
             );
-          } else if (chunk.type === "document_change" && chunk.document_change) {
-            // Store the proposed document edit for the accept/reject banner.
-            set_pending_change(chunk.document_change);
           } else if (chunk.type === "tool_call" && chunk.tool_name) {
             // Accumulate tool names invoked during the agent run.
             set_tool_calls((prev) => [...prev, chunk.tool_name!]);
+          } else if (chunk.type === "document_change" && chunk.document_change) {
+            // Store the proposed document edit for the accept/reject diff viewer.
+            set_pending_document_change(chunk.document_change);
           } else if (chunk.type === "done") {
             const current_streaming_id = streaming_id_ref.current;
-            // Prefer the server-assigned message_id; fall back to the temporary
-            // streaming id. Both current_streaming_id and chunk.message_id may
-            // be null/undefined, so ensure we always produce a string.
             const final_id: string =
               chunk.message_id ?? current_streaming_id ?? crypto.randomUUID();
-
-            set_messages((prev) => {
-              return prev.map((msg) => {
-                if (msg.id === current_streaming_id) {
-                  return { ...msg, id: final_id, is_streaming: false };
-                }
-                return msg;
-              });
-            });
+            set_messages((prev) =>
+              prev.map((msg) =>
+                msg.id === current_streaming_id
+                  ? { ...msg, id: final_id, is_streaming: false }
+                  : msg,
+              ),
+            );
             streaming_id_ref.current = null;
           } else if (chunk.type === "error") {
             set_error(chunk.error ?? "AI service error");
@@ -227,7 +220,7 @@ export function use_ai_stream(): UseAiStreamReturn {
           }
         }
 
-        // If the stream ends naturally without a 'done' chunk
+        // If the stream ends without a 'done' chunk, finalise anyway.
         if (streaming_id_ref.current) {
           const current_streaming_id = streaming_id_ref.current;
           set_messages((prev) =>
@@ -240,7 +233,6 @@ export function use_ai_stream(): UseAiStreamReturn {
       } catch (err) {
         const current_streaming_id = streaming_id_ref.current;
         if ((err as Error).name === "AbortError") {
-          // User cancelled — finalise whatever we accumulated.
           set_messages((prev) =>
             prev.map((msg) =>
               msg.id === current_streaming_id ? { ...msg, is_streaming: false } : msg,
@@ -256,7 +248,7 @@ export function use_ai_stream(): UseAiStreamReturn {
         set_is_loading(false);
       }
     },
-    [is_loading, active_conversation_id, set_conversation],
+    [is_loading, active_conversation_id, set_conversation, set_pending_document_change],
   );
 
   /**
@@ -274,17 +266,17 @@ export function use_ai_stream(): UseAiStreamReturn {
     set_messages([]);
     set_error(null);
     set_is_loading(false);
-    set_pending_change(null);
+    set_pending_document_change(null);
     set_tool_calls([]);
     streaming_id_ref.current = null;
-  }, []);
+  }, [set_pending_document_change]);
 
   /**
    * Clear the pending document change (called after accept or reject).
    */
   const clear_pending_change = useCallback(() => {
-    set_pending_change(null);
-  }, []);
+    set_pending_document_change(null);
+  }, [set_pending_document_change]);
 
   return {
     messages,

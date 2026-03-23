@@ -16,8 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
-import { stream_ai_response, create_conversation } from "../../ai-assistant/api/ai_api";
-import { use_ai_store } from "../../../stores/ai_store";
+import { stream_ai_response } from "../../ai-assistant/api/ai_api";
 
 /** Options for the useGhostText hook. */
 interface UseGhostTextOptions {
@@ -25,8 +24,6 @@ interface UseGhostTextOptions {
   editor: Editor | null;
   /** Current AI conversation UUID (null if no conversation is active). */
   conversation_id: string | null;
-  /** UUID of the document being edited, used to auto-create a conversation. */
-  document_id: string;
 }
 
 /** Return type of the useGhostText hook. */
@@ -68,19 +65,12 @@ function get_cursor_context(editor: Editor): string {
  * @param options - Configuration options.
  * @returns State and handlers for the ghost text feature.
  */
-export function useGhostText({
-  editor,
-  conversation_id,
-  document_id,
-}: UseGhostTextOptions): UseGhostTextReturn {
+export function useGhostText({ editor, conversation_id }: UseGhostTextOptions): UseGhostTextReturn {
   const [is_loading, set_is_loading] = useState(false);
   const [suggestion, set_suggestion] = useState("");
 
   /** Holds the AbortController for the current in-flight stream, if any. */
   const abort_ref = useRef<AbortController | null>(null);
-
-  /** Read the shared model ID and conversation setter from the global AI store. */
-  const { selected_model_id, set_conversation } = use_ai_store();
 
   /**
    * Cancel any in-flight request and clear ghost text from the editor.
@@ -109,34 +99,18 @@ export function useGhostText({
   /**
    * Stream an inline AI completion for the current paragraph context.
    *
-   * If no conversation is active, one is auto-created for the document so
-   * ghost text works without requiring the user to open the chat panel first.
-   *
    * Sends the paragraph text to the AI service via `stream_ai_response`
    * (which handles Supabase auth internally) and streams the response back
    * as ghost text. Each incoming SSE delta updates the decoration in real
    * time so the user can preview the suggestion as it grows.
    */
   const trigger_suggestion = useCallback(async () => {
-    if (!editor) return;
+    if (!editor || !conversation_id) return;
 
     dismiss_suggestion();
 
     const context = get_cursor_context(editor);
     if (!context.trim()) return;
-
-    // Auto-create a conversation for ghost text if none exists.
-    let conv_id = conversation_id;
-    if (!conv_id) {
-      try {
-        const conv = await create_conversation(document_id);
-        conv_id = conv.id;
-        set_conversation(conv_id);
-      } catch {
-        // Silently fail — ghost text is best-effort.
-        return;
-      }
-    }
 
     set_is_loading(true);
     const controller = new AbortController();
@@ -144,10 +118,9 @@ export function useGhostText({
 
     try {
       const generator = stream_ai_response({
-        conversation_id: conv_id,
+        conversation_id,
         message: `Continue the following text naturally (respond with only the continuation, no preamble): "${context}"`,
         document_context: context,
-        model_id: selected_model_id,
         signal: controller.signal,
       });
 
@@ -175,14 +148,7 @@ export function useGhostText({
     } finally {
       set_is_loading(false);
     }
-  }, [
-    editor,
-    conversation_id,
-    document_id,
-    selected_model_id,
-    set_conversation,
-    dismiss_suggestion,
-  ]);
+  }, [editor, conversation_id, dismiss_suggestion]);
 
   /**
    * Register keyboard shortcuts on the editor DOM element.

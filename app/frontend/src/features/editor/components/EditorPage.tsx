@@ -118,6 +118,7 @@ interface DocumentChangeReviewOverlayProps {
   pending_change: DocumentChangePayload;
   on_accept: () => void;
   on_reject: () => void;
+  is_accepting?: boolean;
 }
 
 /**
@@ -128,6 +129,7 @@ function DocumentChangeReviewOverlay({
   pending_change,
   on_accept,
   on_reject,
+  is_accepting = false,
 }: DocumentChangeReviewOverlayProps) {
   const full_diff = compute_line_diff(
     pending_change.original_text ?? "",
@@ -195,16 +197,18 @@ function DocumentChangeReviewOverlay({
         <div className="flex items-center justify-end gap-2 px-3 py-2">
           <button
             onClick={on_reject}
+            disabled={is_accepting}
             className="rounded-md border border-border-subtle px-3 py-1.5 text-ui-xs font-medium text-text-secondary hover:bg-app transition-colors"
           >
             Reject
           </button>
           <button
             onClick={on_accept}
+            disabled={is_accepting}
             className="flex items-center gap-1.5 rounded-md bg-accent-ai px-3 py-1.5 text-ui-xs font-medium text-white hover:bg-accent-ai/90 transition-colors"
           >
             <Check className="h-3 w-3" />
-            Accept
+            {is_accepting ? "Applying..." : "Accept"}
           </button>
         </div>
       </div>
@@ -230,6 +234,9 @@ export function EditorPage() {
   const [save_status, set_save_status] = useState<SaveStatus>("idle");
   const [title, set_title] = useState("");
   const [is_title_focused, set_is_title_focused] = useState(false);
+  const [is_accepting_change, set_is_accepting_change] = useState(false);
+  const [editor_mount_key, set_editor_mount_key] = useState(0);
+  const [editor_content_override, set_editor_content_override] = useState<JSONContent | null>(null);
   const debounce_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const title_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -238,10 +245,10 @@ export function EditorPage() {
   const editor_ref = useRef<Editor | null>(null);
 
   /**
-   * Stores the editor's original HTML before an AI preview is applied so the
-   * user can reject and revert the change.
+   * Stores the editor's original JSON content before an AI preview is applied
+   * so the user can reject and revert the change.
    */
-  const original_content_ref = useRef<string | null>(null);
+  const original_content_ref = useRef<JSONContent | null>(null);
 
   /**
    * Monotonic token used to tell ChatPanel when an external accept/reject
@@ -259,6 +266,39 @@ export function EditorPage() {
    * which must re-register keyboard listeners whenever the editor changes.
    */
   const [editor_instance, set_editor_instance] = useState<Editor | null>(null);
+
+  const debug_log = useCallback((event: string, payload?: unknown) => {
+    if (typeof window === "undefined") return;
+    if (!(window as Window & { __caret_debug?: boolean }).__caret_debug) return;
+    if (payload === undefined) {
+      console.log(`[caret/editor] ${event}`);
+      return;
+    }
+    console.log(`[caret/editor] ${event}`, payload);
+  }, []);
+
+  /**
+   * Returns the current live editor instance (guards against stale destroyed refs).
+   */
+  const get_active_editor = useCallback((): Editor | null => {
+    if (editor_ref.current && !editor_ref.current.isDestroyed) {
+      return editor_ref.current;
+    }
+
+    if (editor_instance && !editor_instance.isDestroyed) {
+      editor_ref.current = editor_instance;
+      return editor_instance;
+    }
+
+    return null;
+  }, [editor_instance]);
+
+  useEffect(() => {
+    if (editor_instance && !editor_instance.isDestroyed) {
+      editor_ref.current = editor_instance;
+      debug_log("editor_instance.synced_to_ref");
+    }
+  }, [editor_instance, debug_log]);
 
   const { add_tab, update_tab_title } = use_tabs_store();
 
@@ -292,6 +332,14 @@ export function EditorPage() {
     window.addEventListener("keydown", handle_keydown);
     return () => window.removeEventListener("keydown", handle_keydown);
   }, [toggle_panel]);
+
+  /** Reset editor override state when switching documents. */
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    set_editor_content_override(null);
+     
+    set_editor_mount_key(0);
+  }, [document_id]);
 
   /** Sync title from server data when document loads. */
   useEffect(() => {
@@ -352,6 +400,7 @@ export function EditorPage() {
     (json: JSONContent, text: string) => {
       // Don't autosave while previewing an AI change, to avoid saving unaccepted changes.
       if (use_ai_store.getState().pending_document_change !== null) {
+        debug_log("handle_update.blocked_by_pending_change");
         return;
       }
 
@@ -361,12 +410,16 @@ export function EditorPage() {
 
       debounce_timer_ref.current = setTimeout(async () => {
         set_save_status("saving");
+        debug_log("handle_update.saving_start", {
+          text_length: text.length,
+        });
 
         try {
           await save_mutation.mutateAsync({
             content_json: json as Record<string, unknown>,
             content_text: text,
           });
+          debug_log("handle_update.saving_success");
           show_saved();
 
           // Re-index embeddings in the background; never block the UI on this.
@@ -376,11 +429,12 @@ export function EditorPage() {
             });
           }
         } catch {
+          debug_log("handle_update.saving_error");
           set_save_status("error");
         }
       }, AUTOSAVE_DELAY_MS);
     },
-    [save_mutation, show_saved, document_id],
+    [save_mutation, show_saved, document_id, debug_log],
   );
 
   /**
@@ -413,7 +467,7 @@ export function EditorPage() {
   /**
    * Handle title blur — save immediately if changed.
    */
-  const handle_title_blur = useCallback(async () => {
+  const handle_title_blur = async () => {
     set_is_title_focused(false);
     if (title_timer_ref.current) {
       clearTimeout(title_timer_ref.current);
@@ -432,27 +486,106 @@ export function EditorPage() {
     if (!trimmed) {
       set_title(document?.title || "Untitled");
     }
-  }, [title, document?.title, save_mutation, show_saved, document_id, update_tab_title]);
+  };
 
   /**
-   * Convert agent plain-text proposals into Tiptap-friendly HTML.
+   * Convert agent plain-text proposals into Tiptap JSON content.
    */
-  const to_editor_html = useCallback((proposed_text: string): string => {
-    return proposed_text
-      .split(/\n{2,}/)
-      .map((para) => `<p>${para.replace(/\n/g, "<br>")}</p>`)
-      .join("");
+  const to_editor_json = useCallback((proposed_text: string): JSONContent => {
+    const paragraphs = proposed_text.split(/\n{2,}/).map((paragraph_text) => {
+      const lines = paragraph_text.split("\n");
+      const content: JSONContent[] = [];
+
+      lines.forEach((line, idx) => {
+        if (line.length > 0) {
+          content.push({ type: "text", text: line });
+        }
+
+        if (idx < lines.length - 1) {
+          content.push({ type: "hardBreak" });
+        }
+      });
+
+      return content.length > 0 ? { type: "paragraph", content } : { type: "paragraph" };
+    });
+
+    return {
+      type: "doc",
+      content: paragraphs.length > 0 ? paragraphs : [{ type: "paragraph" }],
+    };
   }, []);
+
+  const to_editor_json_preserving_blocks = useCallback(
+    (base_content: JSONContent, proposed_text: string): JSONContent | null => {
+      const base_blocks = base_content.content;
+      if (!base_blocks || base_blocks.length === 0) return null;
+
+      const are_supported_blocks = base_blocks.every(
+        (block) => block.type === "paragraph" || block.type === "heading",
+      );
+      if (!are_supported_blocks) return null;
+
+      const paragraphs = proposed_text.split(/\n{2,}/);
+      if (paragraphs.length !== base_blocks.length) return null;
+
+      const next_blocks = base_blocks.map((block, index) => {
+        const block_text = paragraphs[index] ?? "";
+        const lines = block_text.split("\n");
+        const first_text_marks = block.content?.find(
+          (child) => child.type === "text" && child.marks,
+        )?.marks;
+        const next_inline: JSONContent[] = [];
+
+        lines.forEach((line, line_index) => {
+          if (line.length > 0) {
+            next_inline.push(
+              first_text_marks
+                ? { type: "text", text: line, marks: first_text_marks }
+                : { type: "text", text: line },
+            );
+          }
+
+          if (line_index < lines.length - 1) {
+            next_inline.push({ type: "hardBreak" });
+          }
+        });
+
+        return {
+          ...block,
+          content: next_inline.length > 0 ? next_inline : undefined,
+        };
+      });
+
+      return {
+        ...base_content,
+        content: next_blocks,
+      };
+    },
+    [],
+  );
 
   /**
    * Apply editor content from UI-driven preview/revert flows.
    */
-  const apply_editor_content_without_save = useCallback((next_content: string): boolean => {
-    if (!editor_ref.current || editor_ref.current.isDestroyed) return false;
-    // We emit the update so the React view re-renders properly.
-    // Autosaves during preview are blocked by checking use_ai_store.getState().pending_document_change.
-    return editor_ref.current.commands.setContent(next_content);
-  }, []);
+  const apply_editor_content_without_save = useCallback(
+    (next_content: JSONContent): boolean => {
+      const active_editor = get_active_editor();
+      if (!active_editor) {
+        debug_log("apply_editor_content_without_save.no_active_editor");
+        return false;
+      }
+      // We emit the update so the React view re-renders properly.
+      // Autosaves during preview are blocked by checking use_ai_store.getState().pending_document_change.
+      // Apply via commands API directly to avoid chain-state edge cases.
+      const applied = active_editor.commands.setContent(next_content, { emitUpdate: true });
+      debug_log("apply_editor_content_without_save.result", {
+        applied,
+        text_after: active_editor.getText(),
+      });
+      return applied;
+    },
+    [get_active_editor, debug_log],
+  );
 
   /**
    * Try to apply the pending preview to the editor exactly once per payload.
@@ -460,7 +593,8 @@ export function EditorPage() {
    */
   const apply_pending_preview_if_needed = useCallback(
     (next_pending_change: DocumentChangePayload): boolean => {
-      if (!editor_ref.current || editor_ref.current.isDestroyed) {
+      const active_editor = get_active_editor();
+      if (!active_editor) {
         return false;
       }
 
@@ -470,13 +604,11 @@ export function EditorPage() {
       }
 
       if (original_content_ref.current === null) {
-        original_content_ref.current = editor_ref.current.getHTML();
+        original_content_ref.current = active_editor.getJSON();
       }
 
-      const html = to_editor_html(next_pending_change.proposed_text);
-      const was_applied = apply_editor_content_without_save(
-        html || next_pending_change.proposed_text,
-      );
+      const next_content = to_editor_json(next_pending_change.proposed_text);
+      const was_applied = apply_editor_content_without_save(next_content);
       if (!was_applied) {
         return false;
       }
@@ -484,7 +616,7 @@ export function EditorPage() {
       applied_preview_key_ref.current = preview_key;
       return true;
     },
-    [to_editor_html, apply_editor_content_without_save],
+    [to_editor_json, apply_editor_content_without_save, get_active_editor],
   );
 
   /**
@@ -500,8 +632,11 @@ export function EditorPage() {
    * Reject the current pending change and restore the original editor content.
    */
   const handle_reject_pending_change = useCallback(() => {
+    set_is_accepting_change(false);
     if (original_content_ref.current !== null) {
       apply_editor_content_without_save(original_content_ref.current);
+      set_editor_content_override(original_content_ref.current);
+      set_editor_mount_key((prev) => prev + 1);
     }
 
     original_content_ref.current = null;
@@ -516,11 +651,26 @@ export function EditorPage() {
    * to autosave and clears review state.
    */
   const handle_accept_pending_change = useCallback(() => {
-    if (pending_change !== null && editor_ref.current && !editor_ref.current.isDestroyed) {
-      const html = to_editor_html(pending_change.proposed_text);
-      const was_applied = apply_editor_content_without_save(html || pending_change.proposed_text);
+    if (is_accepting_change) return;
+    set_is_accepting_change(true);
+
+    const active_editor = get_active_editor();
+    debug_log("handle_accept_pending_change.clicked", {
+      has_pending: pending_change !== null,
+      has_active_editor: Boolean(active_editor),
+    });
+
+    if (pending_change !== null && active_editor) {
+      const structured_content = to_editor_json_preserving_blocks(
+        active_editor.getJSON(),
+        pending_change.proposed_text,
+      );
+      const next_content = structured_content ?? to_editor_json(pending_change.proposed_text);
+      const was_applied = apply_editor_content_without_save(next_content);
       if (!was_applied) {
+        debug_log("handle_accept_pending_change.apply_failed");
         set_save_status("error");
+        set_is_accepting_change(false);
         return;
       }
 
@@ -529,8 +679,37 @@ export function EditorPage() {
       original_content_ref.current = null;
       applied_preview_key_ref.current = null;
       set_resolve_pending_change_token((prev) => prev + 1);
+      // Hard fallback: remount editor with accepted content to guarantee visible UI update.
+      set_editor_content_override(next_content);
+      set_editor_mount_key((prev) => prev + 1);
 
-      handle_update(editor_ref.current.getJSON(), editor_ref.current.getText());
+      handle_update(next_content, pending_change.proposed_text);
+      set_is_accepting_change(false);
+      return;
+    }
+
+    if (pending_change !== null) {
+      // Fallback path when the live editor instance is temporarily unavailable.
+      // Persist and remount using the accepted content so UI and storage converge.
+      debug_log("handle_accept_pending_change.no_active_editor_fallback");
+      const base_document_content = document?.content_json as JSONContent | undefined;
+      const base_content =
+        original_content_ref.current ?? editor_content_override ?? base_document_content ?? null;
+      const structured_content =
+        base_content !== null
+          ? to_editor_json_preserving_blocks(base_content, pending_change.proposed_text)
+          : null;
+      const next_content = structured_content ?? to_editor_json(pending_change.proposed_text);
+
+      set_pending_document_change(null);
+      original_content_ref.current = null;
+      applied_preview_key_ref.current = null;
+      set_resolve_pending_change_token((prev) => prev + 1);
+      set_editor_content_override(next_content);
+      set_editor_mount_key((prev) => prev + 1);
+
+      handle_update(next_content, pending_change.proposed_text);
+      set_is_accepting_change(false);
       return;
     }
 
@@ -538,9 +717,16 @@ export function EditorPage() {
     applied_preview_key_ref.current = null;
     set_pending_document_change(null);
     set_resolve_pending_change_token((prev) => prev + 1);
+    set_is_accepting_change(false);
   }, [
+    is_accepting_change,
     pending_change,
-    to_editor_html,
+    get_active_editor,
+    debug_log,
+    document?.content_json,
+    editor_content_override,
+    to_editor_json,
+    to_editor_json_preserving_blocks,
     apply_editor_content_without_save,
     handle_update,
     set_pending_document_change,
@@ -615,15 +801,29 @@ export function EditorPage() {
               pending_change={pending_change}
               on_accept={handle_accept_pending_change}
               on_reject={handle_reject_pending_change}
+              is_accepting={is_accepting_change}
             />
           )}
 
           <CaretEditor
-            content={document.content_json as JSONContent | undefined}
+            key={editor_mount_key}
+            content={(editor_content_override ?? document.content_json) as JSONContent | undefined}
             on_update={handle_update}
             on_editor_ready={(ed) => {
+              // In React StrictMode the editor may mount twice in development.
+              // Reset preview bookkeeping whenever we receive a new editor instance
+              // so pending AI changes are re-applied to the live instance.
+              if (editor_ref.current !== ed) {
+                original_content_ref.current = null;
+                applied_preview_key_ref.current = null;
+              }
+
               editor_ref.current = ed;
               set_editor_instance(ed);
+              debug_log("on_editor_ready", {
+                mount_key: editor_mount_key,
+                has_pending: pending_document_change !== null,
+              });
               if (pending_document_change !== null) {
                 apply_pending_preview_if_needed(pending_document_change);
               }

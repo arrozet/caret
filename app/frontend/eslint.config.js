@@ -22,11 +22,5 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
-    rules: {
-      // The project uses snake_case naming for all identifiers (see AGENTS.md).
-      // React's hooks lint rule only recognises camelCase "use*" functions, so
-      // we relax it to "warn" here to allow snake_case custom hooks (use_foo).
-      "react-hooks/rules-of-hooks": "warn",
-    },
   },
 ]);
