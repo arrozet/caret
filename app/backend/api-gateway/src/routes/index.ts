@@ -34,7 +34,6 @@ function create_proxy(target_url: string): ReturnType<typeof proxy> {
  *   /api/v1/workspaces/*   → document-service (port 3002)
  *   /api/v1/folders/*      → document-service (port 3002)
  *   /api/v1/ai/*           → ai-service       (port 8000)
- *   /api/v1/embeddings/*   → ai-service       (port 8000)
  */
 export function register_routes(app: Express): void {
   /* --- Auth Service --- */
@@ -52,9 +51,6 @@ export function register_routes(app: Express): void {
   /* --- AI Service --- */
   app.use("/api/v1/ai", create_proxy(config.AI_SERVICE_URL));
 
-  /* --- Embeddings (handled by ai-service, separate path prefix) --- */
-  app.use("/api/v1/embeddings", create_proxy(config.AI_SERVICE_URL));
-
   /* --- API info endpoint --- */
   app.get("/api/v1", (_req: Request, res: Response) => {
     res.json({
@@ -66,7 +62,6 @@ export function register_routes(app: Express): void {
         "/api/v1/workspaces",
         "/api/v1/folders",
         "/api/v1/ai",
-        "/api/v1/embeddings",
       ],
     });
   });

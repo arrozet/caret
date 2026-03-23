@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import create_async_engine  # noqa: E402
 # autogenerate support.
 from app.core.config import settings  # noqa: E402
 from app.db.session import _normalize_database_url  # noqa: E402
-from app.models.ai import Base  # noqa: F401, E402 — registers all ORM models
+from app.models.ai import Base  # noqa: F401,E402 — registers all ORM models
 
 # ---------------------------------------------------------------------------
 # Alembic Config object (gives access to values from alembic.ini)

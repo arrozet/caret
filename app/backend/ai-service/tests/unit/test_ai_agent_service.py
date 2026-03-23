@@ -6,6 +6,7 @@ without any external dependencies (no DB, no LLM API keys needed).
 """
 
 import json
+import os
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
@@ -15,6 +16,14 @@ import pytest
 
 from app.models.ai import AiMessageRole
 from app.services.ai_agent_service import AiAgentService, _build_model
+
+
+class _FakeAgentMessage:
+    """Lightweight message container exposing only the `parts` attribute."""
+
+    def __init__(self, parts: list) -> None:
+        self.parts = parts
+
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -241,6 +250,168 @@ class TestAiAgentServiceStreaming:
     Verifies the correct SSE event sequence (delta → done) and error handling
     for missing LLM API keys and agent exceptions, without calling real LLMs.
     """
+
+    @pytest.mark.asyncio
+    async def test_stream_response_general_falls_back_to_replacement_text_tool_args(self) -> None:
+        """General-agent stream emits document_change when tool args use replacement_text."""
+        # Arrange
+        from pydantic_ai.messages import ToolCallPart
+
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Texto mejorado.",
+        )
+
+        async def fake_stream_text(delta: bool = False) -> AsyncGenerator[str, None]:
+            """Fake async generator simulating one streamed assistant token chunk."""
+            yield "Texto mejorado."
+
+        mock_result = MagicMock()
+        mock_result.stream_text = fake_stream_text
+        mock_result.all_messages = MagicMock(
+            return_value=[
+                _FakeAgentMessage(
+                    [
+                        ToolCallPart(tool_name="get_document_content", args={}),
+                        ToolCallPart(
+                            tool_name="propose_document_replacement",
+                            args={"replacement_text": "Documento completo mejorado."},
+                        ),
+                    ]
+                )
+            ]
+        )
+
+        mock_agent_ctx = MagicMock()
+        mock_agent_ctx.__aenter__ = AsyncMock(return_value=mock_result)
+        mock_agent_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.run_stream = MagicMock(return_value=mock_agent_ctx)
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "app.services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "app.agents.general_agent.build_general_agent",
+                return_value=mock_agent_instance,
+            ),
+        ):
+            # Act
+            service = AiAgentService(session)
+            chunks = []
+            async for chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Mejora la intro",
+                document_context="Texto original",
+                agent_type="general",
+            ):
+                chunks.append(json.loads(chunk.removeprefix("data: ").strip()))
+
+        # Assert
+        document_change_chunks = [c for c in chunks if c.get("type") == "document_change"]
+        assert len(document_change_chunks) == 1
+        assert (
+            document_change_chunks[0]["document_change"]["proposed_text"]
+            == "Documento completo mejorado."
+        )
+        assert document_change_chunks[0]["document_change"]["original_text"] == "Texto original"
+
+    @pytest.mark.asyncio
+    async def test_stream_response_general_emits_fallback_change_once_for_duplicate_tool_args(
+        self,
+    ) -> None:
+        """Duplicate replacement args from repeated tool calls produce one document_change event."""
+        # Arrange
+        from pydantic_ai.messages import ToolCallPart
+
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Texto final.",
+        )
+
+        async def fake_stream_text(delta: bool = False) -> AsyncGenerator[str, None]:
+            """Fake async generator simulating one streamed assistant token chunk."""
+            yield "Texto final."
+
+        repeated_text = "Documento final único."
+        mock_result = MagicMock()
+        mock_result.stream_text = fake_stream_text
+        mock_result.all_messages = MagicMock(
+            return_value=[
+                _FakeAgentMessage(
+                    [
+                        ToolCallPart(
+                            tool_name="propose_document_replacement",
+                            args={"replacement_text": repeated_text},
+                        ),
+                        ToolCallPart(
+                            tool_name="propose_document_replacement",
+                            args={"replacement_text": repeated_text},
+                        ),
+                    ]
+                )
+            ]
+        )
+
+        mock_agent_ctx = MagicMock()
+        mock_agent_ctx.__aenter__ = AsyncMock(return_value=mock_result)
+        mock_agent_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.run_stream = MagicMock(return_value=mock_agent_ctx)
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "app.services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "app.agents.general_agent.build_general_agent",
+                return_value=mock_agent_instance,
+            ),
+        ):
+            # Act
+            service = AiAgentService(session)
+            chunks = []
+            async for chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Hazlo mejor",
+                document_context="Texto base",
+                agent_type="general",
+            ):
+                chunks.append(json.loads(chunk.removeprefix("data: ").strip()))
+
+        # Assert
+        document_change_chunks = [c for c in chunks if c.get("type") == "document_change"]
+        assert len(document_change_chunks) == 1
+        assert document_change_chunks[0]["document_change"]["proposed_text"] == repeated_text
 
     @pytest.mark.asyncio
     async def test_stream_response_yields_delta_and_done(self) -> None:

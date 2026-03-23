@@ -414,6 +414,7 @@ class AiAgentService:
 
             deps = GeneralAgentDeps(document_content=document_context)
             agent_instance = build_general_agent(model)
+            fallback_proposed_texts: list[str] = []
 
             try:
                 async with agent_instance.run_stream(full_prompt, deps=deps) as result:
@@ -437,6 +438,25 @@ class AiAgentService:
                                     )
                                     yield f"data: {tool_chunk.model_dump_json()}\n\n"
 
+                                    if part.tool_name == "propose_document_replacement":
+                                        args_dict: dict[str, object] = {}
+                                        try:
+                                            args_dict = part.args_as_dict()
+                                        except Exception:
+                                            args = getattr(part, "args", None)
+                                            if isinstance(args, dict):
+                                                args_dict = args
+
+                                        proposed_text = args_dict.get("proposed_text")
+                                        replacement_text = args_dict.get("replacement_text")
+                                        candidate_text = proposed_text or replacement_text
+
+                                        if (
+                                            isinstance(candidate_text, str)
+                                            and candidate_text.strip()
+                                        ):
+                                            fallback_proposed_texts.append(candidate_text)
+
             except Exception as exc:
                 logger.exception("General agent streaming error: %s", exc)
                 error_chunk = StreamChunk(
@@ -445,7 +465,22 @@ class AiAgentService:
                 yield f"data: {error_chunk.model_dump_json()}\n\n"
                 return
 
-            for change in deps.proposed_changes:
+            changes_to_emit = list(deps.proposed_changes)
+            if not changes_to_emit and fallback_proposed_texts:
+                seen_texts: set[str] = set()
+                for proposed_text in fallback_proposed_texts:
+                    if proposed_text in seen_texts:
+                        continue
+                    seen_texts.add(proposed_text)
+                    changes_to_emit.append(
+                        {
+                            "operation": "replace_full",
+                            "proposed_text": proposed_text,
+                            "original_text": document_context or "",
+                        }
+                    )
+
+            for change in changes_to_emit:
                 change_payload = DocumentChangePayload(
                     operation=change["operation"],
                     proposed_text=change["proposed_text"],
