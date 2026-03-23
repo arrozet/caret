@@ -21,6 +21,26 @@ Document writing is not as "agile" as code writing with modern AI tools. No majo
 
 ## Development Guidelines
 
+### Code Agent Execution Guidelines
+
+These guidelines exist to **finish sooner**, **preserve useful context**, and **avoid expensive exploration**.
+
+#### Subagent orchestration (parallel / sequential)
+
+- **Divide and conquer**: delegate scoped tasks (targeted search, small file reads, validation, command execution) to subagents.
+- **Run in parallel when possible**: if tasks are independent (e.g. locating files + checking docs + symbol lookup), spawn subagents concurrently to reduce wall-clock time.
+- **Run sequentially when dependent**: if a task depends on another task’s output (e.g. “find the correct file” → “edit it”), chain subagents in sequence.
+- **Protect the primary context window**: keep high-level requirements/decisions/risks in the main agent, and offload mechanical work to subagents so the primary context stays clean and focused.
+
+#### Default rule: avoid reading the whole codebase
+
+- **Do not perform full-repo scans** unless strictly necessary.
+- **Prefer fast sources of truth first**:
+  - `docs/guidance/*.md` for architecture, contracts, and conventions.
+  - `.agents/skills/*` for recommended procedures and patterns.
+  - Files directly referenced by the user (paths like `@...`) or pointed to by the docs.
+- **Explore the minimum necessary**: start with the most likely directory and narrow quickly; avoid opening large files “just in case”.
+
 ### Design Principles
 
 - **Design Patterns**: Prioritize the use of established design patterns to create a scalable, extensible, and maintainable codebase.
