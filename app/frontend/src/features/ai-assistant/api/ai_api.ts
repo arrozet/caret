@@ -7,8 +7,8 @@ import { api_fetch } from "../../../lib/api_client";
  */
 const AI_BASE = "/ai";
 
-/** Base URL for embedding service endpoints. */
-const EMBEDDINGS_BASE = "/embeddings";
+/** Base URL for embedding service endpoints behind the AI gateway prefix. */
+const EMBEDDINGS_BASE = `${AI_BASE}/embeddings`;
 
 // ---------------------------------------------------------------------------
 // Response shape types (mirrors the Python Pydantic DTOs)

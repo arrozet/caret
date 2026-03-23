@@ -337,7 +337,7 @@ export function EditorPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     set_editor_content_override(null);
-     
+
     set_editor_mount_key(0);
   }, [document_id]);
 
@@ -491,29 +491,47 @@ export function EditorPage() {
   /**
    * Convert agent plain-text proposals into Tiptap JSON content.
    */
-  const to_editor_json = useCallback((proposed_text: string): JSONContent => {
-    const paragraphs = proposed_text.split(/\n{2,}/).map((paragraph_text) => {
-      const lines = paragraph_text.split("\n");
-      const content: JSONContent[] = [];
-
-      lines.forEach((line, idx) => {
-        if (line.length > 0) {
-          content.push({ type: "text", text: line });
-        }
-
-        if (idx < lines.length - 1) {
-          content.push({ type: "hardBreak" });
-        }
-      });
-
-      return content.length > 0 ? { type: "paragraph", content } : { type: "paragraph" };
+  const normalize_proposed_text = useCallback((input_text: string): string => {
+    const normalized_newlines = input_text.replace(/\r\n/g, "\n");
+    const paragraphs = normalized_newlines.split(/\n{2,}/).map((paragraph_text) => {
+      return paragraph_text
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join(" ");
     });
 
-    return {
-      type: "doc",
-      content: paragraphs.length > 0 ? paragraphs : [{ type: "paragraph" }],
-    };
+    const compacted = paragraphs.filter(Boolean).join("\n\n").trim();
+    return compacted.length > 0 ? compacted : input_text.trim();
   }, []);
+
+  const to_editor_json = useCallback(
+    (proposed_text: string): JSONContent => {
+      const normalized_text = normalize_proposed_text(proposed_text);
+      const paragraphs = normalized_text.split(/\n{2,}/).map((paragraph_text) => {
+        const lines = paragraph_text.split("\n");
+        const content: JSONContent[] = [];
+
+        lines.forEach((line, idx) => {
+          if (line.length > 0) {
+            content.push({ type: "text", text: line });
+          }
+
+          if (idx < lines.length - 1) {
+            content.push({ type: "hardBreak" });
+          }
+        });
+
+        return content.length > 0 ? { type: "paragraph", content } : { type: "paragraph" };
+      });
+
+      return {
+        type: "doc",
+        content: paragraphs.length > 0 ? paragraphs : [{ type: "paragraph" }],
+      };
+    },
+    [normalize_proposed_text],
+  );
 
   const to_editor_json_preserving_blocks = useCallback(
     (base_content: JSONContent, proposed_text: string): JSONContent | null => {
@@ -525,7 +543,8 @@ export function EditorPage() {
       );
       if (!are_supported_blocks) return null;
 
-      const paragraphs = proposed_text.split(/\n{2,}/);
+      const normalized_text = normalize_proposed_text(proposed_text);
+      const paragraphs = normalized_text.split(/\n{2,}/);
       if (paragraphs.length !== base_blocks.length) return null;
 
       const next_blocks = base_blocks.map((block, index) => {
@@ -561,7 +580,7 @@ export function EditorPage() {
         content: next_blocks,
       };
     },
-    [],
+    [normalize_proposed_text],
   );
 
   /**
@@ -598,7 +617,8 @@ export function EditorPage() {
         return false;
       }
 
-      const preview_key = `${next_pending_change.original_text ?? ""}__${next_pending_change.proposed_text}`;
+      const normalized_proposed_text = normalize_proposed_text(next_pending_change.proposed_text);
+      const preview_key = `${next_pending_change.original_text ?? ""}__${normalized_proposed_text}`;
       if (applied_preview_key_ref.current === preview_key) {
         return true;
       }
@@ -607,7 +627,7 @@ export function EditorPage() {
         original_content_ref.current = active_editor.getJSON();
       }
 
-      const next_content = to_editor_json(next_pending_change.proposed_text);
+      const next_content = to_editor_json(normalized_proposed_text);
       const was_applied = apply_editor_content_without_save(next_content);
       if (!was_applied) {
         return false;
@@ -616,7 +636,7 @@ export function EditorPage() {
       applied_preview_key_ref.current = preview_key;
       return true;
     },
-    [to_editor_json, apply_editor_content_without_save, get_active_editor],
+    [normalize_proposed_text, to_editor_json, apply_editor_content_without_save, get_active_editor],
   );
 
   /**
@@ -661,11 +681,12 @@ export function EditorPage() {
     });
 
     if (pending_change !== null && active_editor) {
+      const accepted_text = normalize_proposed_text(pending_change.proposed_text);
       const structured_content = to_editor_json_preserving_blocks(
         active_editor.getJSON(),
-        pending_change.proposed_text,
+        accepted_text,
       );
-      const next_content = structured_content ?? to_editor_json(pending_change.proposed_text);
+      const next_content = structured_content ?? to_editor_json(accepted_text);
       const was_applied = apply_editor_content_without_save(next_content);
       if (!was_applied) {
         debug_log("handle_accept_pending_change.apply_failed");
@@ -683,7 +704,7 @@ export function EditorPage() {
       set_editor_content_override(next_content);
       set_editor_mount_key((prev) => prev + 1);
 
-      handle_update(next_content, pending_change.proposed_text);
+      handle_update(next_content, accepted_text);
       set_is_accepting_change(false);
       return;
     }
@@ -692,14 +713,15 @@ export function EditorPage() {
       // Fallback path when the live editor instance is temporarily unavailable.
       // Persist and remount using the accepted content so UI and storage converge.
       debug_log("handle_accept_pending_change.no_active_editor_fallback");
+      const accepted_text = normalize_proposed_text(pending_change.proposed_text);
       const base_document_content = document?.content_json as JSONContent | undefined;
       const base_content =
         original_content_ref.current ?? editor_content_override ?? base_document_content ?? null;
       const structured_content =
         base_content !== null
-          ? to_editor_json_preserving_blocks(base_content, pending_change.proposed_text)
+          ? to_editor_json_preserving_blocks(base_content, accepted_text)
           : null;
-      const next_content = structured_content ?? to_editor_json(pending_change.proposed_text);
+      const next_content = structured_content ?? to_editor_json(accepted_text);
 
       set_pending_document_change(null);
       original_content_ref.current = null;
@@ -708,7 +730,7 @@ export function EditorPage() {
       set_editor_content_override(next_content);
       set_editor_mount_key((prev) => prev + 1);
 
-      handle_update(next_content, pending_change.proposed_text);
+      handle_update(next_content, accepted_text);
       set_is_accepting_change(false);
       return;
     }
@@ -725,6 +747,7 @@ export function EditorPage() {
     debug_log,
     document?.content_json,
     editor_content_override,
+    normalize_proposed_text,
     to_editor_json,
     to_editor_json_preserving_blocks,
     apply_editor_content_without_save,
