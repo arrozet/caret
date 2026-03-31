@@ -101,12 +101,12 @@ class TestIndexEndpointAuth:
     """
 
     async def test_index_requires_auth(self, client) -> None:
-        """POST /embeddings/index without an Authorization header must return 401."""
+        """POST /ai/embeddings/index without an Authorization header must return 401."""
         # Arrange — no Authorization header
 
         # Act
         response = await client.post(
-            "/embeddings/index",
+            "/ai/embeddings/index",
             json={
                 "document_id": str(uuid.uuid4()),
                 "content": "Some document content.",
@@ -117,7 +117,7 @@ class TestIndexEndpointAuth:
         assert response.status_code == 401
 
     async def test_index_rejects_empty_content(self, client_with_db) -> None:
-        """POST /embeddings/index with empty content must return 422 (validation error)."""
+        """POST /ai/embeddings/index with empty content must return 422 (validation error)."""
         # Arrange — override auth so validation is reached
         mock_user = _make_mock_user()
         app.dependency_overrides[get_current_user] = lambda: mock_user
@@ -125,7 +125,7 @@ class TestIndexEndpointAuth:
         try:
             # Act
             response = await client_with_db.post(
-                "/embeddings/index",
+                "/ai/embeddings/index",
                 json={
                     "document_id": str(uuid.uuid4()),
                     "content": "",
@@ -139,7 +139,7 @@ class TestIndexEndpointAuth:
         assert response.status_code == 422
 
     async def test_index_rejects_invalid_document_id(self, client_with_db) -> None:
-        """POST /embeddings/index with a non-UUID document_id must return 422."""
+        """POST /ai/embeddings/index with a non-UUID document_id must return 422."""
         # Arrange — override auth so validation is reached
         mock_user = _make_mock_user()
         app.dependency_overrides[get_current_user] = lambda: mock_user
@@ -147,7 +147,7 @@ class TestIndexEndpointAuth:
         try:
             # Act
             response = await client_with_db.post(
-                "/embeddings/index",
+                "/ai/embeddings/index",
                 json={
                     "document_id": "not-a-uuid",
                     "content": "Valid content.",
@@ -174,12 +174,12 @@ class TestSearchEndpointAuth:
     """
 
     async def test_search_requires_auth(self, client) -> None:
-        """POST /embeddings/search without an Authorization header must return 401."""
+        """POST /ai/embeddings/search without an Authorization header must return 401."""
         # Arrange — no Authorization header
 
         # Act
         response = await client.post(
-            "/embeddings/search",
+            "/ai/embeddings/search",
             json={
                 "query": "What is the main topic?",
                 "document_id": str(uuid.uuid4()),
@@ -190,7 +190,7 @@ class TestSearchEndpointAuth:
         assert response.status_code == 401
 
     async def test_search_rejects_empty_query(self, client_with_db) -> None:
-        """POST /embeddings/search with an empty query string must return 422."""
+        """POST /ai/embeddings/search with an empty query string must return 422."""
         # Arrange — override auth so validation is reached
         mock_user = _make_mock_user()
         app.dependency_overrides[get_current_user] = lambda: mock_user
@@ -198,7 +198,7 @@ class TestSearchEndpointAuth:
         try:
             # Act
             response = await client_with_db.post(
-                "/embeddings/search",
+                "/ai/embeddings/search",
                 json={
                     "query": "",
                     "document_id": str(uuid.uuid4()),
@@ -212,7 +212,7 @@ class TestSearchEndpointAuth:
         assert response.status_code == 422
 
     async def test_search_rejects_top_k_above_maximum(self, client_with_db) -> None:
-        """POST /embeddings/search with top_k > 20 must return 422."""
+        """POST /ai/embeddings/search with top_k > 20 must return 422."""
         # Arrange — override auth so validation is reached
         mock_user = _make_mock_user()
         app.dependency_overrides[get_current_user] = lambda: mock_user
@@ -220,7 +220,7 @@ class TestSearchEndpointAuth:
         try:
             # Act
             response = await client_with_db.post(
-                "/embeddings/search",
+                "/ai/embeddings/search",
                 json={
                     "query": "test query",
                     "document_id": str(uuid.uuid4()),
@@ -235,7 +235,7 @@ class TestSearchEndpointAuth:
         assert response.status_code == 422
 
     async def test_search_rejects_top_k_below_minimum(self, client_with_db) -> None:
-        """POST /embeddings/search with top_k < 1 must return 422."""
+        """POST /ai/embeddings/search with top_k < 1 must return 422."""
         # Arrange — override auth so validation is reached
         mock_user = _make_mock_user()
         app.dependency_overrides[get_current_user] = lambda: mock_user
@@ -243,7 +243,7 @@ class TestSearchEndpointAuth:
         try:
             # Act
             response = await client_with_db.post(
-                "/embeddings/search",
+                "/ai/embeddings/search",
                 json={
                     "query": "test query",
                     "document_id": str(uuid.uuid4()),
@@ -270,17 +270,17 @@ class TestDeleteEndpointAuth:
     """
 
     async def test_delete_requires_auth(self, client) -> None:
-        """DELETE /embeddings/{id} without an Authorization header must return 401."""
+        """DELETE /ai/embeddings/{id} without an Authorization header must return 401."""
         # Arrange — no Authorization header
 
         # Act
-        response = await client.delete(f"/embeddings/{uuid.uuid4()}")
+        response = await client.delete(f"/ai/embeddings/{uuid.uuid4()}")
 
         # Assert
         assert response.status_code == 401
 
     async def test_delete_rejects_invalid_document_id(self, client_with_db) -> None:
-        """DELETE /embeddings/{id} with a non-UUID path parameter must return 422."""
+        """DELETE /ai/embeddings/{id} with a non-UUID path parameter must return 422."""
         # Arrange — override auth so routing is reached
         mock_user = _make_mock_user()
         app.dependency_overrides[get_current_user] = lambda: mock_user
@@ -288,7 +288,7 @@ class TestDeleteEndpointAuth:
         try:
             # Act
             response = await client_with_db.delete(
-                "/embeddings/not-a-valid-uuid",
+                "/ai/embeddings/not-a-valid-uuid",
                 headers={"Authorization": "Bearer fake-token"},
             )
         finally:

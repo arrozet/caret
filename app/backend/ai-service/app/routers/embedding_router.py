@@ -1,10 +1,10 @@
 """
 Embedding router — HTTP boundary for document indexing and semantic search.
 
-Route map (relative to the /embeddings prefix registered in main.py):
-  POST   /embeddings/index           — Index a document (chunk + embed + store)
-  POST   /embeddings/search          — Semantic search over document chunks
-  DELETE /embeddings/{document_id}   — Remove all embeddings for a document
+Route map (the router is registered in main.py with /ai prefix):
+  POST   /ai/embeddings/index           — Index a document (chunk + embed + store)
+  POST   /ai/embeddings/search          — Semantic search over document chunks
+  DELETE /ai/embeddings/{document_id}   — Remove all embeddings for a document
 
 Rule: NO business logic here. Validate input → call EmbeddingService → return DTO.
 """

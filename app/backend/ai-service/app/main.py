@@ -46,7 +46,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 app.include_router(ai_router, prefix="/ai", tags=["ai"])
 app.include_router(ai_meta_router, prefix="/ai", tags=["ai"])
-app.include_router(embedding_router, prefix="", tags=["embeddings"])
+app.include_router(embedding_router, prefix="/ai", tags=["embeddings"])
 
 
 # ---------------------------------------------------------------------------

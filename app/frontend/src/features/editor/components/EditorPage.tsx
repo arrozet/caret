@@ -543,37 +543,101 @@ export function EditorPage() {
       );
       if (!are_supported_blocks) return null;
 
+      // Extract text from each base block to match against proposed text
+      const extract_block_text = (block: JSONContent): string => {
+        if (!block.content) return "";
+        return block.content
+          .map((node) => {
+            if (node.type === "text") return node.text ?? "";
+            if (node.type === "hardBreak") return "\n";
+            return "";
+          })
+          .join("");
+      };
+
+      const base_block_texts = base_blocks.map(extract_block_text);
       const normalized_text = normalize_proposed_text(proposed_text);
-      const paragraphs = normalized_text.split(/\n{2,}/);
-      if (paragraphs.length !== base_blocks.length) return null;
+      const proposed_paragraphs = normalized_text.split(/\n{2,}/);
 
-      const next_blocks = base_blocks.map((block, index) => {
-        const block_text = paragraphs[index] ?? "";
-        const lines = block_text.split("\n");
-        const first_text_marks = block.content?.find(
-          (child) => child.type === "text" && child.marks,
-        )?.marks;
-        const next_inline: JSONContent[] = [];
+      const changes_map = new Map<number, string>();
 
-        lines.forEach((line, line_index) => {
-          if (line.length > 0) {
-            next_inline.push(
-              first_text_marks
-                ? { type: "text", text: line, marks: first_text_marks }
-                : { type: "text", text: line },
-            );
-          }
+      // If the proposed text structure matches the base structure exactly,
+      // we can do a 1:1 mapping
+      if (proposed_paragraphs.length === base_blocks.length) {
+        base_block_texts.forEach((base_text, index) => {
+          const proposed_text_for_block = proposed_paragraphs[index] ?? "";
+          // Normalize both for comparison (collapse whitespace)
+          const normalize_for_comparison = (text: string) => text.replace(/\s+/g, " ").trim();
 
-          if (line_index < lines.length - 1) {
-            next_inline.push({ type: "hardBreak" });
+          if (
+            normalize_for_comparison(base_text) !==
+            normalize_for_comparison(proposed_text_for_block)
+          ) {
+            changes_map.set(index, proposed_text_for_block);
           }
         });
+      } else {
+        // Block count mismatch - proposed text has different structure.
+        // Fall back to replacing everything but try to preserve block types from beginning.
 
-        return {
-          ...block,
-          content: next_inline.length > 0 ? next_inline : undefined,
-        };
-      });
+        // Map as many blocks as we can 1:1 from the start
+        const min_length = Math.min(base_blocks.length, proposed_paragraphs.length);
+        for (let i = 0; i < min_length; i++) {
+          changes_map.set(i, proposed_paragraphs[i] ?? "");
+        }
+
+        // If proposed has more paragraphs, we need to return null and fall back to full replacement
+        if (proposed_paragraphs.length > base_blocks.length) {
+          return null;
+        }
+
+        // If proposed has fewer paragraphs, mark extra base blocks as deleted (empty content)
+        for (let i = proposed_paragraphs.length; i < base_blocks.length; i++) {
+          changes_map.set(i, "");
+        }
+      }
+
+      // Build next_blocks, preserving structure for unchanged blocks
+      const next_blocks = base_blocks
+        .map((block, index) => {
+          const changed_text = changes_map.get(index);
+          if (changed_text === undefined) {
+            // Unchanged block - preserve exactly as-is
+            return block;
+          }
+
+          if (changed_text === "") {
+            // Block was deleted - skip it
+            return null;
+          }
+
+          // Block changed - rebuild content with new text but preserve block type and marks
+          const lines = changed_text.split("\n");
+          const first_text_marks = block.content?.find(
+            (child) => child.type === "text" && child.marks,
+          )?.marks;
+          const next_inline: JSONContent[] = [];
+
+          lines.forEach((line, line_index) => {
+            if (line.length > 0) {
+              next_inline.push(
+                first_text_marks
+                  ? { type: "text", text: line, marks: first_text_marks }
+                  : { type: "text", text: line },
+              );
+            }
+
+            if (line_index < lines.length - 1) {
+              next_inline.push({ type: "hardBreak" });
+            }
+          });
+
+          return {
+            ...block,
+            content: next_inline.length > 0 ? next_inline : undefined,
+          };
+        })
+        .filter((block): block is JSONContent => block !== null);
 
       return {
         ...base_content,
