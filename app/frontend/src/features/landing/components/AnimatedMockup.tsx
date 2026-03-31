@@ -10,10 +10,7 @@ import { useEffect, useRef, useState } from "react";
 /* ── Demo content ──────────────────────────────────────────────── */
 
 /** Words that appear in the document, typed one at a time. */
-const DEMO_WORDS = [
-  "Write", "something", "great", "today.",
-  "Every", "word", "has", "purpose.",
-];
+const DEMO_WORDS = ["Write", "something", "great", "today.", "Every", "word", "has", "purpose."];
 
 /** User message in the AI panel. */
 const DEMO_USER_MSG = "Make it punchier";
@@ -80,18 +77,18 @@ export function AnimatedMockup() {
   const should_reduce = useReducedMotion() ?? false;
   const { el_ref, rx, ry } = useCardTilt(5, should_reduce);
 
-  const [visible_words, set_visible_words] = useState(0);
-  const [show_user_msg, set_show_user_msg] = useState(false);
+  const [visible_words, set_visible_words] = useState(() =>
+    should_reduce ? DEMO_WORDS.length : 0,
+  );
+  const [show_user_msg, set_show_user_msg] = useState(() => should_reduce);
   const [streaming, set_streaming] = useState(false);
-  const [visible_ai_chars, set_visible_ai_chars] = useState(0);
+  const [visible_ai_chars, set_visible_ai_chars] = useState(() =>
+    should_reduce ? DEMO_AI_MSG.length : 0,
+  );
 
   /* Animation loop — async state machine with `live` guard */
   useEffect(() => {
     if (should_reduce) {
-      set_visible_words(DEMO_WORDS.length);
-      set_show_user_msg(true);
-      set_streaming(false);
-      set_visible_ai_chars(DEMO_AI_MSG.length);
       return;
     }
 
@@ -194,7 +191,6 @@ export function AnimatedMockup() {
 
       {/* ── Editor + AI panel ─────────────────────────────────── */}
       <div className="flex min-h-[200px] bg-app">
-
         {/* Document area */}
         <div className="flex-1 px-6 py-5 font-document text-[13px] leading-loose text-text-primary">
           <span>{DEMO_WORDS.slice(0, visible_words).join(" ")}</span>
@@ -206,7 +202,7 @@ export function AnimatedMockup() {
 
         {/* AI panel */}
         <div className="flex w-44 flex-col border-l border-border-subtle">
-          <div className="flex items-center gap-1.5 border-b border-border-subtle bg-accent-ai px-2.5 py-1.5 text-white">
+          <div className="flex items-center gap-1.5 border-b border-border-subtle bg-accent-caret px-2.5 py-1.5 text-white">
             <span className="text-[11px] font-bold leading-none">^</span>
             <span className="font-ui text-[9px] font-semibold tracking-wide">CARET</span>
           </div>
@@ -240,7 +236,7 @@ export function AnimatedMockup() {
                   {DEMO_AI_MSG.slice(0, visible_ai_chars)}
                   {streaming && (
                     <motion.span
-                      className="ml-0.5 inline-block h-[0.7em] w-[2px] align-text-bottom bg-accent-ai"
+                      className="ml-0.5 inline-block h-[0.7em] w-[2px] align-text-bottom bg-accent-caret"
                       animate={{ opacity: [1, 0, 1] }}
                       transition={{ duration: 0.5, repeat: Infinity }}
                     />

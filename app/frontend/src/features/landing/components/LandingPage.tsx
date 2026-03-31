@@ -67,53 +67,16 @@ const item_variants = {
   },
 };
 
-/**
- * Per-word reveal variant: each word blurs in from below.
- * Uses `custom` index for staggered delay without a parent stagger.
- */
-const word_variants = {
-  hidden: { opacity: 0, y: "0.35em", filter: "blur(6px)" },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    filter: "blur(0px)",
-    transition: { type: "spring" as const, stiffness: 120, damping: 22, delay: i * 0.065 },
-  }),
-};
-
 /* ================================================================
    Sub-components
    ================================================================ */
-
-/**
- * Renders a single word as an independently animated span.
- * Uses `word_variants` with a custom delay index.
- */
-function AnimatedWord({ word, index }: { word: string; index: number }) {
-  return (
-    <motion.span
-      custom={index}
-      variants={word_variants}
-      className="inline-block"
-      style={{ marginRight: "0.27em" }}
-    >
-      {word}
-    </motion.span>
-  );
-}
 
 /**
  * Wraps children in a "magnetic" motion div.
  * On hover, the element gently follows the cursor towards its center.
  * Respects `prefers-reduced-motion` via the `disabled` prop.
  */
-function MagneticButton({
-  children,
-  disabled,
-}: {
-  children: React.ReactNode;
-  disabled: boolean;
-}) {
+function MagneticButton({ children, disabled }: { children: React.ReactNode; disabled: boolean }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const spring_x = useSpring(x, { stiffness: 260, damping: 24 });
@@ -143,64 +106,59 @@ function MagneticButton({
   );
 }
 
-/**
- * Trailing dot cursor that smoothly follows the mouse.
- */
-function TrailingCursor() {
-  const { x, y } = useMousePosition();
-
-  // Center the 24px dot (offset by 12)
-  const cursor_x = useTransform(x, (val) => val - 12);
-  const cursor_y = useTransform(y, (val) => val - 12);
-
-  return (
-    <motion.div
-      className="pointer-events-none fixed top-0 left-0 z-50 hidden h-6 w-6 rounded-full mix-blend-screen md:block"
-      style={{
-        x: cursor_x,
-        y: cursor_y,
-        background: "radial-gradient(circle, rgba(var(--color-accent-caret-rgb), 0.9) 0%, rgba(var(--color-accent-caret-rgb), 0) 70%)",
-        boxShadow: "0 0 20px rgba(var(--color-accent-caret-rgb), 0.5)",
-      }}
-    />
-  );
-}
-
 interface FeatureCardProps {
   icon: React.ReactNode;
   title: string;
   description: string;
   index: number;
+  variant?: "primary" | "secondary" | "tertiary";
 }
 
 /**
  * Feature card with scroll-triggered reveal and icon rotation on hover.
- * Delay driven by `index` for sequential entrance.
+ * Now supports three variants for visual variety and asymmetric layout.
  */
-function FeatureCard({ icon, title, description, index }: FeatureCardProps) {
+function FeatureCard({ icon, title, description, index, variant = "secondary" }: FeatureCardProps) {
+  const is_primary = variant === "primary";
+  const is_tertiary = variant === "tertiary";
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 32 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-80px" }}
       transition={{ type: "spring", stiffness: 100, damping: 20, delay: index * 0.1 }}
-      whileHover={{ y: -6, transition: { type: "spring", stiffness: 300, damping: 20 } }}
-      className="group relative flex flex-col gap-6 overflow-hidden rounded-md border border-border-subtle bg-surface/40 p-8 hover:bg-surface/70 transition-all duration-300 backdrop-blur-md"
+      whileHover={{ y: -4, transition: { type: "spring", stiffness: 300, damping: 20 } }}
+      className={`
+        group relative flex flex-col overflow-hidden rounded-md border border-border-subtle bg-surface transition-all duration-300
+        ${is_primary ? "gap-8 p-10 md:col-span-2 md:row-span-1" : is_tertiary ? "gap-4 p-6" : "gap-6 p-8"}
+        hover:border-accent-main/30 hover:shadow-subtle
+      `}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-accent-main/5 to-accent-caret/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-      <div className="absolute -inset-px rounded-md border-2 border-transparent bg-gradient-to-br from-accent-main/30 to-accent-caret/30 opacity-0 [mask-image:linear-gradient(white,white)] [mask-clip:padding-box,border-box] group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ WebkitMaskComposite: 'xor', maskComposite: 'exclude' }} />
+      {/* Subtle hover gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-accent-main/3 to-accent-caret/3 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+
       <motion.div
-        whileHover={{ scale: 1.12, rotate: 4 }}
+        whileHover={{ scale: 1.08, rotate: 3 }}
         transition={{ type: "spring", stiffness: 300, damping: 18 }}
-        className="flex h-12 w-12 items-center justify-center rounded-base border border-border-subtle bg-surface text-text-secondary group-hover:border-accent-caret/40 group-hover:text-accent-main transition-colors duration-300"
+        className={`
+          flex items-center justify-center rounded-base border border-border-subtle bg-app text-text-secondary
+          group-hover:border-accent-caret/40 group-hover:text-accent-main transition-colors duration-300
+          ${is_primary ? "h-14 w-14" : "h-12 w-12"}
+        `}
       >
         {icon}
       </motion.div>
-      <div className="space-y-3">
-        <h4 className="font-ui text-ui-lg font-medium text-text-primary tracking-tight">
+
+      <div className={is_primary ? "space-y-4" : "space-y-3"}>
+        <h4
+          className={`font-ui font-medium text-text-primary tracking-tight ${is_primary ? "text-ui-lg" : "text-[15px]"}`}
+        >
           {title}
         </h4>
-        <p className="text-ui-base leading-relaxed text-text-secondary">
+        <p
+          className={`leading-relaxed text-text-secondary ${is_primary ? "text-[15px]" : "text-ui-base"}`}
+        >
           {description}
         </p>
       </div>
@@ -218,21 +176,21 @@ const theme_icons = { light: Sun, dark: Moon, system: Monitor } as const;
 /**
  * Public landing page shown to unauthenticated visitors.
  *
- * Sections:
- *  1. Hero   — two-column: tagline + CTAs / animated app mockup
- *  2. Stats  — three product pillar strip
- *  3. Features — three capability cards with scroll-triggered reveal
- *  4. CTA    — bottom sign-up prompt
- *  5. Footer
+ * Redesigned following .impeccable.md principles:
+ *  - Two-color system: Blue (UI) + Orange (user focus/AI)
+ *  - Swiss rigor with human warmth
+ *  - Asymmetric feature layout (not monotonous grid)
+ *  - Solid surfaces instead of glassmorphism overuse
+ *  - Copy that speaks to user pain points (not generic AI marketing)
+ *  - Varied spacing for visual rhythm
  *
- * Motion features:
+ * Motion features (gated by useReducedMotion):
  *  - Page-level scroll progress bar
  *  - Hero parallax + fade on scroll
  *  - Cursor-reactive radial background glows
  *  - Word-by-word hero headline reveal
  *  - Magnetic CTA buttons
  *  - Animated app mockup (AnimatedMockup)
- *  - All continuous animations gated by useReducedMotion
  */
 export function LandingPage() {
   const { t } = useTranslation("common");
@@ -262,16 +220,8 @@ export function LandingPage() {
 
   const ThemeIcon = theme_icons[theme];
 
-  /* Split headline words for per-word animation */
-  const line_one = "Write with clarity.".split(" ");
-  const line_two_prefix = ["Think", "with"];
-  const total_prefix_words = line_one.length + line_two_prefix.length;
-
   return (
     <div className="flex min-h-screen flex-col bg-app overflow-x-hidden relative z-0">
-
-      {!should_reduce_motion && <TrailingCursor />}
-
       {/* ── Scroll progress bar ─────────────────────────────────── */}
       <motion.div
         className="fixed top-0 left-0 right-0 z-[200] h-[2px] origin-left bg-gradient-to-r from-accent-main via-accent-caret to-accent-caret"
@@ -298,15 +248,15 @@ export function LandingPage() {
       {/* ── Decorative floating ^ ───────────────────────────────── */}
       <motion.span
         aria-hidden
-        className="pointer-events-none fixed top-[10vh] right-[4vw] z-[-1] hidden select-none font-document text-[16vw] font-light leading-none text-text-primary/[0.025] md:block"
+        className="pointer-events-none fixed top-[10vh] right-[4vw] z-[-1] hidden select-none font-document text-[16vw] font-light leading-none text-text-primary/[0.04] md:block"
         animate={should_reduce_motion ? undefined : { y: [0, -18, 0], rotate: [0, 2, 0] }}
         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
       >
         ^
       </motion.span>
 
-      {/* ── Navigation bar ──────────────────────────────────────── */}
-      <header className="fixed top-0 right-0 left-0 z-30 flex h-14 items-center justify-between border-b border-border-subtle bg-surface/90 px-6 backdrop-blur-glass">
+      {/* ── Navigation bar (solid surface for warmth) ────────────── */}
+      <header className="fixed top-0 right-0 left-0 z-30 flex h-14 items-center justify-between border-b border-border-subtle bg-surface px-6">
         <motion.div
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
@@ -320,24 +270,23 @@ export function LandingPage() {
           transition={{ duration: 0.4, ease: "easeOut" }}
           className="flex items-center gap-2"
         >
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggle_theme}
-            aria-label={t(`theme.${theme}`)}
-          >
+          <Button variant="ghost" size="sm" onClick={toggle_theme} aria-label={t(`theme.${theme}`)}>
             <ThemeIcon className="h-4 w-4" />
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => navigate(is_authenticated ? "/documents" : "/login")}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate(is_authenticated ? "/documents" : "/login")}
+          >
             {is_authenticated ? "Dashboard" : t("auth.sign_in")}
           </Button>
         </motion.div>
       </header>
 
-      {/* ── Hero ────────────────────────────────────────────────── */}
+      {/* ── Hero (BOLDER, MASSIVE SCALE) ───────────────────────── */}
       <section
         ref={hero_ref}
-        className="relative flex flex-1 flex-col items-center justify-center px-6 pt-14"
+        className="relative flex flex-col items-center justify-start pt-32 pb-20 md:pt-40 md:pb-24 overflow-hidden"
       >
         <motion.div
           initial="hidden"
@@ -347,127 +296,109 @@ export function LandingPage() {
             y: should_reduce_motion ? 0 : hero_y,
             opacity: should_reduce_motion ? 1 : hero_opacity,
           }}
-          className="mx-auto grid w-full max-w-5xl grid-cols-1 items-center gap-10 py-16 md:grid-cols-2 md:gap-14 md:py-24"
+          className="w-full flex flex-col relative z-10"
         >
-          {/* ── Left: text + CTAs ─────────────────────────────── */}
-          <div className="flex flex-col items-center text-center md:items-start md:text-left">
-
-            {/* Accent line with traveling dot */}
-            <motion.div variants={item_variants} className="mb-10 flex items-center">
-              <div className="relative h-px w-16 bg-accent-caret/40">
-                <motion.span
-                  className="absolute -top-[2px] h-[5px] w-[5px] rounded-full bg-accent-caret"
-                  animate={should_reduce_motion ? undefined : { x: [0, 58, 0], opacity: [0.4, 1, 0.4] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                />
-              </div>
-            </motion.div>
-
-            {/* Word-by-word headline */}
+          {/* Massive Typography Hero */}
+          <div className="px-6 md:px-12 w-full max-w-7xl mx-auto flex flex-col items-center text-center">
             <motion.h2
               initial="hidden"
               animate="visible"
-              aria-label="Write with clarity. Think with precision."
-              className="font-document text-display leading-tight tracking-tight md:text-[54px] md:leading-[1.08]"
+              className="font-document text-6xl md:text-8xl lg:text-[110px] leading-[1.1] tracking-tight text-text-primary flex flex-col items-center"
             >
-              <span className="block text-text-primary">
-                {line_one.map((word, i) => (
-                  <AnimatedWord key={`l1-${i}`} word={word} index={i} />
-                ))}
-              </span>
-              <span className="block">
-                {line_two_prefix.map((word, i) => (
-                  <AnimatedWord key={`l2-${i}`} word={word} index={line_one.length + i} />
-                ))}
-                <motion.span
-                  custom={total_prefix_words}
-                  variants={word_variants}
-                  className="inline-block bg-gradient-to-r from-accent-main to-accent-caret bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient-x"
-                  style={{ marginRight: 0 }}
-                >
+              <div className="flex flex-wrap justify-center gap-x-4 md:gap-x-6">
+                <span>Write</span>
+                <span className="italic text-text-secondary">with</span>
+                <span>clarity.</span>
+              </div>
+              <div className="flex flex-wrap justify-center gap-x-4 md:gap-x-6 mt-2 md:mt-4">
+                <span>Think</span>
+                <span className="italic text-text-secondary">with</span>
+                <motion.span className="text-accent-caret relative inline-block">
                   precision
+                  {/* Over-the-top dot */}
+                  <motion.span
+                    className="absolute -right-[12px] md:-right-[24px] bottom-[10px] md:bottom-[18px] h-[10px] w-[10px] md:h-[20px] md:w-[20px] rounded-full bg-accent-caret"
+                    animate={
+                      should_reduce_motion
+                        ? undefined
+                        : { scale: [1, 1.2, 1], opacity: [0.8, 1, 0.8] }
+                    }
+                    transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                  />
                 </motion.span>
-                <motion.span
-                  custom={total_prefix_words + 1}
-                  variants={word_variants}
-                  className="inline-block text-text-primary"
-                >
-                  .
-                </motion.span>
-              </span>
+              </div>
             </motion.h2>
 
-            <motion.p
-              variants={item_variants}
-              className="mx-auto mt-8 max-w-sm text-body leading-relaxed text-text-secondary md:mx-0"
-            >
-              A focused writing environment where every element serves the text.
-              AI-assisted, real-time collaborative, distraction-free.
-            </motion.p>
+            {/* Centered Description & CTA */}
+            <div className="mt-12 md:mt-20 flex flex-col items-center w-full">
+              <motion.p
+                variants={item_variants}
+                className="font-ui text-xl md:text-2xl leading-relaxed text-text-secondary max-w-2xl text-center"
+              >
+                Stop fighting your document. Start writing. <br className="hidden md:block" />
+                <span className="text-text-primary font-medium">AI-assisted.</span> Real-time
+                collaborative. Distraction-free.
+              </motion.p>
 
-            <motion.div
-              variants={item_variants}
-              className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center md:justify-start"
-            >
-              <MagneticButton disabled={should_reduce_motion}>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={() => navigate(is_authenticated ? "/documents" : "/login")}
-                  className="min-w-[180px] shadow-subtle group/btn relative overflow-hidden bg-surface text-text-primary border border-border-subtle hover:border-accent-main/50 hover:bg-surface/80 backdrop-blur-md transition-all duration-300"
-                >
-                  <span className="absolute inset-0 bg-gradient-to-r from-accent-main/10 via-transparent to-accent-caret/10 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-500" />
-                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
-                  <span className="relative z-10 flex items-center justify-center gap-2 font-medium">
-                    {is_authenticated ? "Go to Dashboard" : "Get started"}
-                    <motion.span
-                      animate={should_reduce_motion ? undefined : { x: [0, 3, 0] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      className="inline-flex text-accent-main group-hover/btn:text-accent-caret transition-colors duration-300"
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                    </motion.span>
-                  </span>
-                </Button>
-              </MagneticButton>
-
-              <MagneticButton disabled={should_reduce_motion}>
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={() =>
-                    document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })
-                  }
-                  className="min-w-[180px] border border-transparent hover:border-border-subtle/50 transition-all duration-300"
-                >
-                  Learn more
-                </Button>
-              </MagneticButton>
-            </motion.div>
+              <motion.div
+                variants={item_variants}
+                className="mt-10 flex flex-col sm:flex-row gap-4 justify-center"
+              >
+                <MagneticButton disabled={should_reduce_motion}>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={() => navigate(is_authenticated ? "/documents" : "/login")}
+                    className="min-w-[200px] h-14 text-base shadow-elevated bg-accent-main text-white border border-accent-main hover:bg-[#0052A3] transition-all duration-300"
+                  >
+                    <span className="flex items-center justify-center gap-2 font-medium tracking-wide">
+                      {is_authenticated ? "Go to Dashboard" : "Start writing"}
+                      <ArrowRight className="h-5 w-5" />
+                    </span>
+                  </Button>
+                </MagneticButton>
+                <MagneticButton disabled={should_reduce_motion}>
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    onClick={() =>
+                      document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })
+                    }
+                    className="min-w-[200px] h-14 text-base transition-all duration-300"
+                  >
+                    See how it works
+                  </Button>
+                </MagneticButton>
+              </motion.div>
+            </div>
           </div>
 
-          {/* ── Right: animated app mockup ────────────────────── */}
-          <AnimatedMockup />
+          {/* Animated Mockup breaking the grid - Massive scale */}
+          <div className="mt-20 md:mt-28 w-full px-4 md:px-12 max-w-[1400px] mx-auto relative z-20 perspective-1000">
+            <AnimatedMockup />
+          </div>
         </motion.div>
       </section>
 
-      {/* ── Stats strip ────────────────────────────────────────── */}
-      <section className="border-t border-border-subtle/60 px-6 py-12">
+      {/* ── Stats strip (BOLDER, MASSIVE SCALE) ──────────────────────── */}
+      <section className="border-t border-border-subtle px-6 py-24 md:py-32">
         <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-50px" }}
           variants={container_variants}
-          className="mx-auto flex w-full max-w-[var(--max-width-document-wide)] flex-col items-center justify-around gap-8 sm:flex-row"
+          className="mx-auto flex w-full max-w-[1400px] flex-col items-start justify-between gap-16 md:flex-row md:gap-8"
         >
           {[
-            { label: "Real-time", sub: "Collaboration" },
-            { label: "AI-native", sub: "Writing assistant" },
-            { label: "Offline-first", sub: "Document editor" },
+            { label: "Real-time", sub: "Multiplayer editing built on CRDTs" },
+            { label: "AI-native", sub: "Inline, context-aware intelligence" },
+            { label: "Offline-first", sub: "Local-first sync architecture" },
           ].map(({ label, sub }) => (
-            <motion.div key={label} variants={item_variants} className="flex flex-col items-center gap-1">
-              <span className="font-ui text-xl font-semibold text-text-primary">{label}</span>
-              <span className="font-ui text-ui-sm uppercase tracking-widest text-text-secondary">
+            <motion.div key={label} variants={item_variants} className="flex flex-col gap-4">
+              <span className="font-ui text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter text-text-primary">
+                {label}.
+              </span>
+              <span className="font-ui text-lg md:text-xl text-text-secondary max-w-[280px]">
                 {sub}
               </span>
             </motion.div>
@@ -475,76 +406,95 @@ export function LandingPage() {
         </motion.div>
       </section>
 
-      {/* ── Features ───────────────────────────────────────────── */}
-      <section id="features" className="border-t border-border-subtle bg-surface px-6 py-24">
-        <div className="mx-auto w-full max-w-[var(--max-width-document-wide)]">
-          <motion.h3
+      {/* ── Features (Asymmetric layout, generous spatial rhythm) ──────── */}
+      <section
+        id="features"
+        className="border-t border-border-subtle bg-surface px-6 py-32 md:py-48"
+      >
+        <div className="mx-auto w-full max-w-[1400px]">
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-80px" }}
             transition={{ type: "spring" as const, stiffness: 100, damping: 18 }}
-            className="mb-16 text-center font-ui text-h3 tracking-tight text-text-primary"
+            className="mb-24 md:mb-40 max-w-4xl"
           >
-            Built for writers who care about clarity
-          </motion.h3>
+            <h3 className="font-document text-5xl md:text-[7vw] lg:text-[100px] leading-[0.9] tracking-tighter text-text-primary mb-8">
+              Built for writers who <span className="italic text-accent-caret">value clarity.</span>
+            </h3>
+            <p className="text-2xl md:text-3xl text-text-secondary leading-relaxed max-w-2xl">
+              Every feature serves one purpose: help you write better, faster, without friction.
+              Content first. Chrome second.
+            </p>
+          </motion.div>
 
-          <div className="grid gap-8 md:grid-cols-3">
-            <FeatureCard
-              index={0}
-              icon={<Type className="h-5 w-5" />}
-              title="Precision Editor"
-              description="A distraction-free writing canvas with rich typography, autosave, and keyboard-driven formatting. Content first, chrome second."
-            />
-            <FeatureCard
-              index={1}
-              icon={<Users className="h-5 w-5" />}
-              title="Real-time Collaboration"
-              description="Work together seamlessly with live cursors and presence indicators. See changes as they happen, resolve conflicts automatically."
-            />
-            <FeatureCard
-              index={2}
-              icon={<Sparkles className="h-5 w-5" />}
-              title="AI Writing Assistant"
-              description="Inline suggestions, tone adjustments, and structural feedback that respect your voice. AI that assists, never replaces."
-            />
+          {/* Asymmetric grid: massive primary card + two stacked secondary cards */}
+          <div className="grid gap-8 md:grid-cols-12">
+            <div className="md:col-span-8">
+              <FeatureCard
+                index={0}
+                variant="primary"
+                icon={<Sparkles className="h-8 w-8" />}
+                title="AI writing assistant"
+                description="Inline suggestions, tone adjustments, and structural feedback. AI that enhances your voice — never replaces it. No chat window. Just seamless integration right where you write."
+              />
+            </div>
+            <div className="md:col-span-4 flex flex-col gap-8">
+              <FeatureCard
+                index={1}
+                variant="secondary"
+                icon={<Type className="h-6 w-6" />}
+                title="Precision editor"
+                description="Distraction-free canvas with rich typography and autosave."
+              />
+              <FeatureCard
+                index={2}
+                variant="secondary"
+                icon={<Users className="h-6 w-6" />}
+                title="Real-time collaboration"
+                description="Live cursors and seamless edits. See changes as they happen."
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Bottom CTA ─────────────────────────────────────────── */}
-      <section className="border-t border-border-subtle bg-app px-6 py-24">
+      {/* ── Bottom CTA (BOLDER) ─────────────────────────────────────────── */}
+      <section className="border-t border-border-subtle bg-app px-6 py-32 md:py-48">
         <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-50px" }}
           variants={container_variants}
-          className="mx-auto w-full max-w-[var(--max-width-document-wide)] text-center"
+          className="mx-auto w-full max-w-[1400px] text-center flex flex-col items-center"
         >
-          <motion.div variants={item_variants} className="mx-auto mb-8 h-px w-16 bg-accent-caret" />
+          <motion.div
+            variants={item_variants}
+            className="mb-12 h-2 w-24 bg-accent-caret rounded-full"
+          />
           <motion.h3
             variants={item_variants}
-            className="font-document text-h2 tracking-tight text-text-primary"
+            className="font-document text-6xl md:text-[8vw] lg:text-[120px] leading-[0.9] tracking-tighter text-text-primary"
           >
-            Start writing today
+            Ready to write?
           </motion.h3>
           <motion.p
             variants={item_variants}
-            className="mx-auto mt-4 max-w-sm text-ui-lg text-text-secondary"
+            className="mt-8 max-w-2xl text-2xl md:text-3xl text-text-secondary leading-relaxed"
           >
-            No setup required. Sign in and create your first document in seconds.
+            No setup. No friction. Sign in and create your first document in seconds.
           </motion.p>
-          <motion.div variants={item_variants} className="mt-8 inline-block">
+          <motion.div variants={item_variants} className="mt-16 inline-block">
             <MagneticButton disabled={should_reduce_motion}>
               <Button
                 variant="primary"
                 size="lg"
                 onClick={() => navigate(is_authenticated ? "/documents" : "/login")}
-                className="min-w-[200px] shadow-elevated bg-surface text-text-primary border border-border-subtle hover:border-accent-main/50 relative overflow-hidden group/btn backdrop-blur-md transition-all duration-300"
+                className="min-w-[240px] h-20 text-xl shadow-strong bg-accent-main text-white border-2 border-accent-main hover:bg-transparent hover:text-accent-main transition-all duration-300 rounded-none"
               >
-                <span className="absolute inset-0 bg-gradient-to-r from-accent-main/10 to-accent-caret/10 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-500" />
-                <span className="relative z-10 flex items-center justify-center gap-2 font-medium">
-                  {is_authenticated ? "Go to Dashboard" : "Create your first document"}
-                  <ArrowRight className="h-4 w-4 text-accent-main group-hover/btn:text-accent-caret transition-colors duration-300" />
+                <span className="flex items-center justify-center gap-3 font-semibold uppercase tracking-wide">
+                  {is_authenticated ? "Go to Dashboard" : "Get started free"}
+                  <ArrowRight className="h-6 w-6" />
                 </span>
               </Button>
             </MagneticButton>
@@ -552,11 +502,11 @@ export function LandingPage() {
         </motion.div>
       </section>
 
-      {/* ── Footer ──────────────────────────────────────────────── */}
-      <footer className="border-t border-border-subtle px-6 py-6">
-        <div className="mx-auto flex w-full max-w-[var(--max-width-document-wide)] items-center justify-between">
-          <span className="text-ui-sm text-text-secondary">{t("app_name")}</span>
-          <span className="text-ui-sm text-text-secondary">Crafted with precision</span>
+      {/* ── Footer (meaningful text instead of generic filler) ────── */}
+      <footer className="border-t border-border-subtle px-6 py-8">
+        <div className="mx-auto flex w-full max-w-[var(--max-width-document-wide)] items-center justify-between text-ui-sm text-text-secondary">
+          <span>{t("app_name")} © 2026</span>
+          <span>AI-first document editing</span>
         </div>
       </footer>
     </div>
