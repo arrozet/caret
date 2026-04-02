@@ -77,10 +77,9 @@ services:
       NODE_ENV: development
       DATABASE_URL: ${DATABASE_URL:-}
       SUPABASE_URL: ${SUPABASE_URL:-}
-      JWT_SECRET: ${JWT_SECRET:-}
-    # Pure WebSocket service — health check verifies the port is accepting connections
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 3003 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3

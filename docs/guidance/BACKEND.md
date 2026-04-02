@@ -45,7 +45,7 @@
   - Awareness protocol for cursor positions and user presence.
 - **Tech Stack**: Node.js + TypeScript + Y.js.
 - **Deployment**: AWS ECS (Fargate).
-- **Authentication Strategy**: Supabase JWT is passed via WebSocket connection URL as a query parameter (`wss://collab.caret.page?token=<jwt>`). The server validates the token during the WebSocket handshake before allowing CRDT synchronization.
+- **Authentication Strategy**: Supabase JWT is passed via WebSocket connection URL as a query parameter (`wss://collab.caret.page/document/{doc_id}?token=<jwt>`). The server validates the token during the WebSocket handshake before allowing CRDT synchronization.
 
 ### 5. AI Service (Python/FastAPI)
 - **Responsibility**: Agentic AI inference and document intelligence.
@@ -63,7 +63,7 @@
 - **Version Strategy**: All APIs will implement versioning from the start.
 - **Current Version**: v1 (first version).
 - **URL Pattern**: All services are exposed through the API Gateway under a single prefix: `/api/v1/{resource}`. The Gateway routes by path (e.g. `/api/v1/auth/*`, `/api/v1/documents/*`, `/api/v1/ai/*`) to the corresponding microservice.
-- **Frontend contract**: The frontend **always** calls the API Gateway only, using the URL pattern `/api/v{version}/{service}/{method}` (e.g. `/api/v1/auth/login`, `/api/v1/documents/list`, `/api/v1/ai/stream`). It never calls Auth, Document, or AI services directly. The only exception is the Collaboration Service (WebSocket), which the frontend connects to separately because it is not HTTP.
+- **Frontend contract**: The frontend **always** calls the API Gateway only, using the URL pattern `/api/v{version}/{service}/*` (e.g. `/api/v1/auth/login`, `/api/v1/documents`, `/api/v1/ai/stream`). It never calls Auth, Document, or AI services directly. The only exception is the Collaboration Service (WebSocket), which the frontend connects to separately because it is not HTTP.
 - **Future Versions**: Breaking changes will be introduced in new versions (v2, v3, etc.) while maintaining backward compatibility for previous versions when possible.
 
 ### REST API Design Principles
@@ -97,7 +97,7 @@ All REST endpoints must follow these principles:
   - Type-safe route definitions with compile-time validation
   - Automatic request/response validation using TypeScript types
   - Controllers and routes generated from decorators (@Route, @Get, @Post, etc.)
-- **Documentation Endpoint**: `/api/v1/docs` - Interactive Swagger UI for all Node.js services.
+- **Documentation Endpoint**: `/api/v1/docs` at API Gateway - interactive Swagger UI for the unified public API contract.
 - **Implementation**: TypeScript decorators on controllers and interfaces for request/response models will automatically generate the complete OpenAPI specification.
 
 ## Critical Integration Protocols
@@ -117,10 +117,10 @@ All REST endpoints must follow these principles:
 **Solution**:
 - The Frontend passes the Supabase JWT as a **query parameter** during the WebSocket handshake:
   ```
-  wss://collab.caret.page/document/{docId}?token={jwt}
+   wss://collab.caret.page/document/{doc_id}?token={jwt}
   ```
 - The Collaboration Service validates the token before accepting the connection.
-- Invalid tokens result in immediate connection closure (403 Unauthorized).
+- Invalid tokens result in immediate connection closure (401 Unauthorized).
 
 ## Internal Service Architecture (Layered Structure)
 

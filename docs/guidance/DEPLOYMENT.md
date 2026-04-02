@@ -11,7 +11,8 @@ Caret follows a hybrid serverless and containerized approach on **AWS** for maxi
 
 ## Local Development & Deployment (Docker)
 
-Local deployment is fully containerized. Docker Compose orchestrates **all microservices and the frontend**; no services run outside containers for the “full stack” experience.
+Local deployment is fully containerized. Docker Compose orchestrates **all microservices and the frontend** for the recommended full-stack experience.
+Individual service runs outside containers are allowed for focused debugging when needed.
 
 ### Design Principles
 - **No local PostgreSQL**: The app connects to **Supabase** (PostgreSQL in the cloud) via `DATABASE_URL` and Supabase env vars. No `postgres` service in Compose for local dev.
@@ -23,20 +24,21 @@ Local deployment is fully containerized. Docker Compose orchestrates **all micro
 | Service            | Stack        | Port (local) | Notes |
 |--------------------|--------------|--------------|--------|
 | Frontend           | React/Vite   | 5173         | Build and serve with Bun. Calls only the API Gateway (see BACKEND.md). |
-| API Gateway        | Node/TS      | 3000         | Single entry point. Frontend uses `/api/v{version}/{service}/{method}`; Gateway routes to Auth, Document, AI. |
+| API Gateway        | Node/TS      | 3000         | Single entry point. Frontend uses `/api/v{version}/{service}/*`; Gateway routes to Auth, Document, AI. |
 | Auth Service       | Node/TS      | (internal)   | Reached only by the Gateway (no public port). |
 | Document Service   | Node/TS      | (internal)   | Reached only by the Gateway (no public port). |
-| Collaboration Svc  | Node/TS+Y.js | 4000         | WebSocket; frontend connects here directly (not via Gateway). |
+| Collaboration Svc  | Node/TS+Y.js | 3003         | WebSocket; frontend connects here directly (not via Gateway). |
 | AI Service         | Python/FastAPI | 8000       | uv + PydanticAI. Reached by the Gateway at `/api/v1/ai/*`. |
 
 ### Environment Variables (Local)
-Create a `.env` in the repo root and pass it into Compose. Required for Supabase and AI:
+Create a `.env` in the repo root and pass it into Compose. Required for Supabase, collaboration auth, and AI:
 
 ```
 # Supabase (PostgreSQL + Auth in the cloud)
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+SUPABASE_JWT_SECRET=your-supabase-jwt-secret
 
 # AI
 OPENAI_API_KEY=sk-...
@@ -49,9 +51,13 @@ docker compose up --build
 
 - Frontend: `http://localhost:5173`
 - API (Gateway): `http://localhost:3000` — frontend calls this with `/api/v1/...` (see BACKEND.md).
-- WebSocket (collab): `ws://localhost:4000`
+- WebSocket (collab): `ws://localhost:3003/document/{doc_id}?token={jwt}`
 
 All services use the same Supabase-backed PostgreSQL and env config; no local DB container.
+
+### ECS/SST Preparation Note
+- Collaboration Service is a dedicated stateful service (persistent WebSocket connections) and is deployed to ECS Fargate via SST in cloud environments.
+- Local development remains independent through Docker Compose (`collab-service` container on port `3003`), so local iteration is not blocked by ECS provisioning.
 
 ---
 
