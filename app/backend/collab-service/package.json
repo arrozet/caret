@@ -12,7 +12,11 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "format:check": "prettier --check src",
-    "format:write": "prettier --write src"
+    "format:write": "prettier --write src",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "ws": "^8.18.2",
