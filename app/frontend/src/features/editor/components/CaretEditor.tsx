@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import Collaboration from "@tiptap/extension-collaboration";
 import StarterKit from "@tiptap/starter-kit";
 import TextAlign from "@tiptap/extension-text-align";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -22,6 +23,7 @@ import { SelectionMenu } from "./SelectionMenu";
 import { Pagination } from "../extensions/pagination";
 import type { PaperSize } from "../extensions/pagination";
 import { GhostText } from "../extensions/ghost_text";
+import type * as Y from "yjs";
 
 /**
  * Props for the CaretEditor component.
@@ -35,6 +37,8 @@ interface CaretEditorProps {
   editable?: boolean;
   /** Callback to expose the editor instance to parent components. */
   on_editor_ready?: (editor: Editor) => void;
+  /** Shared Y.js document for real-time collaboration mode. */
+  collaboration_document?: Y.Doc | null;
 }
 
 /**
@@ -53,6 +57,7 @@ export function CaretEditor({
   on_update,
   editable = true,
   on_editor_ready,
+  collaboration_document = null,
 }: CaretEditorProps) {
   const [paper_size, set_paper_size] = useState<PaperSize>("a4");
 
@@ -60,12 +65,21 @@ export function CaretEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
+        history: collaboration_document ? false : undefined,
         // Tiptap v3 StarterKit bundles Link and Underline by default.
         // Disable them here to avoid "Duplicate extension names" warnings;
         // we register both below with our own configuration options.
         link: false,
         underline: false,
       }),
+      ...(collaboration_document
+        ? [
+            Collaboration.configure({
+              document: collaboration_document,
+              field: "content",
+            }),
+          ]
+        : []),
       TextStyle,
       Color,
       FontFamily.configure({
@@ -121,7 +135,7 @@ export function CaretEditor({
         on_editor_ready(ed);
       }
     },
-  });
+  }, [collaboration_document, editable]);
 
   // Keep the Pagination extension in sync with the selected paper size.
   useEffect(() => {

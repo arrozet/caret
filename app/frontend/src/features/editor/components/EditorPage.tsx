@@ -8,10 +8,16 @@ import { use_document } from "../hooks/use_document";
 import { use_save_document } from "../hooks/use_save_document";
 import { use_focus_mode } from "../../../hooks/use_focus_mode";
 import { use_tabs_store } from "../../../stores/tabs_store";
-import { use_ai_store } from "../../../stores";
+import { use_ai_store, use_auth_store } from "../../../stores";
 import { useGhostText } from "../hooks/use_ghost_text";
 import { index_document_embeddings } from "../../ai-assistant/api/ai_api";
 import type { DocumentChangePayload } from "../../ai-assistant/api/ai_api";
+import {
+  CollaborationPresenceBar,
+  LOCAL_COLLAB_WS_BASE_URL,
+  use_collaboration_presence,
+  use_collaboration_session,
+} from "../../collaboration";
 
 /**
  * Lazy-load the AI Chat Panel to keep the initial bundle lean.
@@ -24,6 +30,20 @@ const AUTOSAVE_DELAY_MS = 1_000;
 
 /** Debounce delay for title saves (shorter since it's a single field). */
 const TITLE_SAVE_DELAY_MS = 500;
+
+/**
+ * Resolve collaboration feature flag from Vite env.
+ */
+function is_collaboration_enabled(): boolean {
+  return import.meta.env.VITE_ENABLE_COLLABORATION !== "false";
+}
+
+/**
+ * Resolve collaboration websocket base URL from Vite env.
+ */
+function get_collaboration_ws_url(): string {
+  return (import.meta.env.VITE_COLLABORATION_WS_URL as string | undefined) ?? LOCAL_COLLAB_WS_BASE_URL;
+}
 
 /** Possible states for the save status indicator. */
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -227,6 +247,8 @@ function DocumentChangeReviewOverlay({
 export function EditorPage() {
   const { id: document_id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const auth_user = use_auth_store((state) => state.user);
+  const auth_session = use_auth_store((state) => state.session);
 
   const { data: document, isLoading, error } = use_document(document_id);
   const save_mutation = use_save_document(document_id ?? "");
@@ -266,6 +288,24 @@ export function EditorPage() {
    * which must re-register keyboard listeners whenever the editor changes.
    */
   const [editor_instance, set_editor_instance] = useState<Editor | null>(null);
+
+  const collaboration_enabled =
+    is_collaboration_enabled() &&
+    Boolean(document_id) &&
+    Boolean(auth_user?.id) &&
+    Boolean(auth_session?.access_token);
+
+  const collaboration_session = use_collaboration_session({
+    enabled: collaboration_enabled,
+    document_id,
+    token: auth_session?.access_token,
+    user_id: auth_user?.id,
+    user_name:
+      auth_user?.user_metadata?.full_name ?? auth_user?.email ?? auth_user?.id ?? "Collaborator",
+    server_url: get_collaboration_ws_url(),
+  });
+
+  const collaboration_presence = use_collaboration_presence(collaboration_session.users);
 
   const debug_log = useCallback((event: string, payload?: unknown) => {
     if (typeof window === "undefined") return;
@@ -874,7 +914,14 @@ export function EditorPage() {
         />
 
         {/* Save status indicator */}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {collaboration_enabled && (
+            <CollaborationPresenceBar
+              connection_status={collaboration_session.connection_status}
+              users={collaboration_presence.users}
+              class_name="hidden md:block"
+            />
+          )}
           <SaveStatusIndicator status={save_status} />
         </div>
       </div>
@@ -896,6 +943,7 @@ export function EditorPage() {
             key={editor_mount_key}
             content={(editor_content_override ?? document.content_json) as JSONContent | undefined}
             on_update={handle_update}
+            collaboration_document={collaboration_session.ydoc}
             on_editor_ready={(ed) => {
               // In React StrictMode the editor may mount twice in development.
               // Reset preview bookkeeping whenever we receive a new editor instance
