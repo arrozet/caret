@@ -61,81 +61,85 @@ export function CaretEditor({
 }: CaretEditorProps) {
   const [paper_size, set_paper_size] = useState<PaperSize>("a4");
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-        history: collaboration_document ? false : undefined,
-        // Tiptap v3 StarterKit bundles Link and Underline by default.
-        // Disable them here to avoid "Duplicate extension names" warnings;
-        // we register both below with our own configuration options.
-        link: false,
-        underline: false,
-      }),
-      ...(collaboration_document
-        ? [
-            Collaboration.configure({
-              document: collaboration_document,
-              field: "content",
-            }),
-          ]
-        : []),
-      TextStyle,
-      Color,
-      FontFamily.configure({
-        types: ["textStyle"],
-      }),
-      Highlight.configure({
-        multicolor: true,
-      }),
-      TextAlign.configure({
-        types: ["heading", "paragraph"],
-      }),
-      Placeholder.configure({
-        placeholder: "Start writing...",
-      }),
-      Underline,
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-      }),
-      Image,
-      TaskList,
-      TaskItem.configure({
-        nested: true,
-      }),
-      Table.configure({
-        resizable: true,
-      }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      Pagination.configure({
-        paper_size,
-      }),
-      GhostText,
-    ],
-    content: content ?? {
-      type: "doc",
-      content: [{ type: "paragraph" }],
-    },
-    editable,
-    editorProps: {
-      attributes: {
-        class: "caret-editor outline-none",
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({
+          heading: { levels: [1, 2, 3] },
+          // Disable undo/redo when using collaboration (Y.js handles history)
+          undoRedo: collaboration_document ? false : undefined,
+          // Tiptap v3 StarterKit bundles Link and Underline by default.
+          // Disable them here to avoid "Duplicate extension names" warnings;
+          // we register both below with our own configuration options.
+          link: false,
+          underline: false,
+        }),
+        ...(collaboration_document
+          ? [
+              Collaboration.configure({
+                document: collaboration_document,
+                field: "content",
+              }),
+            ]
+          : []),
+        TextStyle,
+        Color,
+        FontFamily.configure({
+          types: ["textStyle"],
+        }),
+        Highlight.configure({
+          multicolor: true,
+        }),
+        TextAlign.configure({
+          types: ["heading", "paragraph"],
+        }),
+        Placeholder.configure({
+          placeholder: "Start writing...",
+        }),
+        Underline,
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
+        }),
+        Image,
+        TaskList,
+        TaskItem.configure({
+          nested: true,
+        }),
+        Table.configure({
+          resizable: true,
+        }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        Pagination.configure({
+          paper_size,
+        }),
+        GhostText,
+      ],
+      content: content ?? {
+        type: "doc",
+        content: [{ type: "paragraph" }],
+      },
+      editable,
+      editorProps: {
+        attributes: {
+          class: "caret-editor outline-none",
+        },
+      },
+      onUpdate: ({ editor: ed }) => {
+        if (on_update) {
+          on_update(ed.getJSON(), ed.getText());
+        }
+      },
+      onCreate: ({ editor: ed }) => {
+        if (on_editor_ready) {
+          on_editor_ready(ed);
+        }
       },
     },
-    onUpdate: ({ editor: ed }) => {
-      if (on_update) {
-        on_update(ed.getJSON(), ed.getText());
-      }
-    },
-    onCreate: ({ editor: ed }) => {
-      if (on_editor_ready) {
-        on_editor_ready(ed);
-      }
-    },
-  }, [collaboration_document, editable]);
+    [collaboration_document, editable],
+  );
 
   // Keep the Pagination extension in sync with the selected paper size.
   useEffect(() => {

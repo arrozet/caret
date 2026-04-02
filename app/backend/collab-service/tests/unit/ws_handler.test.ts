@@ -252,7 +252,7 @@ describe("handle_ws_connection", () => {
   });
 
   /** Closes with 4000 when route is invalid before auth. */
-  it("should_close_connection_with_4000_when_route_is_invalid", async () => {
+  it("should_close_connection_with_1008_when_route_is_invalid", async () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/docs/doc-123?token=valid.jwt.token");
@@ -262,15 +262,15 @@ describe("handle_ws_connection", () => {
 
     // Assert
     expect(validate_ws_token).not.toHaveBeenCalled();
-    expect(mock_ws.close).toHaveBeenCalledWith(4000, "Invalid route or missing doc_id");
+    expect(mock_ws.close).toHaveBeenCalledWith(1008, "Invalid route or missing doc_id");
     expect(logger.warn).toHaveBeenCalledWith(
       "WebSocket connection rejected due to invalid route",
       expect.objectContaining({ path: "/docs/doc-123?token=valid.jwt.token" }),
     );
   });
 
-  /** Closes with 4000 when URL is malformed before auth. */
-  it("should_close_connection_with_4000_when_url_is_malformed", async () => {
+  /** Closes with 1008 when URL is malformed before auth. */
+  it("should_close_connection_with_1008_when_url_is_malformed", async () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("http://[::1");
@@ -280,7 +280,7 @@ describe("handle_ws_connection", () => {
 
     // Assert
     expect(validate_ws_token).not.toHaveBeenCalled();
-    expect(mock_ws.close).toHaveBeenCalledWith(4000, "Invalid route or missing doc_id");
+    expect(mock_ws.close).toHaveBeenCalledWith(1008, "Invalid route or missing doc_id");
   });
 });
 

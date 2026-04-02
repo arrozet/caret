@@ -110,13 +110,17 @@ export class ConnectionHandler {
     // Set up message handler
     ws.on("message", (data: RawData) => {
       try {
-        this.handle_message(ctx, data, awareness);
+        const close_code = this.handle_message(ctx, data, awareness);
+        if (close_code !== null) {
+          ws.close(close_code, "Protocol error");
+        }
       } catch (error) {
         logger.error("Error handling message", {
           doc_id,
           user_id,
           error: error instanceof Error ? error.message : String(error),
         });
+        ws.close(1002, "Protocol error");
       }
     });
 
@@ -149,19 +153,21 @@ export class ConnectionHandler {
    * @param ctx - Connection context
    * @param data - Raw message data (binary)
    * @param awareness - Awareness instance for the document
+   * @returns Close code if connection should be closed due to protocol error, null otherwise
    */
   private handle_message(
     ctx: ConnectionContext,
     data: RawData,
     awareness: awarenessProtocol.Awareness,
-  ): void {
+  ): number | null {
     const { auth, room_manager } = ctx;
     const { user_id, doc_id } = auth;
 
     // Convert RawData to Uint8Array
     const message = this.to_uint8_array(data);
     if (message.length === 0) {
-      return;
+      // Empty message is a protocol violation
+      return 1002;
     }
 
     const decoder = decoding.createDecoder(message);
@@ -170,7 +176,7 @@ export class ConnectionHandler {
     const doc = room_manager.get_doc(doc_id);
     if (!doc) {
       logger.warn("Received message for non-existent room", { doc_id, user_id });
-      return;
+      return null;
     }
 
     switch (message_type) {
@@ -185,6 +191,8 @@ export class ConnectionHandler {
       default:
         logger.warn("Unknown message type", { message_type, doc_id, user_id });
     }
+
+    return null;
   }
 
   /**

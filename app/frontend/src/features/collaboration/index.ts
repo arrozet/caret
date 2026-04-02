@@ -41,6 +41,9 @@ export {
 } from "./components";
 export type { RemoteCursorProps, RemoteCursorsProps, CursorConfig } from "./components";
 
+// Debug/testing components
+export { CollabHarnessPage } from "./components";
+
 // =============================================================================
 // Hooks
 // =============================================================================
@@ -71,3 +74,6 @@ export type {
   CollaborationSession,
   CreateCollaborationSessionParams,
 } from "./utils";
+
+// Harness/debug utilities
+export { build_collab_ws_endpoint, build_collab_provider_config } from "./utils";

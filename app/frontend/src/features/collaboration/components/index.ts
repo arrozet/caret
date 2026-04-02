@@ -21,3 +21,6 @@ export {
   type RemoteCursorsProps,
   type CursorConfig,
 } from "./RemoteCursor";
+
+// Debug/testing components
+export { CollabHarnessPage } from "./CollabHarnessPage";

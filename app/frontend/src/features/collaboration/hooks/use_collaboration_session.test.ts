@@ -32,7 +32,7 @@ vi.mock("../utils", () => ({
   })),
   destroy_collaboration_session: vi.fn(),
   derive_user_color: vi.fn(() => "#123456"),
-  extract_presence_users: (...args: unknown[]) => extract_presence_users_mock(...args),
+  extract_presence_users: vi.fn(() => extract_presence_users_mock()),
 }));
 
 /** Unit tests for collaboration session lifecycle hook. */
