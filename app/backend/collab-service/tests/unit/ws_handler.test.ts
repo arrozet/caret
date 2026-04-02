@@ -3,18 +3,14 @@ import type { WebSocket as WsType, RawData } from "ws";
 import type { IncomingMessage } from "http";
 
 /**
- * Unit tests para el WebSocket connection handler del collab-service.
- * Verifica el flujo de conexión, autenticación en handshake, manejo de
- * desconexión y comportamiento ante clientes maliciosos.
- * Se mockea ws y auth_middleware para aislar la lógica del handler.
+ * Unit tests for WebSocket connection handling in collab-service.
+ * Validates handshake auth, path parsing, and connection close semantics.
  */
 
-// Mock del módulo auth_middleware para controlar el resultado del handshake
 vi.mock("../../src/middleware/auth_middleware.js", () => ({
   validate_ws_token: vi.fn(),
 }));
 
-// Mock del módulo logger para suprimir output en tests
 vi.mock("../../src/lib/logger.js", () => ({
   logger: {
     info: vi.fn(),
@@ -27,9 +23,10 @@ vi.mock("../../src/lib/logger.js", () => ({
 import { validate_ws_token } from "../../src/middleware/auth_middleware.js";
 import { logger } from "../../src/lib/logger.js";
 import { UnauthorizedError } from "../../src/lib/errors.js";
+import { extract_doc_id_from_request_path, handle_ws_connection } from "../../src/app.js";
 
 /**
- * Factory que crea un mock de WebSocket con los métodos más usados.
+ * Creates a WebSocket mock with the methods used by handlers.
  */
 function make_mock_ws(): WsType {
   return {
@@ -41,7 +38,7 @@ function make_mock_ws(): WsType {
 }
 
 /**
- * Factory que crea un mock de IncomingMessage HTTP con la URL y host dados.
+ * Creates an IncomingMessage mock with URL and host.
  */
 function make_mock_request(url: string, host = "localhost:3003"): IncomingMessage {
   return {
@@ -51,10 +48,62 @@ function make_mock_request(url: string, host = "localhost:3003"): IncomingMessag
 }
 
 /**
- * Tests para el handler de conexión WebSocket del app.ts.
- * Replica la lógica del handler: valida token → acepta o cierra (4001).
+ * Unit tests for doc_id extraction from the expected route format.
  */
-describe("WebSocket connection handler logic", () => {
+describe("extract_doc_id_from_request_path", () => {
+  /** Returns doc_id when route matches /document/{doc_id}. */
+  it("should_extract_doc_id_from_valid_document_route", () => {
+    // Arrange
+    const req = make_mock_request("/document/doc-123?token=ok");
+
+    // Act
+    const doc_id = extract_doc_id_from_request_path(req);
+
+    // Assert
+    expect(doc_id).toBe("doc-123");
+  });
+
+  /** Returns null when route is not under /document/{doc_id}. */
+  it("should_return_null_for_invalid_document_route", () => {
+    // Arrange
+    const req = make_mock_request("/docs/doc-123?token=ok");
+
+    // Act
+    const doc_id = extract_doc_id_from_request_path(req);
+
+    // Assert
+    expect(doc_id).toBeNull();
+  });
+
+  /** Returns null when route misses doc_id segment. */
+  it("should_return_null_when_doc_id_is_missing", () => {
+    // Arrange
+    const req = make_mock_request("/document/?token=ok");
+
+    // Act
+    const doc_id = extract_doc_id_from_request_path(req);
+
+    // Assert
+    expect(doc_id).toBeNull();
+  });
+
+  /** Returns null when URL cannot be parsed. */
+  it("should_return_null_when_url_is_malformed", () => {
+    // Arrange
+    const req = make_mock_request("http://[::1");
+
+    // Act
+    const doc_id = extract_doc_id_from_request_path(req);
+
+    // Assert
+    expect(doc_id).toBeNull();
+  });
+});
+
+/**
+ * Unit tests for the WebSocket connection handler exported by app.ts.
+ */
+describe("handle_ws_connection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -63,24 +112,7 @@ describe("WebSocket connection handler logic", () => {
     vi.restoreAllMocks();
   });
 
-  /**
-   * Simula el handler de conexión de app.ts:
-   *   if validate_ws_token falla → ws.close(4001)
-   *   si pasa → logger.info
-   */
-  async function run_connection_handler(
-    ws: WsType,
-    req: IncomingMessage
-  ): Promise<void> {
-    try {
-      await validate_ws_token(req);
-      logger.info("WebSocket connection established");
-    } catch {
-      ws.close(4001, "Unauthorized");
-    }
-  }
-
-  /** Verifica que una conexión con token válido sea aceptada sin cerrar el socket */
+  /** Accepts valid token and route without closing socket. */
   it("should_accept_connection_when_token_is_valid", async () => {
     // Arrange
     const mock_ws = make_mock_ws();
@@ -88,47 +120,49 @@ describe("WebSocket connection handler logic", () => {
     vi.mocked(validate_ws_token).mockResolvedValue("valid.jwt.token");
 
     // Act
-    await run_connection_handler(mock_ws, req);
+    await handle_ws_connection(mock_ws, req);
 
     // Assert
     expect(mock_ws.close).not.toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith("WebSocket connection established");
+    expect(logger.info).toHaveBeenCalledWith("WebSocket connection accepted", {
+      doc_id: "doc-123",
+    });
   });
 
-  /** Verifica que una conexión sin token sea rechazada con código 4001 */
+  /** Closes with 4001 when token is missing. */
   it("should_close_connection_with_4001_when_token_missing", async () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123");
     vi.mocked(validate_ws_token).mockRejectedValue(
-      new UnauthorizedError("Missing token query parameter")
+      new UnauthorizedError("Missing token query parameter"),
     );
 
     // Act
-    await run_connection_handler(mock_ws, req);
+    await handle_ws_connection(mock_ws, req);
 
     // Assert
     expect(mock_ws.close).toHaveBeenCalledWith(4001, "Unauthorized");
   });
 
-  /** Verifica que token inválido también resulte en cierre con 4001 */
+  /** Closes with 4001 when token is invalid. */
   it("should_close_connection_with_4001_when_token_invalid", async () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=bad.token");
-    vi.mocked(validate_ws_token).mockRejectedValue(
-      new UnauthorizedError("Invalid token")
-    );
+    vi.mocked(validate_ws_token).mockRejectedValue(new UnauthorizedError("Invalid token"));
 
     // Act
-    await run_connection_handler(mock_ws, req);
+    await handle_ws_connection(mock_ws, req);
 
     // Assert
     expect(mock_ws.close).toHaveBeenCalledWith(4001, "Unauthorized");
-    expect(logger.info).not.toHaveBeenCalledWith("WebSocket connection established");
+    expect(logger.info).not.toHaveBeenCalledWith("WebSocket connection accepted", {
+      doc_id: "doc-123",
+    });
   });
 
-  /** Verifica que validate_ws_token sea llamado con el IncomingMessage correcto */
+  /** Calls validate_ws_token with the incoming request. */
   it("should_call_validate_ws_token_with_incoming_request", async () => {
     // Arrange
     const mock_ws = make_mock_ws();
@@ -136,28 +170,36 @@ describe("WebSocket connection handler logic", () => {
     vi.mocked(validate_ws_token).mockResolvedValue("my.token");
 
     // Act
-    await run_connection_handler(mock_ws, req);
+    await handle_ws_connection(mock_ws, req);
 
     // Assert
     expect(validate_ws_token).toHaveBeenCalledOnce();
     expect(validate_ws_token).toHaveBeenCalledWith(req);
   });
 
-  /** Verifica que cualquier error (no solo UnauthorizedError) cierre el socket */
-  it("should_close_connection_on_any_unexpected_error", async () => {
+  /** Closes with 1011 and logs error on unexpected auth errors. */
+  it("should_close_connection_with_1011_on_unexpected_error", async () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=token");
-    vi.mocked(validate_ws_token).mockRejectedValue(new Error("DB connection failed"));
+    const unexpected_error = new Error("DB connection failed");
+    vi.mocked(validate_ws_token).mockRejectedValue(unexpected_error);
 
     // Act
-    await run_connection_handler(mock_ws, req);
+    await handle_ws_connection(mock_ws, req);
 
     // Assert
-    expect(mock_ws.close).toHaveBeenCalledWith(4001, "Unauthorized");
+    expect(mock_ws.close).toHaveBeenCalledWith(1011, "Internal Error");
+    expect(logger.error).toHaveBeenCalledWith(
+      "Unexpected WebSocket handshake error",
+      expect.objectContaining({
+        doc_id: "doc-123",
+        error: unexpected_error,
+      }),
+    );
   });
 
-  /** Verifica que una conexión válida llame a logger.info exactamente una vez */
+  /** Logs info once on successful connection. */
   it("should_log_info_exactly_once_on_successful_connection", async () => {
     // Arrange
     const mock_ws = make_mock_ws();
@@ -165,13 +207,13 @@ describe("WebSocket connection handler logic", () => {
     vi.mocked(validate_ws_token).mockResolvedValue("ok.token");
 
     // Act
-    await run_connection_handler(mock_ws, req);
+    await handle_ws_connection(mock_ws, req);
 
     // Assert
     expect(logger.info).toHaveBeenCalledTimes(1);
   });
 
-  /** Verifica que una conexión rechazada no llame a logger.info */
+  /** Does not log acceptance when connection is rejected. */
   it("should_not_log_info_when_connection_rejected", async () => {
     // Arrange
     const mock_ws = make_mock_ws();
@@ -179,10 +221,42 @@ describe("WebSocket connection handler logic", () => {
     vi.mocked(validate_ws_token).mockRejectedValue(new UnauthorizedError());
 
     // Act
-    await run_connection_handler(mock_ws, req);
+    await handle_ws_connection(mock_ws, req);
 
     // Assert
     expect(logger.info).not.toHaveBeenCalled();
+  });
+
+  /** Closes with 4000 when route is invalid before auth. */
+  it("should_close_connection_with_4000_when_route_is_invalid", async () => {
+    // Arrange
+    const mock_ws = make_mock_ws();
+    const req = make_mock_request("/docs/doc-123?token=valid.jwt.token");
+
+    // Act
+    await handle_ws_connection(mock_ws, req);
+
+    // Assert
+    expect(validate_ws_token).not.toHaveBeenCalled();
+    expect(mock_ws.close).toHaveBeenCalledWith(4000, "Invalid route or missing doc_id");
+    expect(logger.warn).toHaveBeenCalledWith(
+      "WebSocket connection rejected due to invalid route",
+      expect.objectContaining({ path: "/docs/doc-123?token=valid.jwt.token" }),
+    );
+  });
+
+  /** Closes with 4000 when URL is malformed before auth. */
+  it("should_close_connection_with_4000_when_url_is_malformed", async () => {
+    // Arrange
+    const mock_ws = make_mock_ws();
+    const req = make_mock_request("http://[::1");
+
+    // Act
+    await handle_ws_connection(mock_ws, req);
+
+    // Assert
+    expect(validate_ws_token).not.toHaveBeenCalled();
+    expect(mock_ws.close).toHaveBeenCalledWith(4000, "Invalid route or missing doc_id");
   });
 });
 
