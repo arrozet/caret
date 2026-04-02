@@ -7,5 +7,7 @@
  *
  * Rule: Do NOT import feature-specific hooks or stores here.
  */
+export { Avatar } from "./Avatar";
+export { Badge } from "./Badge";
 export { Button } from "./Button";
 export { Input } from "./Input";
