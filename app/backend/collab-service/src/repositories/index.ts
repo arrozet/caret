@@ -5,4 +5,6 @@
  *
  * Rule: all DB access lives here. Services never import Drizzle directly.
  */
-export {};
+
+export type { ICollabRepository } from "./collab_repository.js";
+export { InMemoryCollabRepository } from "./collab_repository.js";

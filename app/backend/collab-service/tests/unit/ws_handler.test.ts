@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import type { WebSocket as WsType, RawData } from "ws";
 import type { IncomingMessage } from "http";
+import type { AuthResult } from "../../src/middleware/auth_middleware.js";
+import { UnauthorizedError } from "../../src/lib/errors.js";
 
 /**
  * Unit tests para el WebSocket connection handler del collab-service.
@@ -9,24 +11,33 @@ import type { IncomingMessage } from "http";
  * Se mockea ws y auth_middleware para aislar la lógica del handler.
  */
 
-// Mock del módulo auth_middleware para controlar el resultado del handshake
-vi.mock("../../src/middleware/auth_middleware.js", () => ({
+// ─────────────────────────────────────────────────────────────────
+// Typed mock interfaces (Bun-compatible pattern)
+// ─────────────────────────────────────────────────────────────────
+
+type ValidateWsTokenFn = (req: IncomingMessage) => Promise<AuthResult>;
+
+interface MockAuthMiddleware {
+  validate_ws_token: Mock<ValidateWsTokenFn>;
+}
+
+interface MockLogger {
+  info: Mock<(...args: unknown[]) => void>;
+  warn: Mock<(...args: unknown[]) => void>;
+  error: Mock<(...args: unknown[]) => void>;
+  debug: Mock<(...args: unknown[]) => void>;
+}
+
+const mock_auth: MockAuthMiddleware = {
   validate_ws_token: vi.fn(),
-}));
+};
 
-// Mock del módulo logger para suprimir output en tests
-vi.mock("../../src/lib/logger.js", () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
-}));
-
-import { validate_ws_token } from "../../src/middleware/auth_middleware.js";
-import { logger } from "../../src/lib/logger.js";
-import { UnauthorizedError } from "../../src/lib/errors.js";
+const mock_logger: MockLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+};
 
 /**
  * Factory que crea un mock de WebSocket con los métodos más usados.
@@ -67,14 +78,12 @@ describe("WebSocket connection handler logic", () => {
    * Simula el handler de conexión de app.ts:
    *   if validate_ws_token falla → ws.close(4001)
    *   si pasa → logger.info
+   * Uses injected mocks for Bun compatibility.
    */
-  async function run_connection_handler(
-    ws: WsType,
-    req: IncomingMessage
-  ): Promise<void> {
+  async function run_connection_handler(ws: WsType, req: IncomingMessage): Promise<void> {
     try {
-      await validate_ws_token(req);
-      logger.info("WebSocket connection established");
+      await mock_auth.validate_ws_token(req);
+      mock_logger.info("WebSocket connection established");
     } catch {
       ws.close(4001, "Unauthorized");
     }
@@ -85,14 +94,19 @@ describe("WebSocket connection handler logic", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=valid.jwt.token");
-    vi.mocked(validate_ws_token).mockResolvedValue("valid.jwt.token");
+    const auth_result: AuthResult = {
+      user_id: "user-1",
+      doc_id: "doc-123",
+      token: "valid.jwt.token",
+    };
+    mock_auth.validate_ws_token.mockResolvedValue(auth_result);
 
     // Act
     await run_connection_handler(mock_ws, req);
 
     // Assert
     expect(mock_ws.close).not.toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith("WebSocket connection established");
+    expect(mock_logger.info).toHaveBeenCalledWith("WebSocket connection established");
   });
 
   /** Verifica que una conexión sin token sea rechazada con código 4001 */
@@ -100,8 +114,8 @@ describe("WebSocket connection handler logic", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123");
-    vi.mocked(validate_ws_token).mockRejectedValue(
-      new UnauthorizedError("Missing token query parameter")
+    mock_auth.validate_ws_token.mockRejectedValue(
+      new UnauthorizedError("Missing token query parameter"),
     );
 
     // Act
@@ -116,16 +130,14 @@ describe("WebSocket connection handler logic", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=bad.token");
-    vi.mocked(validate_ws_token).mockRejectedValue(
-      new UnauthorizedError("Invalid token")
-    );
+    mock_auth.validate_ws_token.mockRejectedValue(new UnauthorizedError("Invalid token"));
 
     // Act
     await run_connection_handler(mock_ws, req);
 
     // Assert
     expect(mock_ws.close).toHaveBeenCalledWith(4001, "Unauthorized");
-    expect(logger.info).not.toHaveBeenCalledWith("WebSocket connection established");
+    expect(mock_logger.info).not.toHaveBeenCalledWith("WebSocket connection established");
   });
 
   /** Verifica que validate_ws_token sea llamado con el IncomingMessage correcto */
@@ -133,14 +145,15 @@ describe("WebSocket connection handler logic", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-456?token=my.token");
-    vi.mocked(validate_ws_token).mockResolvedValue("my.token");
+    const auth_result: AuthResult = { user_id: "user-1", doc_id: "doc-456", token: "my.token" };
+    mock_auth.validate_ws_token.mockResolvedValue(auth_result);
 
     // Act
     await run_connection_handler(mock_ws, req);
 
     // Assert
-    expect(validate_ws_token).toHaveBeenCalledOnce();
-    expect(validate_ws_token).toHaveBeenCalledWith(req);
+    expect(mock_auth.validate_ws_token).toHaveBeenCalledOnce();
+    expect(mock_auth.validate_ws_token).toHaveBeenCalledWith(req);
   });
 
   /** Verifica que cualquier error (no solo UnauthorizedError) cierre el socket */
@@ -148,7 +161,7 @@ describe("WebSocket connection handler logic", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=token");
-    vi.mocked(validate_ws_token).mockRejectedValue(new Error("DB connection failed"));
+    mock_auth.validate_ws_token.mockRejectedValue(new Error("DB connection failed"));
 
     // Act
     await run_connection_handler(mock_ws, req);
@@ -162,13 +175,14 @@ describe("WebSocket connection handler logic", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=ok.token");
-    vi.mocked(validate_ws_token).mockResolvedValue("ok.token");
+    const auth_result: AuthResult = { user_id: "user-1", doc_id: "doc-123", token: "ok.token" };
+    mock_auth.validate_ws_token.mockResolvedValue(auth_result);
 
     // Act
     await run_connection_handler(mock_ws, req);
 
     // Assert
-    expect(logger.info).toHaveBeenCalledTimes(1);
+    expect(mock_logger.info).toHaveBeenCalledTimes(1);
   });
 
   /** Verifica que una conexión rechazada no llame a logger.info */
@@ -176,13 +190,13 @@ describe("WebSocket connection handler logic", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123");
-    vi.mocked(validate_ws_token).mockRejectedValue(new UnauthorizedError());
+    mock_auth.validate_ws_token.mockRejectedValue(new UnauthorizedError());
 
     // Act
     await run_connection_handler(mock_ws, req);
 
     // Assert
-    expect(logger.info).not.toHaveBeenCalled();
+    expect(mock_logger.info).not.toHaveBeenCalled();
   });
 });
 

@@ -1,51 +1,28 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import * as Y from "yjs";
+import type { CollabUpdate, CollabSnapshot } from "../../src/models/index.js";
+import type { ICollabRepository } from "../../src/repositories/index.js";
+import { CollabPersistenceService } from "../../src/services/index.js";
 
 /**
  * Unit tests para la capa de persistencia del collab-service.
  * Verifica el guardado y carga de estado Y.js (updates y snapshots)
  * mockeando la DB/repositorio para aislar la lógica de persistencia.
- *
- * Implementa la forma esperada del CollabRepository antes de que
- * sea implementado en src/repositories/index.ts.
  */
 
 // ─────────────────────────────────────────────────────────────────
-// Tipos e interfaces esperadas del repositorio
+// Mock del repositorio con typed mocks
 // ─────────────────────────────────────────────────────────────────
 
-interface CollabUpdate {
-  id: string;
-  document_id: string;
-  update_data: Uint8Array;
-  created_at: Date;
+interface MockCollabRepository extends ICollabRepository {
+  save_update: Mock<ICollabRepository["save_update"]>;
+  get_updates: Mock<ICollabRepository["get_updates"]>;
+  save_snapshot: Mock<ICollabRepository["save_snapshot"]>;
+  get_latest_snapshot: Mock<ICollabRepository["get_latest_snapshot"]>;
+  delete_updates_before: Mock<ICollabRepository["delete_updates_before"]>;
 }
 
-interface CollabSnapshot {
-  id: string;
-  document_id: string;
-  snapshot_data: Uint8Array;
-  state_vector: Uint8Array;
-  created_at: Date;
-}
-
-/**
- * Interfaz del repositorio de colaboración.
- * Define el contrato que debe cumplir la implementación real con Drizzle.
- */
-interface ICollabRepository {
-  save_update(document_id: string, update: Uint8Array): Promise<CollabUpdate>;
-  get_updates(document_id: string): Promise<CollabUpdate[]>;
-  save_snapshot(document_id: string, snapshot: Uint8Array, state_vector: Uint8Array): Promise<CollabSnapshot>;
-  get_latest_snapshot(document_id: string): Promise<CollabSnapshot | null>;
-  delete_updates_before(document_id: string, snapshot_id: string): Promise<number>;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Mock del repositorio
-// ─────────────────────────────────────────────────────────────────
-
-function make_mock_repository(): ICollabRepository {
+function make_mock_repository(): MockCollabRepository {
   return {
     save_update: vi.fn(),
     get_updates: vi.fn(),
@@ -56,61 +33,11 @@ function make_mock_repository(): ICollabRepository {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Implementación del servicio de persistencia para testear
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Servicio de persistencia de Y.js.
- * Aplica updates acumulados sobre el snapshot base para reconstruir el doc.
- */
-class CollabPersistenceService {
-  constructor(private readonly repository: ICollabRepository) {}
-
-  /**
-   * Persiste un update Y.js incremental en la DB.
-   */
-  async persist_update(document_id: string, update: Uint8Array): Promise<CollabUpdate> {
-    return this.repository.save_update(document_id, update);
-  }
-
-  /**
-   * Recarga el estado Y.js completo desde DB:
-   * toma el último snapshot y aplica todos los updates posteriores.
-   */
-  async load_document(document_id: string): Promise<Y.Doc> {
-    const doc = new Y.Doc();
-
-    // 1. Aplicar snapshot base si existe
-    const snapshot = await this.repository.get_latest_snapshot(document_id);
-    if (snapshot) {
-      Y.applyUpdate(doc, snapshot.snapshot_data);
-    }
-
-    // 2. Aplicar updates incrementales
-    const updates = await this.repository.get_updates(document_id);
-    for (const u of updates) {
-      Y.applyUpdate(doc, u.update_data);
-    }
-
-    return doc;
-  }
-
-  /**
-   * Toma un snapshot del estado actual y opcionalmente elimina updates previos.
-   */
-  async take_snapshot(document_id: string, doc: Y.Doc): Promise<CollabSnapshot> {
-    const snapshot_data = Y.encodeStateAsUpdate(doc);
-    const state_vector = Y.encodeStateVector(doc);
-    return this.repository.save_snapshot(document_id, snapshot_data, state_vector);
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────
 
 describe("CollabPersistenceService", () => {
-  let mock_repo: ICollabRepository;
+  let mock_repo: MockCollabRepository;
   let service: CollabPersistenceService;
 
   beforeEach(() => {
@@ -136,7 +63,7 @@ describe("CollabPersistenceService", () => {
         update_data: update,
         created_at: new Date(),
       };
-      vi.mocked(mock_repo.save_update).mockResolvedValue(expected_result);
+      mock_repo.save_update.mockResolvedValue(expected_result);
 
       // Act
       const result = await service.persist_update(document_id, update);
@@ -158,7 +85,7 @@ describe("CollabPersistenceService", () => {
         update_data: update,
         created_at: new Date(),
       };
-      vi.mocked(mock_repo.save_update).mockResolvedValue(saved);
+      mock_repo.save_update.mockResolvedValue(saved);
 
       // Act
       const result = await service.persist_update(document_id, update);
@@ -172,12 +99,10 @@ describe("CollabPersistenceService", () => {
       // Arrange
       const document_id = "doc-error";
       const update = new Uint8Array([1]);
-      vi.mocked(mock_repo.save_update).mockRejectedValue(new Error("DB write failed"));
+      mock_repo.save_update.mockRejectedValue(new Error("DB write failed"));
 
       // Act & Assert
-      await expect(service.persist_update(document_id, update)).rejects.toThrow(
-        "DB write failed"
-      );
+      await expect(service.persist_update(document_id, update)).rejects.toThrow("DB write failed");
     });
   });
 
@@ -189,8 +114,8 @@ describe("CollabPersistenceService", () => {
     it("should_return_empty_ydoc_when_no_snapshot_or_updates", async () => {
       // Arrange
       const document_id = "empty-doc";
-      vi.mocked(mock_repo.get_latest_snapshot).mockResolvedValue(null);
-      vi.mocked(mock_repo.get_updates).mockResolvedValue([]);
+      mock_repo.get_latest_snapshot.mockResolvedValue(null);
+      mock_repo.get_updates.mockResolvedValue([]);
 
       // Act
       const doc = await service.load_document(document_id);
@@ -208,14 +133,14 @@ describe("CollabPersistenceService", () => {
       source_doc.getText("content").insert(0, "from snapshot");
       const snapshot_data = Y.encodeStateAsUpdate(source_doc);
 
-      vi.mocked(mock_repo.get_latest_snapshot).mockResolvedValue({
+      mock_repo.get_latest_snapshot.mockResolvedValue({
         id: "snap-1",
         document_id,
         snapshot_data,
         state_vector: Y.encodeStateVector(source_doc),
         created_at: new Date(),
       });
-      vi.mocked(mock_repo.get_updates).mockResolvedValue([]);
+      mock_repo.get_updates.mockResolvedValue([]);
 
       // Act
       const doc = await service.load_document(document_id);
@@ -241,14 +166,14 @@ describe("CollabPersistenceService", () => {
       const sv_after_snap = Y.encodeStateVector(base_doc);
       const delta_update = Y.encodeStateAsUpdate(delta_doc, sv_after_snap);
 
-      vi.mocked(mock_repo.get_latest_snapshot).mockResolvedValue({
+      mock_repo.get_latest_snapshot.mockResolvedValue({
         id: "snap-base",
         document_id,
         snapshot_data,
         state_vector: Y.encodeStateVector(base_doc),
         created_at: new Date(),
       });
-      vi.mocked(mock_repo.get_updates).mockResolvedValue([
+      mock_repo.get_updates.mockResolvedValue([
         {
           id: "upd-1",
           document_id,
@@ -268,12 +193,11 @@ describe("CollabPersistenceService", () => {
     it("should_apply_multiple_updates_in_order", async () => {
       // Arrange
       const document_id = "multi-update-doc";
-      vi.mocked(mock_repo.get_latest_snapshot).mockResolvedValue(null);
+      mock_repo.get_latest_snapshot.mockResolvedValue(null);
 
       // Crear tres updates secuenciales
       const doc_source = new Y.Doc();
       doc_source.getText("content").insert(0, "A");
-      const sv_empty = new Uint8Array();
       const update_1 = Y.encodeStateAsUpdate(doc_source);
 
       const sv_after_1 = Y.encodeStateVector(doc_source);
@@ -284,7 +208,7 @@ describe("CollabPersistenceService", () => {
       doc_source.getText("content").insert(2, "C");
       const update_3 = Y.encodeStateAsUpdate(doc_source, sv_after_2);
 
-      vi.mocked(mock_repo.get_updates).mockResolvedValue([
+      mock_repo.get_updates.mockResolvedValue([
         { id: "u1", document_id, update_data: update_1, created_at: new Date() },
         { id: "u2", document_id, update_data: update_2, created_at: new Date() },
         { id: "u3", document_id, update_data: update_3, created_at: new Date() },
@@ -301,8 +225,8 @@ describe("CollabPersistenceService", () => {
     it("should_query_both_snapshot_and_updates_from_repository", async () => {
       // Arrange
       const document_id = "query-doc";
-      vi.mocked(mock_repo.get_latest_snapshot).mockResolvedValue(null);
-      vi.mocked(mock_repo.get_updates).mockResolvedValue([]);
+      mock_repo.get_latest_snapshot.mockResolvedValue(null);
+      mock_repo.get_updates.mockResolvedValue([]);
 
       // Act
       await service.load_document(document_id);
@@ -331,14 +255,14 @@ describe("CollabPersistenceService", () => {
         state_vector: Y.encodeStateVector(doc),
         created_at: new Date(),
       };
-      vi.mocked(mock_repo.save_snapshot).mockResolvedValue(expected_snap);
+      mock_repo.save_snapshot.mockResolvedValue(expected_snap);
 
       // Act
       const result = await service.take_snapshot(document_id, doc);
 
       // Assert
       expect(mock_repo.save_snapshot).toHaveBeenCalledOnce();
-      const [called_id, called_snap, called_sv] = vi.mocked(mock_repo.save_snapshot).mock.calls[0];
+      const [called_id, called_snap, called_sv] = mock_repo.save_snapshot.mock.calls[0];
       expect(called_id).toBe(document_id);
       expect(called_snap).toBeInstanceOf(Uint8Array);
       expect(called_sv).toBeInstanceOf(Uint8Array);
@@ -353,18 +277,16 @@ describe("CollabPersistenceService", () => {
       doc.getText("content").insert(0, "restore me");
 
       let captured_snapshot_data: Uint8Array | undefined;
-      vi.mocked(mock_repo.save_snapshot).mockImplementation(
-        async (_id, snap_data, sv) => {
-          captured_snapshot_data = snap_data;
-          return {
-            id: "snap-restore",
-            document_id: _id,
-            snapshot_data: snap_data,
-            state_vector: sv,
-            created_at: new Date(),
-          };
-        }
-      );
+      mock_repo.save_snapshot.mockImplementation(async (_id, snap_data, sv) => {
+        captured_snapshot_data = snap_data;
+        return {
+          id: "snap-restore",
+          document_id: _id,
+          snapshot_data: snap_data,
+          state_vector: sv,
+          created_at: new Date(),
+        };
+      });
 
       // Act
       await service.take_snapshot(document_id, doc);
@@ -379,12 +301,10 @@ describe("CollabPersistenceService", () => {
     it("should_propagate_errors_from_save_snapshot", async () => {
       // Arrange
       const doc = new Y.Doc();
-      vi.mocked(mock_repo.save_snapshot).mockRejectedValue(new Error("Snapshot write failed"));
+      mock_repo.save_snapshot.mockRejectedValue(new Error("Snapshot write failed"));
 
       // Act & Assert
-      await expect(service.take_snapshot("doc-fail", doc)).rejects.toThrow(
-        "Snapshot write failed"
-      );
+      await expect(service.take_snapshot("doc-fail", doc)).rejects.toThrow("Snapshot write failed");
     });
   });
 });

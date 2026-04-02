@@ -15,14 +15,15 @@
     "format:write": "prettier --write src"
   },
   "dependencies": {
-    "ws": "^8.18.2",
-    "yjs": "^13.6.29",
-    "y-protocols": "^1.0.6",
-    "lib0": "^0.2.110",
-    "drizzle-orm": "^0.43.0",
-    "postgres": "^3.4.5",
     "dotenv": "^16.5.0",
-    "reflect-metadata": "^0.2.2"
+    "drizzle-orm": "^0.43.0",
+    "jose": "^6.2.2",
+    "lib0": "^0.2.110",
+    "postgres": "^3.4.5",
+    "reflect-metadata": "^0.2.2",
+    "ws": "^8.18.2",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.29"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

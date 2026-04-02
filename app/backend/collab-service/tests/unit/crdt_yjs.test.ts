@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import * as Y from "yjs";
 
 /**
@@ -186,9 +186,7 @@ describe("Y.js CRDT core", () => {
       Y.applyUpdate(doc_b, Y.encodeStateAsUpdate(doc_a));
 
       // Assert — ambos docs deben tener el mismo estado final
-      expect(doc_a.getText("content").toString()).toBe(
-        doc_b.getText("content").toString()
-      );
+      expect(doc_a.getText("content").toString()).toBe(doc_b.getText("content").toString());
     });
 
     /** Verifica que merge de docs idénticos no duplique contenido */
@@ -227,7 +225,7 @@ describe("Y.js CRDT core", () => {
 
       // Assert — conmutatividad garantiza mismo resultado
       expect(result_doc_1.getText("content").toString()).toBe(
-        result_doc_2.getText("content").toString()
+        result_doc_2.getText("content").toString(),
       );
     });
   });

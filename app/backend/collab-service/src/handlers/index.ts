@@ -6,4 +6,4 @@
  * Rule: no business logic here — delegate to Services.
  * Rule: no direct DB access — delegate to Repositories via Services.
  */
-export {};
+export { ConnectionHandler, type ConnectionContext } from "./connection_handler.js";

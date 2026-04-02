@@ -6,4 +6,6 @@
  * Rule: no WebSocket concepts (ws, message event) inside Services.
  * Rule: no direct ORM/SQL — delegate to Repositories.
  */
-export {};
+
+export { RoomManager } from "./room_manager.js";
+export { CollabPersistenceService } from "./collab_persistence_service.js";
