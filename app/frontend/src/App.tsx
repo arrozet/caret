@@ -4,6 +4,7 @@ import { use_auth_store } from "./stores/auth_store";
 import { AuthPage } from "./features/auth";
 import { LandingPage } from "./features/landing";
 import { SettingsPage } from "./features/settings";
+import { CollabHarnessPage } from "./features/collaboration";
 import { MainLayout } from "./components/layout/MainLayout";
 import { AuthGuard } from "./components/layout/AuthGuard";
 import { DocumentList, EditorPage } from "./features/editor/components";
@@ -19,6 +20,7 @@ import "./App.css";
  */
 function App() {
   const initialize = use_auth_store((s) => s.initialize);
+  const is_dev_mode = import.meta.env.DEV;
 
   useEffect(() => {
     initialize();
@@ -28,11 +30,11 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public routes */}
-        <Route
-          path="/"
-          element={<LandingPage />}
-        />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<AuthPage />} />
+        {is_dev_mode ? (
+          <Route path="/debug/collab-harness" element={<CollabHarnessPage />} />
+        ) : null}
 
         {/* Protected routes */}
         <Route

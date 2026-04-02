@@ -1,6 +1,5 @@
 /**
  * Collaboration feature utilities.
- * Infrastructure layer: Y.js WebSocket provider setup, CRDT helpers.
- * Pure functions that set up and manage the Y.js document and provider.
+ * Utility functions for building collaboration websocket connection settings.
  */
-export {};
+export { build_collab_ws_endpoint, build_collab_provider_config } from "./build_collab_ws_endpoint";
