@@ -5,4 +5,6 @@
  *
  * Rule: all DB access lives here. Services never import Drizzle directly.
  */
-export {};
+
+export { CollabUpdateRepository } from "./collab_update_repository.js";
+export { CollabSnapshotRepository } from "./collab_snapshot_repository.js";
