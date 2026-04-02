@@ -8,9 +8,10 @@
 
 import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import type { document_collab_updates, document_collab_snapshots } from "../db/schema.js";
+import * as Y from "yjs";
 
 /* ============================================================
-   Y.js Update Log Models
+   Y.js Update Log Models (Drizzle-inferred for DB persistence)
    ============================================================ */
 
 /**
@@ -37,7 +38,7 @@ export interface CollabUpdateKey {
 }
 
 /* ============================================================
-   Y.js Snapshot Models
+   Y.js Snapshot Models (Drizzle-inferred for DB persistence)
    ============================================================ */
 
 /**
@@ -77,6 +78,43 @@ export interface BatchInsertResult {
   inserted_count: number;
   /** The highest sequence number inserted. */
   last_seq: number;
+}
+
+/* ============================================================
+   In-Memory Room & Participant Models (WebSocket runtime state)
+   ============================================================ */
+
+/**
+ * Represents a WebSocket participant session in a collaboration room.
+ * Tracks a user's connection to a specific document for real-time collaboration.
+ */
+export interface Participant {
+  /** Unique identifier of the user in the system. */
+  user_id: string;
+
+  /** Unique identifier of the WebSocket connection. */
+  socket_id: string;
+
+  /** Timestamp when the participant joined the room. */
+  joined_at: Date;
+}
+
+/**
+ * Represents an active collaboration room with a shared Y.Doc.
+ * Manages the in-memory state for real-time collaborative editing.
+ */
+export interface Room {
+  /** Unique identifier of the document being edited. */
+  document_id: string;
+
+  /** The Y.js document instance for CRDT-based synchronization. */
+  doc: Y.Doc;
+
+  /** Map of participants keyed by user_id. */
+  participants: Map<string, Participant>;
+
+  /** Timestamp when the room was created. */
+  created_at: Date;
 }
 
 /* ============================================================

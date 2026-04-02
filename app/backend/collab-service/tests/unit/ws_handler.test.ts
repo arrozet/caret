@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { WebSocket as WsType, RawData } from "ws";
 import type { IncomingMessage } from "http";
+import type { AuthResult } from "../../src/middleware/auth_middleware.js";
+import { UnauthorizedError } from "../../src/lib/errors.js";
 
 /**
  * Unit tests for WebSocket connection handling in collab-service.
@@ -20,9 +22,22 @@ vi.mock("../../src/lib/logger.js", () => ({
   },
 }));
 
+vi.mock("../../src/services/room_manager.js", () => ({
+  RoomManager: vi.fn().mockImplementation(() => ({
+    get_or_create_room: vi.fn(),
+    remove_participant: vi.fn(),
+    get_room: vi.fn(),
+  })),
+}));
+
+vi.mock("../../src/handlers/index.js", () => ({
+  ConnectionHandler: vi.fn().mockImplementation(() => ({
+    handle_connection: vi.fn(),
+  })),
+}));
+
 import { validate_ws_token } from "../../src/middleware/auth_middleware.js";
 import { logger } from "../../src/lib/logger.js";
-import { UnauthorizedError } from "../../src/lib/errors.js";
 import { extract_doc_id_from_request_path, handle_ws_connection } from "../../src/app.js";
 
 /**
@@ -117,7 +132,12 @@ describe("handle_ws_connection", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=valid.jwt.token");
-    vi.mocked(validate_ws_token).mockResolvedValue("valid.jwt.token");
+    const auth_result: AuthResult = {
+      user_id: "user-1",
+      doc_id: "doc-123",
+      token: "valid.jwt.token",
+    };
+    vi.mocked(validate_ws_token).mockResolvedValue(auth_result);
 
     // Act
     await handle_ws_connection(mock_ws, req);
@@ -126,6 +146,7 @@ describe("handle_ws_connection", () => {
     expect(mock_ws.close).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith("WebSocket connection accepted", {
       doc_id: "doc-123",
+      user_id: "user-1",
     });
   });
 
@@ -159,6 +180,7 @@ describe("handle_ws_connection", () => {
     expect(mock_ws.close).toHaveBeenCalledWith(4001, "Unauthorized");
     expect(logger.info).not.toHaveBeenCalledWith("WebSocket connection accepted", {
       doc_id: "doc-123",
+      user_id: expect.any(String),
     });
   });
 
@@ -167,7 +189,8 @@ describe("handle_ws_connection", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-456?token=my.token");
-    vi.mocked(validate_ws_token).mockResolvedValue("my.token");
+    const auth_result: AuthResult = { user_id: "user-1", doc_id: "doc-456", token: "my.token" };
+    vi.mocked(validate_ws_token).mockResolvedValue(auth_result);
 
     // Act
     await handle_ws_connection(mock_ws, req);
@@ -204,7 +227,8 @@ describe("handle_ws_connection", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=ok.token");
-    vi.mocked(validate_ws_token).mockResolvedValue("ok.token");
+    const auth_result: AuthResult = { user_id: "user-1", doc_id: "doc-123", token: "ok.token" };
+    vi.mocked(validate_ws_token).mockResolvedValue(auth_result);
 
     // Act
     await handle_ws_connection(mock_ws, req);

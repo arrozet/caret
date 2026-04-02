@@ -1,119 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as Y from "yjs";
+import { RoomManager } from "../../src/services/room_manager.js";
 
 /**
  * Unit tests para la gestión de salas (room management) del collab-service.
  * Verifica la lógica de join/leave de participantes, presencia, y el ciclo
  * de vida de un documento Y.js compartido en una sala de colaboración.
- * Implementa la lógica de RoomManager in-memory que el servicio usará.
  */
-
-// ─────────────────────────────────────────────────────────────────
-// Implementación inline de RoomManager para testear la lógica
-// (el src/services/index.ts es un stub; los tests definen la
-//  forma esperada del servicio antes de que sea implementado)
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Representa una sesión de participante en una sala.
- */
-interface Participant {
-  user_id: string;
-  socket_id: string;
-  joined_at: Date;
-}
-
-/**
- * Representa una sala de colaboración activa.
- */
-interface Room {
-  document_id: string;
-  doc: Y.Doc;
-  participants: Map<string, Participant>;
-  created_at: Date;
-}
-
-/**
- * Gestiona el ciclo de vida de salas de colaboración en memoria.
- * Esta es la forma esperada del servicio de rooms del collab-service.
- */
-class RoomManager {
-  private rooms: Map<string, Room> = new Map();
-
-  /**
-   * Une a un usuario a una sala, creando la sala si no existe.
-   */
-  join_room(document_id: string, user_id: string, socket_id: string): void {
-    if (!this.rooms.has(document_id)) {
-      this.rooms.set(document_id, {
-        document_id,
-        doc: new Y.Doc(),
-        participants: new Map(),
-        created_at: new Date(),
-      });
-    }
-    const room = this.rooms.get(document_id)!;
-    room.participants.set(user_id, {
-      user_id,
-      socket_id,
-      joined_at: new Date(),
-    });
-  }
-
-  /**
-   * Elimina a un usuario de la sala. Si la sala queda vacía, la destruye.
-   */
-  leave_room(document_id: string, user_id: string): boolean {
-    const room = this.rooms.get(document_id);
-    if (!room) return false;
-    const removed = room.participants.delete(user_id);
-    if (room.participants.size === 0) {
-      this.rooms.delete(document_id);
-    }
-    return removed;
-  }
-
-  /**
-   * Devuelve la lista de user_ids presentes en la sala.
-   */
-  get_participants(document_id: string): string[] {
-    const room = this.rooms.get(document_id);
-    if (!room) return [];
-    return Array.from(room.participants.keys());
-  }
-
-  /**
-   * Devuelve el YDoc asociado a la sala, o undefined si no existe.
-   */
-  get_doc(document_id: string): Y.Doc | undefined {
-    return this.rooms.get(document_id)?.doc;
-  }
-
-  /**
-   * Indica si una sala existe.
-   */
-  room_exists(document_id: string): boolean {
-    return this.rooms.has(document_id);
-  }
-
-  /**
-   * Devuelve el número de salas activas.
-   */
-  get_room_count(): number {
-    return this.rooms.size;
-  }
-
-  /**
-   * Devuelve el número de participantes en una sala.
-   */
-  get_participant_count(document_id: string): number {
-    return this.rooms.get(document_id)?.participants.size ?? 0;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Tests
-// ─────────────────────────────────────────────────────────────────
 
 describe("RoomManager", () => {
   let room_manager: RoomManager;
