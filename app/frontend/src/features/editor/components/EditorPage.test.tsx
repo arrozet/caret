@@ -30,6 +30,7 @@ let current_text = "Texto original";
 let current_html = "<p>Texto original</p>";
 let current_json: JSONContent = initial_json;
 let set_content_call_count = 0;
+let latest_caret_editor_props: Record<string, unknown> | null = null;
 
 const mock_commands_set_content = vi.fn((next_content: JSONContent): boolean => {
   set_content_call_count += 1;
@@ -109,8 +110,43 @@ vi.mock("../../../stores", () => {
   store.getState = () => ({
     pending_document_change: current_pending_change,
   });
-  return { use_ai_store: store };
+
+  const auth_store = (selector?: (state: { user: { id: string; email: string }; session: { access_token: string } }) => unknown) => {
+    const state = {
+      user: {
+        id: "user-1",
+        email: "test@caret.page",
+      },
+      session: {
+        access_token: "jwt-token",
+      },
+    };
+    return selector ? selector(state) : state;
+  };
+
+  return {
+    use_ai_store: store,
+    use_auth_store: auth_store,
+  };
 });
+
+vi.mock("../../collaboration", () => ({
+  LOCAL_COLLAB_WS_BASE_URL: "ws://localhost:3003/document",
+  use_collaboration_session: () => ({
+    ydoc: { id: "collab-doc" },
+    provider: null,
+    connection_status: "connected",
+    users: [{ id: "user-1", name: "Ada", color: "#123456" }],
+    is_ready: true,
+  }),
+  use_collaboration_presence: (users: unknown[]) => ({
+    users,
+    users_count: users.length,
+    has_collaborators: users.length > 1,
+    is_solo: users.length <= 1,
+  }),
+  CollaborationPresenceBar: () => <div data-testid="collab-presence" />,
+}));
 
 vi.mock("../hooks/use_ghost_text", () => ({
   useGhostText: vi.fn(),
@@ -121,7 +157,9 @@ vi.mock("../../ai-assistant/api/ai_api", () => ({
 }));
 
 vi.mock("./CaretEditor", () => ({
-  CaretEditor: ({ on_editor_ready }: { on_editor_ready?: (editor: Editor) => void }) => {
+  CaretEditor: ({ on_editor_ready, ...props }: { on_editor_ready?: (editor: Editor) => void }) => {
+    latest_caret_editor_props = props;
+
     useEffect(() => {
       on_editor_ready?.(fake_editor);
     }, [on_editor_ready]);
@@ -144,6 +182,7 @@ describe("EditorPage", () => {
     current_html = "<p>Texto original</p>";
     current_json = initial_json;
     set_content_call_count = 0;
+    latest_caret_editor_props = null;
 
     mock_mutate_async.mockResolvedValue({
       id: "doc-1",
@@ -183,5 +222,17 @@ describe("EditorPage", () => {
       | { content_text?: string }
       | undefined;
     expect(last_call?.content_text).toBe("Hola.");
+  });
+
+  /** Verifies collaboration bootstrap injects a shared Y.Doc into CaretEditor. */
+  it("passes collaboration_document to CaretEditor", () => {
+    // Arrange
+    render(<EditorPage />);
+
+    // Act
+    const collaboration_document = latest_caret_editor_props?.collaboration_document;
+
+    // Assert
+    expect(collaboration_document).toEqual({ id: "collab-doc" });
   });
 });

@@ -3,4 +3,6 @@
  * Presentation layer: UserAvatars, LiveCursor, PresenceIndicator.
  * Renders real-time user presence using Y.js awareness data.
  */
-export {};
+export { CollaborationPresenceBar } from "./CollaborationPresenceBar";
+
+export type { CollaborationPresenceBarProps } from "./CollaborationPresenceBar";
