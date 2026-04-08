@@ -22,10 +22,7 @@ export class WorkspaceRepository {
    * @returns The inserted workspace row.
    */
   async create(data: typeof schema.workspaces.$inferInsert) {
-    const rows = await this.db
-      .insert(schema.workspaces)
-      .values(data)
-      .returning();
+    const rows = await this.db.insert(schema.workspaces).values(data).returning();
     return rows[0];
   }
 
@@ -61,10 +58,7 @@ export class WorkspaceRepository {
    * @param pagination - Limit and offset for pagination.
    * @returns Object with data array (workspace + role) and total count.
    */
-  async list_by_user(
-    user_id: string,
-    pagination: PaginationParams,
-  ) {
+  async list_by_user(user_id: string, pagination: PaginationParams) {
     const where_clause = and(
       eq(schema.workspace_members.user_id, user_id),
       isNull(schema.workspace_members.revoked_at),
@@ -113,10 +107,7 @@ export class WorkspaceRepository {
    * @returns The inserted membership row.
    */
   async add_member(data: typeof schema.workspace_members.$inferInsert) {
-    const rows = await this.db
-      .insert(schema.workspace_members)
-      .values(data)
-      .returning();
+    const rows = await this.db.insert(schema.workspace_members).values(data).returning();
     return rows[0];
   }
 
@@ -137,6 +128,72 @@ export class WorkspaceRepository {
           isNull(schema.workspace_members.revoked_at),
         ),
       );
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Check whether a user has any membership row in a workspace,
+   * including revoked memberships.
+   * @param workspace_id - Workspace UUID.
+   * @param user_id - User UUID.
+   * @returns The membership row if found, or null.
+   */
+  async find_membership_any(workspace_id: string, user_id: string) {
+    const rows = await this.db
+      .select()
+      .from(schema.workspace_members)
+      .where(
+        and(
+          eq(schema.workspace_members.workspace_id, workspace_id),
+          eq(schema.workspace_members.user_id, user_id),
+        ),
+      );
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Resolve an auth user id by email address (case-insensitive).
+   * Reads directly from Supabase `auth.users` as source of truth.
+   * @param email - Target email to resolve.
+   * @returns Matching user id, or null when not found.
+   */
+  async find_auth_user_id_by_email(email: string): Promise<string | null> {
+    const rows = await this.db.execute(sql<{ id: string }>`
+      SELECT id::text AS id
+      FROM auth.users
+      WHERE lower(email) = lower(${email})
+      LIMIT 1
+    `);
+
+    const row = rows[0] as { id?: string } | undefined;
+    return row?.id ?? null;
+  }
+
+  /**
+   * Reactivate a revoked workspace membership and set member metadata.
+   * @param workspace_id - Workspace UUID.
+   * @param user_id - User UUID.
+   * @param invited_by_user_id - User UUID who performed the invite.
+   * @returns Updated membership row, or null if no row exists.
+   */
+  async reactivate_member(workspace_id: string, user_id: string, invited_by_user_id: string) {
+    const rows = await this.db
+      .update(schema.workspace_members)
+      .set({
+        role: "member",
+        invited_by_user_id,
+        revoked_at: null,
+        revoked_by_user_id: null,
+        joined_at: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.workspace_members.workspace_id, workspace_id),
+          eq(schema.workspace_members.user_id, user_id),
+        ),
+      )
+      .returning();
+
     return rows[0] ?? null;
   }
 }

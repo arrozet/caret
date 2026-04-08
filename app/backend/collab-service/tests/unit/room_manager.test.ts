@@ -142,8 +142,8 @@ describe("RoomManager", () => {
       expect(result).toBe(false);
     });
 
-    /** Verifica que la sala se destruya cuando el último usuario sale */
-    it("should_destroy_room_when_last_user_leaves", () => {
+    /** Verifica que la sala se mantenga cuando el último usuario sale */
+    it("should_keep_room_when_last_user_leaves", () => {
       // Arrange
       const document_id = "doc-destroy";
       room_manager.join_room(document_id, "user-1", "sock-1");
@@ -152,7 +152,8 @@ describe("RoomManager", () => {
       room_manager.leave_room(document_id, "user-1");
 
       // Assert
-      expect(room_manager.room_exists(document_id)).toBe(false);
+      expect(room_manager.room_exists(document_id)).toBe(true);
+      expect(room_manager.is_room_empty(document_id)).toBe(true);
     });
 
     /** Verifica que la sala persista cuando quedan participantes */

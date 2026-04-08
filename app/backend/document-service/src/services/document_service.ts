@@ -4,8 +4,9 @@ import type { WorkspaceRepository } from "../repositories/workspace_repository.j
 import type { CreateDocumentDto } from "../dtos/create_document_dto.js";
 import type { UpdateDocumentDto } from "../dtos/update_document_dto.js";
 import type { DocumentResponseDto } from "../dtos/document_response_dto.js";
+import type { InviteWorkspaceMemberResponseDto } from "../dtos/invite_workspace_member_response_dto.js";
 import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
-import { NotFoundError, ForbiddenError } from "../lib/errors.js";
+import { NotFoundError, ForbiddenError, ConflictError } from "../lib/errors.js";
 
 /**
  * Business logic for document lifecycle: create, read, update, delete.
@@ -40,15 +41,9 @@ export class DocumentService {
    * @param user_id - Authenticated user's UUID.
    * @returns The created document as a response DTO.
    */
-  async create_document(
-    dto: CreateDocumentDto,
-    user_id: string,
-  ): Promise<DocumentResponseDto> {
+  async create_document(dto: CreateDocumentDto, user_id: string): Promise<DocumentResponseDto> {
     /* Authorization: caller must belong to the workspace */
-    const membership = await this.workspace_repo.find_membership(
-      dto.workspace_id,
-      user_id,
-    );
+    const membership = await this.workspace_repo.find_membership(dto.workspace_id, user_id);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
@@ -88,20 +83,14 @@ export class DocumentService {
    * @param user_id - Authenticated user's UUID.
    * @returns The document as a response DTO.
    */
-  async get_document(
-    document_id: string,
-    user_id: string,
-  ): Promise<DocumentResponseDto> {
+  async get_document(document_id: string, user_id: string): Promise<DocumentResponseDto> {
     const doc = await this.document_repo.find_by_id(document_id);
     if (!doc) {
       throw new NotFoundError("Document not found");
     }
 
     /* Authorization */
-    const membership = await this.workspace_repo.find_membership(
-      doc.workspace_id,
-      user_id,
-    );
+    const membership = await this.workspace_repo.find_membership(doc.workspace_id, user_id);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
@@ -128,18 +117,12 @@ export class DocumentService {
     user_id: string,
     pagination: PaginationParams,
   ): Promise<PaginatedResponse<DocumentResponseDto>> {
-    const membership = await this.workspace_repo.find_membership(
-      workspace_id,
-      user_id,
-    );
+    const membership = await this.workspace_repo.find_membership(workspace_id, user_id);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const { data, total } = await this.document_repo.list_by_workspace(
-      workspace_id,
-      pagination,
-    );
+    const { data, total } = await this.document_repo.list_by_workspace(workspace_id, pagination);
     return {
       data: data.map((doc) => this.to_response_dto(doc)),
       pagination: {
@@ -168,10 +151,7 @@ export class DocumentService {
       throw new NotFoundError("Document not found");
     }
 
-    const membership = await this.workspace_repo.find_membership(
-      doc.workspace_id,
-      user_id,
-    );
+    const membership = await this.workspace_repo.find_membership(doc.workspace_id, user_id);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
@@ -193,16 +173,11 @@ export class DocumentService {
     let content_text: string | null = null;
 
     if (dto.content_json !== undefined) {
-      const latest = await this.version_repo.find_latest(document_id);
-      const next_version = (latest?.version_number ?? 0) + 1;
-
-      const version = await this.version_repo.create({
+      const version = await this.create_version_with_retry({
         document_id,
-        version_number: next_version,
-        source: "autosnapshot",
         content_json: dto.content_json,
         content_text: dto.content_text ?? "",
-        created_by_user_id: user_id,
+        user_id,
       });
 
       content_json = version.content_json as Record<string, unknown>;
@@ -212,10 +187,7 @@ export class DocumentService {
       update_fields.latest_version_id = version.id;
     }
 
-    const updated_doc = await this.document_repo.update(
-      document_id,
-      update_fields,
-    );
+    const updated_doc = await this.document_repo.update(document_id, update_fields);
     if (!updated_doc) {
       throw new NotFoundError("Document was deleted during update");
     }
@@ -235,15 +207,134 @@ export class DocumentService {
       throw new NotFoundError("Document not found");
     }
 
-    const membership = await this.workspace_repo.find_membership(
-      doc.workspace_id,
-      user_id,
-    );
+    const membership = await this.workspace_repo.find_membership(doc.workspace_id, user_id);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
     await this.document_repo.soft_delete(document_id, user_id);
+  }
+
+  /**
+   * Create a new document version with optimistic retry on unique conflicts.
+   *
+   * Concurrent saves can race on `(document_id, version_number)`. When that
+   * happens we recompute the latest version and retry with the next number.
+   */
+  private async create_version_with_retry(params: {
+    document_id: string;
+    content_json: Record<string, unknown>;
+    content_text: string;
+    user_id: string;
+  }) {
+    const { document_id, content_json, content_text, user_id } = params;
+    const MAX_ATTEMPTS = 3;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const latest = await this.version_repo.find_latest(document_id);
+      const next_version = (latest?.version_number ?? 0) + 1;
+
+      try {
+        const version = await this.version_repo.create({
+          document_id,
+          version_number: next_version,
+          source: "autosnapshot",
+          content_json,
+          content_text,
+          created_by_user_id: user_id,
+        });
+        return version;
+      } catch (err: unknown) {
+        if (is_unique_violation(err) && attempt < MAX_ATTEMPTS) {
+          continue;
+        }
+
+        if (is_unique_violation(err)) {
+          throw new ConflictError("Document was updated concurrently. Please retry.");
+        }
+
+        throw err;
+      }
+    }
+
+    throw new ConflictError("Document was updated concurrently. Please retry.");
+  }
+
+  /**
+   * Invite an existing user (resolved by email) to the document's workspace.
+   *
+   * Current MVP behavior grants workspace membership (`member`) so the invited
+   * user can see and open the shared document in their list.
+   *
+   * @param document_id - Document UUID to share.
+   * @param invited_email - Email address of the target user.
+   * @param inviter_user_id - Authenticated inviter user UUID.
+   * @returns Invitation result payload.
+   */
+  async invite_document_collaborator(
+    document_id: string,
+    invited_email: string,
+    inviter_user_id: string,
+  ): Promise<InviteWorkspaceMemberResponseDto> {
+    const doc = await this.document_repo.find_by_id(document_id);
+    if (!doc) {
+      throw new NotFoundError("Document not found");
+    }
+
+    const inviter_membership = await this.workspace_repo.find_membership(
+      doc.workspace_id,
+      inviter_user_id,
+    );
+    if (!inviter_membership) {
+      throw new ForbiddenError("You are not a member of this workspace");
+    }
+
+    const invited_user_id = await this.workspace_repo.find_auth_user_id_by_email(invited_email);
+
+    if (!invited_user_id) {
+      throw new NotFoundError("User with this email does not exist in Caret");
+    }
+
+    const existing_active = await this.workspace_repo.find_membership(
+      doc.workspace_id,
+      invited_user_id,
+    );
+
+    if (existing_active) {
+      return {
+        workspace_id: doc.workspace_id,
+        user_id: invited_user_id,
+        email: invited_email,
+        role: "member",
+      };
+    }
+
+    const existing_any = await this.workspace_repo.find_membership_any(
+      doc.workspace_id,
+      invited_user_id,
+    );
+
+    if (existing_any) {
+      await this.workspace_repo.reactivate_member(
+        doc.workspace_id,
+        invited_user_id,
+        inviter_user_id,
+      );
+    } else {
+      await this.workspace_repo.add_member({
+        workspace_id: doc.workspace_id,
+        user_id: invited_user_id,
+        role: "member",
+        invited_by_user_id: inviter_user_id,
+      });
+    }
+
+    return {
+      workspace_id: doc.workspace_id,
+      user_id: invited_user_id,
+      email: invited_email,
+      role: "member",
+    };
   }
 
   /**
@@ -282,4 +373,16 @@ export class DocumentService {
       updated_at: doc.updated_at.toISOString(),
     };
   }
+}
+
+/**
+ * Check whether a thrown error is a Postgres unique constraint violation (code 23505).
+ */
+function is_unique_violation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: string }).code === "23505"
+  );
 }

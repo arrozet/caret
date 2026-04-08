@@ -1,5 +1,11 @@
 import type { IncomingMessage } from "http";
-import { jwtVerify, errors as jose_errors } from "jose";
+import {
+  createLocalJWKSet,
+  decodeProtectedHeader,
+  jwtVerify,
+  errors as jose_errors,
+  type JSONWebKeySet,
+} from "jose";
 import { config } from "../lib/config.js";
 import { UnauthorizedError } from "../lib/errors.js";
 
@@ -29,6 +35,84 @@ export interface AuthResult {
   token: string;
 }
 
+/** Cached JWKS resolver and fetch timestamp (ms). */
+let cached_jwks: {
+  resolver: ReturnType<typeof createLocalJWKSet>;
+  fetched_at: number;
+} | null = null;
+
+/** JWKS cache TTL: 5 minutes. */
+const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Convert jose errors into stable UnauthorizedError messages.
+ *
+ * @param error - Unknown error thrown by jose
+ * @returns UnauthorizedError with normalized message
+ */
+function normalize_jose_error(error: unknown): UnauthorizedError {
+  if (error instanceof jose_errors.JWTExpired) {
+    return new UnauthorizedError("Token has expired");
+  }
+  if (error instanceof jose_errors.JWSSignatureVerificationFailed) {
+    return new UnauthorizedError("Invalid token signature");
+  }
+  if (error instanceof jose_errors.JWSInvalid) {
+    return new UnauthorizedError("Malformed token");
+  }
+  if (error instanceof UnauthorizedError) {
+    return error;
+  }
+  return new UnauthorizedError("Token validation failed");
+}
+
+/**
+ * Fetch Supabase JWKS from GoTrue endpoint.
+ *
+ * @returns JWKS payload
+ * @throws UnauthorizedError when config is missing or request fails
+ */
+async function fetch_jwks(): Promise<JSONWebKeySet> {
+  const base = config.SUPABASE_URL.replace(/\/+$/, "");
+  const anon_key = config.SUPABASE_ANON_KEY;
+
+  if (!base || !anon_key) {
+    throw new UnauthorizedError("Authentication is not configured");
+  }
+
+  const url = `${base}/auth/v1/.well-known/jwks.json`;
+  const response = await fetch(url, {
+    headers: {
+      apikey: anon_key,
+    },
+  });
+
+  if (!response.ok) {
+    throw new UnauthorizedError("Token validation failed");
+  }
+
+  return response.json() as Promise<JSONWebKeySet>;
+}
+
+/**
+ * Resolve and cache Supabase JWKS for asymmetric JWT verification.
+ */
+async function get_jwks_resolver(): Promise<ReturnType<typeof createLocalJWKSet>> {
+  const now = Date.now();
+  if (cached_jwks && now - cached_jwks.fetched_at < JWKS_CACHE_TTL_MS) {
+    return cached_jwks.resolver;
+  }
+
+  const jwks = await fetch_jwks();
+  const resolver = createLocalJWKSet(jwks);
+  cached_jwks = {
+    resolver,
+    fetched_at: now,
+  };
+
+  return resolver;
+}
+
 /**
  * Validates a JWT token against the Supabase secret.
  * Verifies signature and expiration automatically via jose library.
@@ -38,16 +122,33 @@ export interface AuthResult {
  * @throws UnauthorizedError if token is invalid, expired, or malformed
  */
 async function validate_jwt(token: string): Promise<TokenPayload> {
-  const secret = config.SUPABASE_JWT_SECRET;
-
-  if (!secret) {
-    throw new UnauthorizedError("JWT secret not configured");
-  }
-
-  const secret_key = new TextEncoder().encode(secret);
+  let alg: string;
 
   try {
-    const { payload } = await jwtVerify(token, secret_key);
+    const header = decodeProtectedHeader(token);
+    alg = header.alg ?? "";
+  } catch (error) {
+    throw normalize_jose_error(error);
+  }
+
+  try {
+    let payload: Awaited<ReturnType<typeof jwtVerify>>["payload"];
+
+    if (alg === "HS256") {
+      const secret = config.SUPABASE_JWT_SECRET;
+      if (!secret) {
+        throw new UnauthorizedError("JWT secret not configured");
+      }
+      const secret_key = new TextEncoder().encode(secret);
+      ({ payload } = await jwtVerify(token, secret_key, {
+        algorithms: ["HS256"],
+      }));
+    } else {
+      const jwks_resolver = await get_jwks_resolver();
+      ({ payload } = await jwtVerify(token, jwks_resolver, {
+        algorithms: ["ES256", "RS256"],
+      }));
+    }
 
     if (!payload.sub || typeof payload.sub !== "string") {
       throw new UnauthorizedError("Invalid token: missing sub claim");
@@ -59,19 +160,7 @@ async function validate_jwt(token: string): Promise<TokenPayload> {
       iat: typeof payload.iat === "number" ? payload.iat : undefined,
     };
   } catch (error) {
-    if (error instanceof jose_errors.JWTExpired) {
-      throw new UnauthorizedError("Token has expired");
-    }
-    if (error instanceof jose_errors.JWSSignatureVerificationFailed) {
-      throw new UnauthorizedError("Invalid token signature");
-    }
-    if (error instanceof jose_errors.JWSInvalid) {
-      throw new UnauthorizedError("Malformed token");
-    }
-    if (error instanceof UnauthorizedError) {
-      throw error;
-    }
-    throw new UnauthorizedError("Token validation failed");
+    throw normalize_jose_error(error);
   }
 }
 
@@ -103,7 +192,7 @@ function extract_doc_id(pathname: string): string {
  *         The WS server must close the connection (code 4001) on error.
  */
 export async function validate_ws_token(req: IncomingMessage): Promise<AuthResult> {
-  const url = new URL(req.url ?? "", `http://${req.headers.host}`);
+  const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
   const token = url.searchParams.get("token");
 
   if (!token) {

@@ -44,7 +44,11 @@ export class RoomManager {
   }
 
   /**
-   * Removes a user from a room. If the room becomes empty, destroys it.
+   * Removes a user from a room.
+   *
+   * Note: We intentionally keep empty rooms in memory so the Y.Doc state
+   * survives brief disconnect gaps (e.g. both collaborators close/reopen tabs)
+   * without resetting to an empty document.
    *
    * @param document_id - The unique identifier of the document/room.
    * @param user_id - The unique identifier of the user leaving.
@@ -57,10 +61,6 @@ export class RoomManager {
     }
 
     const removed = room.participants.delete(user_id);
-
-    if (room.participants.size === 0) {
-      this.rooms.delete(document_id);
-    }
 
     return removed;
   }
@@ -116,5 +116,16 @@ export class RoomManager {
    */
   get_participant_count(document_id: string): number {
     return this.rooms.get(document_id)?.participants.size ?? 0;
+  }
+
+  /**
+   * Checks whether a room exists and currently has zero participants.
+   *
+   * @param document_id - The unique identifier of the document/room.
+   * @returns True when room exists and has no active participants.
+   */
+  is_room_empty(document_id: string): boolean {
+    const room = this.rooms.get(document_id);
+    return room !== undefined && room.participants.size === 0;
   }
 }

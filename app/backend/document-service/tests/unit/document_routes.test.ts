@@ -2,11 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { create_document_routes } from "../../src/routes/document_routes.js";
-import {
-  NotFoundError,
-  ForbiddenError,
-  ValidationError,
-} from "../../src/lib/errors.js";
+import { NotFoundError, ForbiddenError, ValidationError } from "../../src/lib/errors.js";
 
 /**
  * Unit tests for create_document_routes (document_routes.ts).
@@ -23,6 +19,7 @@ describe("document_routes", () => {
     list_documents: ReturnType<typeof vi.fn>;
     update_document: ReturnType<typeof vi.fn>;
     delete_document: ReturnType<typeof vi.fn>;
+    invite_document_collaborator: ReturnType<typeof vi.fn>;
   };
 
   /* ── fixtures ───────────────────────────────────────── */
@@ -67,8 +64,7 @@ describe("document_routes", () => {
     body: unknown;
     next_error: Error | undefined;
   }> {
-    const { body = {}, query = {}, params = {}, auth_user = { sub: USER_ID } } =
-      options;
+    const { body = {}, query = {}, params = {}, auth_user = { sub: USER_ID } } = options;
 
     let status_code = 200;
     let response_body: unknown = null;
@@ -104,7 +100,23 @@ describe("document_routes", () => {
     }) as unknown as NextFunction;
 
     /* Find the matching route layer and call its handler */
-    const layers = (router as unknown as { stack: Array<{ route?: { path: string; stack: Array<{ method: string; handle: Function }> } }> }).stack;
+    const layers = (
+      router as unknown as {
+        stack: Array<{
+          route?: {
+            path: string;
+            stack: Array<{
+              method: string;
+              handle: (
+                req: RequestCustom,
+                res: Response,
+                next: NextFunction,
+              ) => void | Promise<void>;
+            }>;
+          };
+        }>;
+      }
+    ).stack;
 
     for (const layer of layers) {
       if (!layer.route) continue;
@@ -139,6 +151,7 @@ describe("document_routes", () => {
       list_documents: vi.fn(),
       update_document: vi.fn(),
       delete_document: vi.fn(),
+      invite_document_collaborator: vi.fn(),
     };
 
     router = create_document_routes(document_service as never);
@@ -157,21 +170,15 @@ describe("document_routes", () => {
       document_service.create_document.mockResolvedValue(make_doc_dto());
 
       // Act
-      const { status_code, body, next_error } = await call_route_handler(
-        router,
-        "post",
-        "/",
-        { body: dto },
-      );
+      const { status_code, body, next_error } = await call_route_handler(router, "post", "/", {
+        body: dto,
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
       expect(status_code).toBe(201);
       expect(body).toMatchObject({ id: DOCUMENT_ID, title: "Test Doc" });
-      expect(document_service.create_document).toHaveBeenCalledWith(
-        dto,
-        USER_ID,
-      );
+      expect(document_service.create_document).toHaveBeenCalledWith(dto, USER_ID);
     });
 
     /** verifica que pasa next(ValidationError) cuando title está vacío */
@@ -211,9 +218,7 @@ describe("document_routes", () => {
         workspace_id: WORKSPACE_ID,
         folder_id: FOLDER_ID,
       };
-      document_service.create_document.mockResolvedValue(
-        make_doc_dto({ folder_id: FOLDER_ID }),
-      );
+      document_service.create_document.mockResolvedValue(make_doc_dto({ folder_id: FOLDER_ID }));
 
       // Act
       const { next_error } = await call_route_handler(router, "post", "/", {
@@ -321,12 +326,9 @@ describe("document_routes", () => {
       document_service.get_document.mockResolvedValue(make_doc_dto());
 
       // Act
-      const { body, next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: DOCUMENT_ID } },
-      );
+      const { body, next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: DOCUMENT_ID },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -336,12 +338,9 @@ describe("document_routes", () => {
     /** verifica que pasa next(ValidationError) cuando el ID no es UUID */
     it("should_call_next_with_ValidationError_for_invalid_uuid", async () => {
       // Arrange & Act
-      const { next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: "not-a-uuid" } },
-      );
+      const { next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: "not-a-uuid" },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
@@ -350,17 +349,12 @@ describe("document_routes", () => {
     /** verifica que pasa next(NotFoundError) cuando el servicio lanza NotFoundError */
     it("should_pass_NotFoundError_from_service_to_next", async () => {
       // Arrange
-      document_service.get_document.mockRejectedValue(
-        new NotFoundError("Document not found"),
-      );
+      document_service.get_document.mockRejectedValue(new NotFoundError("Document not found"));
 
       // Act
-      const { next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: DOCUMENT_ID } },
-      );
+      const { next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: DOCUMENT_ID },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(NotFoundError);
@@ -376,20 +370,13 @@ describe("document_routes", () => {
     /** verifica que actualiza el documento y retorna status 200 */
     it("should_update_document_and_return_200", async () => {
       // Arrange
-      document_service.update_document.mockResolvedValue(
-        make_doc_dto({ title: "Updated" }),
-      );
+      document_service.update_document.mockResolvedValue(make_doc_dto({ title: "Updated" }));
 
       // Act
-      const { body, next_error } = await call_route_handler(
-        router,
-        "patch",
-        "/:id",
-        {
-          params: { id: DOCUMENT_ID },
-          body: { title: "Updated" },
-        },
-      );
+      const { body, next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: DOCUMENT_ID },
+        body: { title: "Updated" },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -399,15 +386,10 @@ describe("document_routes", () => {
     /** verifica que pasa next(ValidationError) cuando title es cadena vacía */
     it("should_call_next_with_ValidationError_for_empty_title", async () => {
       // Arrange & Act
-      const { next_error } = await call_route_handler(
-        router,
-        "patch",
-        "/:id",
-        {
-          params: { id: DOCUMENT_ID },
-          body: { title: "" },
-        },
-      );
+      const { next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: DOCUMENT_ID },
+        body: { title: "" },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
@@ -419,15 +401,10 @@ describe("document_routes", () => {
       document_service.update_document.mockResolvedValue(make_doc_dto());
 
       // Act
-      const { next_error } = await call_route_handler(
-        router,
-        "patch",
-        "/:id",
-        {
-          params: { id: DOCUMENT_ID },
-          body: { content_json: { type: "doc", content: [] } },
-        },
-      );
+      const { next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: DOCUMENT_ID },
+        body: { content_json: { type: "doc", content: [] } },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -446,33 +423,109 @@ describe("document_routes", () => {
       document_service.delete_document.mockResolvedValue(undefined);
 
       // Act
-      const { status_code, next_error } = await call_route_handler(
-        router,
-        "delete",
-        "/:id",
-        { params: { id: DOCUMENT_ID } },
-      );
+      const { next_error } = await call_route_handler(router, "delete", "/:id", {
+        params: { id: DOCUMENT_ID },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
-      expect(document_service.delete_document).toHaveBeenCalledWith(
-        DOCUMENT_ID,
-        USER_ID,
-      );
+      expect(document_service.delete_document).toHaveBeenCalledWith(DOCUMENT_ID, USER_ID);
     });
 
     /** verifica que pasa next(ValidationError) cuando el ID no es UUID */
     it("should_call_next_with_ValidationError_for_invalid_uuid", async () => {
       // Arrange & Act
-      const { next_error } = await call_route_handler(
-        router,
-        "delete",
-        "/:id",
-        { params: { id: "bad-id" } },
-      );
+      const { next_error } = await call_route_handler(router, "delete", "/:id", {
+        params: { id: "bad-id" },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
+    });
+  });
+
+  /* ── POST /:id/invite ───────────────────────────────── */
+
+  /**
+   * Tests de POST /:id/invite — invita colaboradores por email.
+   */
+  describe("POST /:id/invite", () => {
+    /** verifica que invita por email y retorna status 201 */
+    it("should_invite_collaborator_and_return_201", async () => {
+      // Arrange
+      document_service.invite_document_collaborator.mockResolvedValue({
+        workspace_id: WORKSPACE_ID,
+        user_id: "invited-user-1",
+        email: "juan@nombre.es",
+        role: "member",
+      });
+
+      // Act
+      const { status_code, body, next_error } = await call_route_handler(
+        router,
+        "post",
+        "/:id/invite",
+        {
+          params: { id: DOCUMENT_ID },
+          body: { email: "juan@nombre.es" },
+        },
+      );
+
+      // Assert
+      expect(next_error).toBeUndefined();
+      expect(status_code).toBe(201);
+      expect(body).toMatchObject({
+        workspace_id: WORKSPACE_ID,
+        email: "juan@nombre.es",
+        role: "member",
+      });
+      expect(document_service.invite_document_collaborator).toHaveBeenCalledWith(
+        DOCUMENT_ID,
+        "juan@nombre.es",
+        USER_ID,
+      );
+    });
+
+    /** verifica que valida email faltante */
+    it("should_call_next_with_ValidationError_for_missing_email", async () => {
+      // Arrange & Act
+      const { next_error } = await call_route_handler(router, "post", "/:id/invite", {
+        params: { id: DOCUMENT_ID },
+        body: {},
+      });
+
+      // Assert
+      expect(next_error).toBeInstanceOf(ValidationError);
+      expect(document_service.invite_document_collaborator).not.toHaveBeenCalled();
+    });
+
+    /** verifica que valida formato de email */
+    it("should_call_next_with_ValidationError_for_invalid_email", async () => {
+      // Arrange & Act
+      const { next_error } = await call_route_handler(router, "post", "/:id/invite", {
+        params: { id: DOCUMENT_ID },
+        body: { email: "not-an-email" },
+      });
+
+      // Assert
+      expect(next_error).toBeInstanceOf(ValidationError);
+      expect(document_service.invite_document_collaborator).not.toHaveBeenCalled();
+    });
+
+    /** verifica que pasa errores del servicio a next() */
+    it("should_pass_service_error_to_next", async () => {
+      // Arrange
+      const not_found_error = new NotFoundError("User with this email does not exist in Caret");
+      document_service.invite_document_collaborator.mockRejectedValue(not_found_error);
+
+      // Act
+      const { next_error } = await call_route_handler(router, "post", "/:id/invite", {
+        params: { id: DOCUMENT_ID },
+        body: { email: "missing@nombre.es" },
+      });
+
+      // Assert
+      expect(next_error).toBe(not_found_error);
     });
   });
 });

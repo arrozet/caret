@@ -17,7 +17,8 @@ Collaboration service for real-time document sync using WebSocket + Y.js CRDT. I
 
 - `PORT` (default `3003`)
 - `DATABASE_URL`
-- `SUPABASE_JWT_SECRET`
+- `SUPABASE_JWT_SECRET` (for HS256 tokens)
+- `SUPABASE_URL` + `SUPABASE_ANON_KEY` (for JWKS validation of ES256/RS256 tokens)
 
 ## Run Locally
 

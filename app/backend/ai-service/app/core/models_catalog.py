@@ -148,5 +148,5 @@ OPENROUTER_MODELS: list[ModelEntry] = [*FREE_MODELS, *PAID_MODELS]
 # Quick lookup by model id.
 MODELS_BY_ID: dict[str, ModelEntry] = {m.id: m for m in OPENROUTER_MODELS}
 
-# Default model id — mirrors the OPENROUTER_MODEL env-var default.
-DEFAULT_MODEL_ID = "openrouter/healer-alpha"
+# Default model id shown/used by the frontend selector.
+DEFAULT_MODEL_ID = "grok-4-1-fast-reasoning"

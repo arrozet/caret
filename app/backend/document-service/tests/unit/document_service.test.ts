@@ -27,6 +27,10 @@ type MockVersionRepo = {
 
 type MockWorkspaceRepo = {
   find_membership: ReturnType<typeof vi.fn>;
+  find_membership_any: ReturnType<typeof vi.fn>;
+  find_auth_user_id_by_email: ReturnType<typeof vi.fn>;
+  add_member: ReturnType<typeof vi.fn>;
+  reactivate_member: ReturnType<typeof vi.fn>;
 };
 
 /* ── fixtures ───────────────────────────────────────── */
@@ -34,6 +38,7 @@ type MockWorkspaceRepo = {
 const USER_ID = "user-abc-123";
 const WORKSPACE_ID = "ws-def-456";
 const DOCUMENT_ID = "doc-ghi-789";
+const INVITED_USER_ID = "user-invited-999";
 
 /** Build a fake document row matching the shape the service expects. */
 function make_doc(overrides: Record<string, unknown> = {}) {
@@ -99,6 +104,10 @@ describe("DocumentService", () => {
 
     workspace_repo = {
       find_membership: vi.fn(),
+      find_membership_any: vi.fn(),
+      find_auth_user_id_by_email: vi.fn(),
+      add_member: vi.fn(),
+      reactivate_member: vi.fn(),
     };
 
     /* Cast mocks to satisfy the constructor's type expectations */
@@ -122,10 +131,7 @@ describe("DocumentService", () => {
         USER_ID,
       );
 
-      expect(workspace_repo.find_membership).toHaveBeenCalledWith(
-        WORKSPACE_ID,
-        USER_ID,
-      );
+      expect(workspace_repo.find_membership).toHaveBeenCalledWith(WORKSPACE_ID, USER_ID);
       expect(document_repo.create).toHaveBeenCalledOnce();
       expect(version_repo.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -144,10 +150,7 @@ describe("DocumentService", () => {
       workspace_repo.find_membership.mockResolvedValue(null);
 
       await expect(
-        service.create_document(
-          { title: "Test", workspace_id: WORKSPACE_ID },
-          USER_ID,
-        ),
+        service.create_document({ title: "Test", workspace_id: WORKSPACE_ID }, USER_ID),
       ).rejects.toThrow(ForbiddenError);
 
       expect(document_repo.create).not.toHaveBeenCalled();
@@ -160,9 +163,7 @@ describe("DocumentService", () => {
     it("returns document with latest version content", async () => {
       document_repo.find_by_id.mockResolvedValue(make_doc());
       workspace_repo.find_membership.mockResolvedValue(make_membership());
-      version_repo.find_latest.mockResolvedValue(
-        make_version(3),
-      );
+      version_repo.find_latest.mockResolvedValue(make_version(3));
 
       const result = await service.get_document(DOCUMENT_ID, USER_ID);
 
@@ -173,18 +174,14 @@ describe("DocumentService", () => {
     it("throws NotFoundError when document does not exist", async () => {
       document_repo.find_by_id.mockResolvedValue(null);
 
-      await expect(
-        service.get_document("nonexistent", USER_ID),
-      ).rejects.toThrow(NotFoundError);
+      await expect(service.get_document("nonexistent", USER_ID)).rejects.toThrow(NotFoundError);
     });
 
     it("throws ForbiddenError when user is not a member of document's workspace", async () => {
       document_repo.find_by_id.mockResolvedValue(make_doc());
       workspace_repo.find_membership.mockResolvedValue(null);
 
-      await expect(
-        service.get_document(DOCUMENT_ID, USER_ID),
-      ).rejects.toThrow(ForbiddenError);
+      await expect(service.get_document(DOCUMENT_ID, USER_ID)).rejects.toThrow(ForbiddenError);
     });
   });
 
@@ -227,9 +224,7 @@ describe("DocumentService", () => {
     it("updates title without creating a new version", async () => {
       document_repo.find_by_id.mockResolvedValue(make_doc());
       workspace_repo.find_membership.mockResolvedValue(make_membership());
-      document_repo.update.mockResolvedValue(
-        make_doc({ title: "Updated Title" }),
-      );
+      document_repo.update.mockResolvedValue(make_doc({ title: "Updated Title" }));
 
       const result = await service.update_document(
         DOCUMENT_ID,
@@ -269,15 +264,38 @@ describe("DocumentService", () => {
       expect(result.content_json).toEqual(new_content);
     });
 
+    it("retries version creation when a concurrent unique conflict occurs", async () => {
+      // Arrange
+      const new_content = { type: "doc", content: [{ type: "paragraph" }] };
+      document_repo.find_by_id.mockResolvedValue(make_doc());
+      workspace_repo.find_membership.mockResolvedValue(make_membership());
+      document_repo.update.mockResolvedValue(make_doc());
+      version_repo.find_latest
+        .mockResolvedValueOnce(make_version(2))
+        .mockResolvedValueOnce(make_version(3));
+      version_repo.create.mockRejectedValueOnce({ code: "23505" }).mockResolvedValueOnce({
+        ...make_version(4),
+        content_json: new_content,
+        content_text: "hello",
+      });
+
+      // Act
+      const result = await service.update_document(
+        DOCUMENT_ID,
+        { content_json: new_content, content_text: "hello" },
+        USER_ID,
+      );
+
+      // Assert
+      expect(version_repo.create).toHaveBeenCalledTimes(2);
+      expect(result.content_json).toEqual(new_content);
+    });
+
     it("throws NotFoundError when document does not exist", async () => {
       document_repo.find_by_id.mockResolvedValue(null);
 
       await expect(
-        service.update_document(
-          "nonexistent",
-          { title: "New" },
-          USER_ID,
-        ),
+        service.update_document("nonexistent", { title: "New" }, USER_ID),
       ).rejects.toThrow(NotFoundError);
     });
 
@@ -285,13 +303,141 @@ describe("DocumentService", () => {
       document_repo.find_by_id.mockResolvedValue(make_doc());
       workspace_repo.find_membership.mockResolvedValue(null);
 
+      await expect(service.update_document(DOCUMENT_ID, { title: "New" }, USER_ID)).rejects.toThrow(
+        ForbiddenError,
+      );
+    });
+  });
+
+  /* ── invite_document_collaborator ───────────────────── */
+
+  describe("invite_document_collaborator", () => {
+    it("invites an existing user by email into the document workspace", async () => {
+      // Arrange
+      document_repo.find_by_id.mockResolvedValue(make_doc());
+      workspace_repo.find_membership.mockResolvedValueOnce(make_membership());
+      workspace_repo.find_auth_user_id_by_email.mockResolvedValue(INVITED_USER_ID);
+      workspace_repo.find_membership.mockResolvedValueOnce(null);
+      workspace_repo.find_membership_any.mockResolvedValue(null);
+      workspace_repo.add_member.mockResolvedValue({
+        workspace_id: WORKSPACE_ID,
+        user_id: INVITED_USER_ID,
+        role: "member",
+      });
+
+      // Act
+      const result = await service.invite_document_collaborator(
+        DOCUMENT_ID,
+        "invitee@caret.page",
+        USER_ID,
+      );
+
+      // Assert
+      expect(workspace_repo.find_auth_user_id_by_email).toHaveBeenCalledWith("invitee@caret.page");
+      expect(workspace_repo.add_member).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspace_id: WORKSPACE_ID,
+          user_id: INVITED_USER_ID,
+          role: "member",
+          invited_by_user_id: USER_ID,
+        }),
+      );
+      expect(result).toEqual({
+        workspace_id: WORKSPACE_ID,
+        user_id: INVITED_USER_ID,
+        email: "invitee@caret.page",
+        role: "member",
+      });
+    });
+
+    it("reactivates a revoked membership instead of inserting a duplicate", async () => {
+      // Arrange
+      document_repo.find_by_id.mockResolvedValue(make_doc());
+      workspace_repo.find_membership.mockResolvedValueOnce(make_membership());
+      workspace_repo.find_auth_user_id_by_email.mockResolvedValue(INVITED_USER_ID);
+      workspace_repo.find_membership.mockResolvedValueOnce(null);
+      workspace_repo.find_membership_any.mockResolvedValue({
+        workspace_id: WORKSPACE_ID,
+        user_id: INVITED_USER_ID,
+        role: "member",
+        revoked_at: new Date(),
+      });
+      workspace_repo.reactivate_member.mockResolvedValue({
+        workspace_id: WORKSPACE_ID,
+        user_id: INVITED_USER_ID,
+        role: "member",
+        revoked_at: null,
+      });
+
+      // Act
+      await service.invite_document_collaborator(DOCUMENT_ID, "invitee@caret.page", USER_ID);
+
+      // Assert
+      expect(workspace_repo.reactivate_member).toHaveBeenCalledWith(
+        WORKSPACE_ID,
+        INVITED_USER_ID,
+        USER_ID,
+      );
+      expect(workspace_repo.add_member).not.toHaveBeenCalled();
+    });
+
+    it("returns success when the invited user is already an active member", async () => {
+      // Arrange
+      document_repo.find_by_id.mockResolvedValue(make_doc());
+      workspace_repo.find_membership.mockResolvedValueOnce(make_membership());
+      workspace_repo.find_auth_user_id_by_email.mockResolvedValue(INVITED_USER_ID);
+      workspace_repo.find_membership.mockResolvedValueOnce({
+        workspace_id: WORKSPACE_ID,
+        user_id: INVITED_USER_ID,
+        role: "member",
+      });
+
+      // Act
+      const result = await service.invite_document_collaborator(
+        DOCUMENT_ID,
+        "invitee@caret.page",
+        USER_ID,
+      );
+
+      // Assert
+      expect(workspace_repo.find_membership_any).not.toHaveBeenCalled();
+      expect(workspace_repo.add_member).not.toHaveBeenCalled();
+      expect(workspace_repo.reactivate_member).not.toHaveBeenCalled();
+      expect(result.user_id).toBe(INVITED_USER_ID);
+    });
+
+    it("throws NotFoundError when the document does not exist", async () => {
+      // Arrange
+      document_repo.find_by_id.mockResolvedValue(null);
+
+      // Act & Assert
       await expect(
-        service.update_document(
-          DOCUMENT_ID,
-          { title: "New" },
-          USER_ID,
-        ),
+        service.invite_document_collaborator(DOCUMENT_ID, "invitee@caret.page", USER_ID),
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it("throws ForbiddenError when inviter is not in the workspace", async () => {
+      // Arrange
+      document_repo.find_by_id.mockResolvedValue(make_doc());
+      workspace_repo.find_membership.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.invite_document_collaborator(DOCUMENT_ID, "invitee@caret.page", USER_ID),
       ).rejects.toThrow(ForbiddenError);
+    });
+
+    it("throws NotFoundError when invited email does not exist in Caret", async () => {
+      // Arrange
+      document_repo.find_by_id.mockResolvedValue(make_doc());
+      workspace_repo.find_membership.mockResolvedValue(make_membership());
+      workspace_repo.find_auth_user_id_by_email.mockResolvedValue(null);
+
+      // Act & Assert
+      await expect(
+        service.invite_document_collaborator(DOCUMENT_ID, "missing@caret.page", USER_ID),
+      ).rejects.toThrow(NotFoundError);
+      expect(workspace_repo.add_member).not.toHaveBeenCalled();
     });
   });
 
@@ -305,27 +451,20 @@ describe("DocumentService", () => {
 
       await service.delete_document(DOCUMENT_ID, USER_ID);
 
-      expect(document_repo.soft_delete).toHaveBeenCalledWith(
-        DOCUMENT_ID,
-        USER_ID,
-      );
+      expect(document_repo.soft_delete).toHaveBeenCalledWith(DOCUMENT_ID, USER_ID);
     });
 
     it("throws NotFoundError when document does not exist", async () => {
       document_repo.find_by_id.mockResolvedValue(null);
 
-      await expect(
-        service.delete_document("nonexistent", USER_ID),
-      ).rejects.toThrow(NotFoundError);
+      await expect(service.delete_document("nonexistent", USER_ID)).rejects.toThrow(NotFoundError);
     });
 
     it("throws ForbiddenError when user is not a member", async () => {
       document_repo.find_by_id.mockResolvedValue(make_doc());
       workspace_repo.find_membership.mockResolvedValue(null);
 
-      await expect(
-        service.delete_document(DOCUMENT_ID, USER_ID),
-      ).rejects.toThrow(ForbiddenError);
+      await expect(service.delete_document(DOCUMENT_ID, USER_ID)).rejects.toThrow(ForbiddenError);
     });
   });
 });

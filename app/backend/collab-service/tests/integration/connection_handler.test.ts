@@ -506,8 +506,8 @@ describe("ConnectionHandler", () => {
       expect(room_manager.get_participants("doc-1")).not.toContain("user-1");
     });
 
-    /** Verifies room is destroyed when last user disconnects */
-    it("should destroy room when last user disconnects", () => {
+    /** Verifies room is kept when last user disconnects */
+    it("should keep room when last user disconnects", () => {
       // Arrange
       const ws = make_mock_ws();
       const auth = make_auth("user-1", "doc-solo");
@@ -517,7 +517,8 @@ describe("ConnectionHandler", () => {
       ws.trigger("close", 1000, Buffer.from(""));
 
       // Assert
-      expect(room_manager.room_exists("doc-solo")).toBe(false);
+      expect(room_manager.room_exists("doc-solo")).toBe(true);
+      expect(room_manager.is_room_empty("doc-solo")).toBe(true);
       expect(handler.get_active_room_count()).toBe(0);
     });
 
@@ -559,7 +560,8 @@ describe("ConnectionHandler", () => {
 
       // Assert
       expect(handler.get_room_socket_count("doc-error")).toBe(0);
-      expect(room_manager.room_exists("doc-error")).toBe(false);
+      expect(room_manager.room_exists("doc-error")).toBe(true);
+      expect(room_manager.is_room_empty("doc-error")).toBe(true);
     });
 
     /** Verifies awareness state is broadcast on disconnect */

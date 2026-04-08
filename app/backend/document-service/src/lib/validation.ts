@@ -1,8 +1,10 @@
 import { ValidationError } from "./errors.js";
 
 /** UUID v4 format regex (lowercase hex with dashes). */
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Basic email format regex for invite endpoints. */
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Default number of items per page. */
 export const DEFAULT_PAGE_LIMIT = 50;
@@ -31,10 +33,7 @@ export interface PaginatedResponse<T> {
  * @param raw_offset - Raw offset string from query params.
  * @returns Validated pagination parameters with safe defaults.
  */
-export function parse_pagination(
-  raw_limit?: string,
-  raw_offset?: string,
-): PaginationParams {
+export function parse_pagination(raw_limit?: string, raw_offset?: string): PaginationParams {
   let limit = DEFAULT_PAGE_LIMIT;
   let offset = 0;
 
@@ -90,13 +89,22 @@ export function validate_non_empty_string(
  * @param value - The value to validate (may be undefined/null).
  * @param field_name - Field name for the error message.
  */
-export function validate_optional_uuid(
-  value: unknown,
-  field_name: string,
-): void {
+export function validate_optional_uuid(value: unknown, field_name: string): void {
   if (value !== undefined && value !== null) {
     if (typeof value !== "string" || !UUID_REGEX.test(value)) {
       throw new ValidationError(`${field_name} must be a valid UUID`);
     }
+  }
+}
+
+/**
+ * Validate that a value is a syntactically valid email address.
+ * @param value - The value to validate.
+ * @param field_name - Field name for the error message.
+ * @throws ValidationError if the value is not a valid email string.
+ */
+export function validate_email(value: unknown, field_name: string): asserts value is string {
+  if (typeof value !== "string" || !EMAIL_REGEX.test(value.trim())) {
+    throw new ValidationError(`${field_name} must be a valid email`);
   }
 }

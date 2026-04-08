@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     XAI_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "openrouter/healer-alpha"
+    OPENROUTER_MODEL: str = "grok-4-1-fast-reasoning"
 
     # Embedding model settings for RAG (Phase 4)
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"

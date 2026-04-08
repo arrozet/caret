@@ -4,6 +4,7 @@ import {
   validate_uuid,
   validate_non_empty_string,
   validate_optional_uuid,
+  validate_email,
   DEFAULT_PAGE_LIMIT,
   MAX_PAGE_LIMIT,
 } from "../../src/lib/validation.js";
@@ -44,9 +45,7 @@ describe("validation helpers", () => {
     it("should_throw_ValidationError_for_limit_zero", () => {
       // Arrange & Act & Assert
       expect(() => parse_pagination("0", undefined)).toThrow(ValidationError);
-      expect(() => parse_pagination("0", undefined)).toThrow(
-        "limit must be a positive integer",
-      );
+      expect(() => parse_pagination("0", undefined)).toThrow("limit must be a positive integer");
     });
 
     /** verifica que un limit negativo lanza ValidationError */
@@ -145,9 +144,7 @@ describe("validation helpers", () => {
     /** verifica que una cadena arbitraria lanza ValidationError */
     it("should_throw_ValidationError_for_random_string", () => {
       // Arrange & Act & Assert
-      expect(() => validate_uuid("not-a-uuid", "workspace_id")).toThrow(
-        ValidationError,
-      );
+      expect(() => validate_uuid("not-a-uuid", "workspace_id")).toThrow(ValidationError);
     });
 
     /** verifica que un UUID sin guiones lanza ValidationError */
@@ -162,9 +159,7 @@ describe("validation helpers", () => {
     /** verifica que el campo_name aparece en el mensaje de error */
     it("should_include_field_name_in_error_message", () => {
       // Arrange & Act & Assert
-      expect(() => validate_uuid("bad", "folder_id")).toThrow(
-        "folder_id must be a valid UUID",
-      );
+      expect(() => validate_uuid("bad", "folder_id")).toThrow("folder_id must be a valid UUID");
     });
   });
 
@@ -175,49 +170,37 @@ describe("validation helpers", () => {
     /** verifica que una cadena válida no lanza error */
     it("should_not_throw_for_non_empty_string", () => {
       // Arrange & Act & Assert
-      expect(() =>
-        validate_non_empty_string("Hello World", "title"),
-      ).not.toThrow();
+      expect(() => validate_non_empty_string("Hello World", "title")).not.toThrow();
     });
 
     /** verifica que una cadena vacía lanza ValidationError */
     it("should_throw_ValidationError_for_empty_string", () => {
       // Arrange & Act & Assert
-      expect(() => validate_non_empty_string("", "title")).toThrow(
-        ValidationError,
-      );
+      expect(() => validate_non_empty_string("", "title")).toThrow(ValidationError);
     });
 
     /** verifica que una cadena solo con espacios lanza ValidationError */
     it("should_throw_ValidationError_for_whitespace_only_string", () => {
       // Arrange & Act & Assert
-      expect(() => validate_non_empty_string("   ", "name")).toThrow(
-        ValidationError,
-      );
+      expect(() => validate_non_empty_string("   ", "name")).toThrow(ValidationError);
     });
 
     /** verifica que un número lanza ValidationError */
     it("should_throw_ValidationError_for_number", () => {
       // Arrange & Act & Assert
-      expect(() => validate_non_empty_string(42, "title")).toThrow(
-        ValidationError,
-      );
+      expect(() => validate_non_empty_string(42, "title")).toThrow(ValidationError);
     });
 
     /** verifica que null lanza ValidationError */
     it("should_throw_ValidationError_for_null", () => {
       // Arrange & Act & Assert
-      expect(() => validate_non_empty_string(null, "title")).toThrow(
-        ValidationError,
-      );
+      expect(() => validate_non_empty_string(null, "title")).toThrow(ValidationError);
     });
 
     /** verifica que undefined lanza ValidationError */
     it("should_throw_ValidationError_for_undefined", () => {
       // Arrange & Act & Assert
-      expect(() => validate_non_empty_string(undefined, "title")).toThrow(
-        ValidationError,
-      );
+      expect(() => validate_non_empty_string(undefined, "title")).toThrow(ValidationError);
     });
 
     /** verifica que el campo_name aparece en el mensaje */
@@ -251,25 +234,19 @@ describe("validation helpers", () => {
       const valid_uuid = "550e8400-e29b-41d4-a716-446655440000";
 
       // Act & Assert
-      expect(() =>
-        validate_optional_uuid(valid_uuid, "folder_id"),
-      ).not.toThrow();
+      expect(() => validate_optional_uuid(valid_uuid, "folder_id")).not.toThrow();
     });
 
     /** verifica que un string no-UUID lanza ValidationError */
     it("should_throw_ValidationError_for_invalid_uuid_string", () => {
       // Arrange & Act & Assert
-      expect(() =>
-        validate_optional_uuid("not-a-uuid", "folder_id"),
-      ).toThrow(ValidationError);
+      expect(() => validate_optional_uuid("not-a-uuid", "folder_id")).toThrow(ValidationError);
     });
 
     /** verifica que un número lanza ValidationError */
     it("should_throw_ValidationError_for_number", () => {
       // Arrange & Act & Assert
-      expect(() => validate_optional_uuid(123, "folder_id")).toThrow(
-        ValidationError,
-      );
+      expect(() => validate_optional_uuid(123, "folder_id")).toThrow(ValidationError);
     });
 
     /** verifica que el campo_name aparece en el mensaje */
@@ -278,6 +255,36 @@ describe("validation helpers", () => {
       expect(() => validate_optional_uuid("bad", "parent_folder_id")).toThrow(
         "parent_folder_id must be a valid UUID",
       );
+    });
+  });
+
+  /**
+   * Tests para validate_email — valida formato básico de correo electrónico.
+   */
+  describe("validate_email", () => {
+    /** verifica que un email válido no lanza error */
+    it("should_not_throw_for_valid_email", () => {
+      // Arrange & Act & Assert
+      expect(() => validate_email("juan@nombre.es", "email")).not.toThrow();
+    });
+
+    /** verifica que un email con espacios alrededor es válido tras trim del caller */
+    it("should_not_throw_for_valid_email_with_uppercase", () => {
+      // Arrange & Act & Assert
+      expect(() => validate_email("Juan.Perez@Nombre.Es", "email")).not.toThrow();
+    });
+
+    /** verifica que formato inválido lanza ValidationError */
+    it("should_throw_ValidationError_for_invalid_email", () => {
+      // Arrange & Act & Assert
+      expect(() => validate_email("not-an-email", "email")).toThrow(ValidationError);
+      expect(() => validate_email("not-an-email", "email")).toThrow("email must be a valid email");
+    });
+
+    /** verifica que null lanza ValidationError */
+    it("should_throw_ValidationError_for_null", () => {
+      // Arrange & Act & Assert
+      expect(() => validate_email(null, "email")).toThrow(ValidationError);
     });
   });
 });

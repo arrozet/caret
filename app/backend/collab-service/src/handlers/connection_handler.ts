@@ -293,10 +293,11 @@ export class ConnectionHandler {
     const broadcast_message = encoding.toUint8Array(encoder);
     this.broadcast_to_room(doc_id, user_id, broadcast_message);
 
-    // Clean up awareness if room is empty
-    if (!room_manager.room_exists(doc_id)) {
+    // Clean up awareness when room has no active participants.
+    // The room itself is kept in memory to preserve Y.Doc state across brief reconnect gaps.
+    if (room_manager.is_room_empty(doc_id)) {
       this.awareness_map.delete(doc_id);
-      logger.debug("Room destroyed, awareness cleaned up", { doc_id });
+      logger.debug("Room became empty, awareness cleaned up", { doc_id });
     }
   }
 
