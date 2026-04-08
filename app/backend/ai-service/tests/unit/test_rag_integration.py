@@ -19,10 +19,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.ai import AiMessageRole
-from app.schemas.ai import StreamRequest
-from app.schemas.embedding import ChunkResult
-from app.services.ai_agent_service import AiAgentService
+from models.ai import AiMessageRole
+from schemas.ai import StreamRequest
+from schemas.embedding import ChunkResult
+from services.ai_agent_service import AiAgentService
 
 # ---------------------------------------------------------------------------
 # Shared helpers (mirrors test_ai_agent_service.py helpers for consistency)
@@ -126,17 +126,17 @@ class TestRetrieveRagContext:
         mock_emb_service.search_similar_chunks = AsyncMock(return_value=[])
 
         with patch(
-            "app.services.ai_agent_service.AiAgentService._retrieve_rag_context",
+            "services.ai_agent_service.AiAgentService._retrieve_rag_context",
             wraps=service._retrieve_rag_context,
         ):
             with patch(
-                "app.services.embedding_service.EmbeddingService",
+                "services.embedding_service.EmbeddingService",
                 return_value=mock_emb_service,
             ):
                 # Patch the lazy import inside the method
                 with patch.dict(
                     "sys.modules",
-                    {"app.services.embedding_service": _make_embedding_module(mock_emb_service)},
+                    {"services.embedding_service": _make_embedding_module(mock_emb_service)},
                 ):
                     result = await service._retrieve_rag_context(
                         document_id=doc_id,
@@ -162,7 +162,7 @@ class TestRetrieveRagContext:
 
         with patch.dict(
             "sys.modules",
-            {"app.services.embedding_service": _make_embedding_module(mock_emb_service)},
+            {"services.embedding_service": _make_embedding_module(mock_emb_service)},
         ):
             result = await service._retrieve_rag_context(
                 document_id=doc_id,
@@ -188,7 +188,7 @@ class TestRetrieveRagContext:
 
         with patch.dict(
             "sys.modules",
-            {"app.services.embedding_service": _make_embedding_module(mock_emb_service)},
+            {"services.embedding_service": _make_embedding_module(mock_emb_service)},
         ):
             result = await service._retrieve_rag_context(
                 document_id=doc_id,
@@ -212,7 +212,7 @@ class TestRetrieveRagContext:
 
         with patch.dict(
             "sys.modules",
-            {"app.services.embedding_service": _make_embedding_module(mock_emb_service)},
+            {"services.embedding_service": _make_embedding_module(mock_emb_service)},
         ):
             result = await service._retrieve_rag_context(
                 document_id=doc_id,
@@ -239,7 +239,7 @@ class TestRetrieveRagContext:
 
         with patch.dict(
             "sys.modules",
-            {"app.services.embedding_service": _make_embedding_module(mock_emb_service)},
+            {"services.embedding_service": _make_embedding_module(mock_emb_service)},
         ):
             await service._retrieve_rag_context(
                 document_id=doc_id,
@@ -289,17 +289,17 @@ class TestStreamResponseRagWiring:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
-            patch("app.services.ai_agent_service.Agent", return_value=mock_agent_instance),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service.Agent", return_value=mock_agent_instance),
             patch.object(
                 AiAgentService,
                 "_retrieve_rag_context",
@@ -351,17 +351,17 @@ class TestStreamResponseRagWiring:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
-            patch("app.services.ai_agent_service.Agent", return_value=mock_agent_instance),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service.Agent", return_value=mock_agent_instance),
             patch.object(
                 AiAgentService,
                 "_retrieve_rag_context",
@@ -411,17 +411,17 @@ class TestStreamResponseRagWiring:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
-            patch("app.services.ai_agent_service.Agent", return_value=mock_agent_instance),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service.Agent", return_value=mock_agent_instance),
             # RAG returns nothing (no embeddings stored yet)
             patch.object(
                 AiAgentService,

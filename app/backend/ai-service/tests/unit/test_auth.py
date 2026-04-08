@@ -14,7 +14,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
-from app.core.auth import (
+from core.auth import (
     AuthUser,
     _fetch_jwks,
     _get_jwks,
@@ -73,7 +73,7 @@ class TestFetchJwks:
     async def test_raises_503_when_no_supabase_url(self) -> None:
         """_fetch_jwks should raise HTTPException 503 when SUPABASE_URL is not set."""
         # Arrange
-        with patch("app.core.auth.settings") as mock_settings:
+        with patch("core.auth.settings") as mock_settings:
             mock_settings.SUPABASE_URL = ""
             mock_settings.SUPABASE_ANON_KEY = ""
 
@@ -91,7 +91,7 @@ class TestFetchJwks:
         mock_response.status_code = 401
 
         with (
-            patch("app.core.auth.settings") as mock_settings,
+            patch("core.auth.settings") as mock_settings,
             patch("httpx.AsyncClient") as mock_client_cls,
         ):
             mock_settings.SUPABASE_URL = "https://project.supabase.co"
@@ -118,7 +118,7 @@ class TestFetchJwks:
         mock_response.json.return_value = {"keys": fake_keys}
 
         with (
-            patch("app.core.auth.settings") as mock_settings,
+            patch("core.auth.settings") as mock_settings,
             patch("httpx.AsyncClient") as mock_client_cls,
         ):
             mock_settings.SUPABASE_URL = "https://project.supabase.co"
@@ -153,15 +153,15 @@ class TestGetJwksCache:
         # Arrange
         cached_keys = [{"kty": "EC", "kid": "cached"}]
 
-        with patch("app.core.auth._jwks_cache") as _:
-            import app.core.auth as auth_module
+        with patch("core.auth._jwks_cache") as _:
+            import core.auth as auth_module
 
             auth_module._jwks_cache = _JwksCache(
                 keys=cached_keys,
                 fetched_at=time.monotonic(),  # fetched just now → within TTL
             )
 
-            with patch("app.core.auth.settings") as mock_settings:
+            with patch("core.auth.settings") as mock_settings:
                 mock_settings.JWKS_CACHE_TTL_SECONDS = 300
 
                 # Act
@@ -176,7 +176,7 @@ class TestGetJwksCache:
         # Arrange
         fresh_keys = [{"kty": "EC", "kid": "fresh"}]
 
-        import app.core.auth as auth_module
+        import core.auth as auth_module
 
         auth_module._jwks_cache = _JwksCache(
             keys=[{"kty": "EC", "kid": "stale"}],
@@ -184,8 +184,8 @@ class TestGetJwksCache:
         )
 
         with (
-            patch("app.core.auth.settings") as mock_settings,
-            patch("app.core.auth._fetch_jwks", new_callable=AsyncMock, return_value=fresh_keys),
+            patch("core.auth.settings") as mock_settings,
+            patch("core.auth._fetch_jwks", new_callable=AsyncMock, return_value=fresh_keys),
         ):
             mock_settings.JWKS_CACHE_TTL_SECONDS = 300
 
@@ -241,8 +241,8 @@ class TestGetCurrentUser:
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="expired.jwt.token")
 
         with (
-            patch("app.core.auth._get_jwks", new_callable=AsyncMock, return_value=fake_keys),
-            patch("app.core.auth.jwt.decode", side_effect=ExpiredSignatureError("expired")),
+            patch("core.auth._get_jwks", new_callable=AsyncMock, return_value=fake_keys),
+            patch("core.auth.jwt.decode", side_effect=ExpiredSignatureError("expired")),
         ):
             # Act / Assert
             with pytest.raises(HTTPException) as exc_info:
@@ -261,8 +261,8 @@ class TestGetCurrentUser:
         creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="bad.jwt.token")
 
         with (
-            patch("app.core.auth._get_jwks", new_callable=AsyncMock, return_value=fake_keys),
-            patch("app.core.auth.jwt.decode", side_effect=JWTError("bad sig")),
+            patch("core.auth._get_jwks", new_callable=AsyncMock, return_value=fake_keys),
+            patch("core.auth.jwt.decode", side_effect=JWTError("bad sig")),
         ):
             # Act / Assert
             with pytest.raises(HTTPException) as exc_info:
@@ -280,8 +280,8 @@ class TestGetCurrentUser:
         fake_payload = {"email": "user@example.com", "role": "authenticated"}
 
         with (
-            patch("app.core.auth._get_jwks", new_callable=AsyncMock, return_value=fake_keys),
-            patch("app.core.auth.jwt.decode", return_value=fake_payload),
+            patch("core.auth._get_jwks", new_callable=AsyncMock, return_value=fake_keys),
+            patch("core.auth.jwt.decode", return_value=fake_payload),
         ):
             # Act / Assert
             with pytest.raises(HTTPException) as exc_info:
@@ -303,8 +303,8 @@ class TestGetCurrentUser:
         }
 
         with (
-            patch("app.core.auth._get_jwks", new_callable=AsyncMock, return_value=fake_keys),
-            patch("app.core.auth.jwt.decode", return_value=fake_payload),
+            patch("core.auth._get_jwks", new_callable=AsyncMock, return_value=fake_keys),
+            patch("core.auth.jwt.decode", return_value=fake_payload),
         ):
             # Act
             result = await get_current_user(credentials=creds)

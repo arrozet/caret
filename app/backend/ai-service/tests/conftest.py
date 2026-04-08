@@ -6,7 +6,7 @@ Provides shared fixtures for test discovery and FastAPI test client setup.
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.main import app
+from main import app
 
 
 @pytest.fixture

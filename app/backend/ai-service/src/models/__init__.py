@@ -6,7 +6,7 @@ Rule: these are DB-layer types used exclusively in Repositories.
 Rule: never return SQLAlchemy models directly from a Router — map them to Pydantic schemas first.
 """
 
-from app.models.ai import AiConversation, AiMessage, AiMessageRole, AiSuggestion, AiSuggestionStatus
+from models.ai import AiConversation, AiMessage, AiMessageRole, AiSuggestion, AiSuggestionStatus
 
 __all__ = [
     "AiConversation",

@@ -7,7 +7,7 @@ the MODELS_BY_ID index and DEFAULT_MODEL_ID are consistent with the list.
 
 import pytest
 
-from app.core.models_catalog import (
+from core.models_catalog import (
     DEFAULT_MODEL_ID,
     MODELS_BY_ID,
     OPENROUTER_MODELS,

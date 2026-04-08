@@ -15,9 +15,9 @@ import uuid
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
-from app.repositories.ai_repository import DocumentEmbeddingRepository
-from app.schemas.embedding import ChunkResult
+from core.config import settings
+from repositories.ai_repository import DocumentEmbeddingRepository
+from schemas.embedding import ChunkResult
 
 logger = logging.getLogger(__name__)
 

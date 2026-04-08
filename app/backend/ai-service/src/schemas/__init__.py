@@ -3,7 +3,7 @@ Pydantic schemas (DTOs) for the Caret AI Service.
 These are the only types that cross the HTTP boundary.
 """
 
-from app.schemas.ai import (
+from schemas.ai import (
     ConversationCreate,
     ConversationListByDocumentResponse,
     ConversationListItemResponse,

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.core.config import settings
+from core.config import settings
 
 
 def _normalize_database_url(url: str) -> tuple[str, dict]:

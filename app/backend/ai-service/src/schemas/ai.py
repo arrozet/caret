@@ -2,7 +2,7 @@
 Pydantic schemas (DTOs) for the AI Service API.
 
 Schemas are the only types that cross the HTTP boundary — they are never
-persisted to the database directly.  SQLAlchemy models live in app/models/.
+persisted to the database directly.  SQLAlchemy models live in models/.
 
 Naming convention:
   <Resource>Create   — request body for POST endpoints
@@ -15,7 +15,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.ai import AiMessageRole, AiSuggestionStatus
+from models.ai import AiMessageRole, AiSuggestionStatus
 
 # ---------------------------------------------------------------------------
 # Shared config

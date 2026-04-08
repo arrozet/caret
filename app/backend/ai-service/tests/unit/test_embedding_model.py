@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.ai import Base, DocumentEmbedding
-from app.repositories.ai_repository import DocumentEmbeddingRepository
+from models.ai import Base, DocumentEmbedding
+from repositories.ai_repository import DocumentEmbeddingRepository
 
 # ---------------------------------------------------------------------------
 # Helpers

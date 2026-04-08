@@ -19,10 +19,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import AuthUser, get_current_user
-from app.core.dependencies import get_db_session
-from app.core.models_catalog import DEFAULT_MODEL_ID, OPENROUTER_MODELS, ModelEntry
-from app.schemas.ai import (
+from core.auth import AuthUser, get_current_user
+from core.dependencies import get_db_session
+from core.models_catalog import DEFAULT_MODEL_ID, OPENROUTER_MODELS, ModelEntry
+from schemas.ai import (
     ConversationCreate,
     ConversationListByDocumentResponse,
     ConversationResponse,
@@ -31,7 +31,7 @@ from app.schemas.ai import (
     ModelsResponse,
     StreamRequest,
 )
-from app.services.ai_agent_service import AiAgentService
+from services.ai_agent_service import AiAgentService
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +203,7 @@ async def list_messages(
     Raises:
         HTTPException 404 if the conversation does not exist.
     """
-    from app.repositories.ai_repository import AiConversationRepository
+    from repositories.ai_repository import AiConversationRepository
 
     conv_repo = AiConversationRepository(session)
     conversation = await conv_repo.get_by_id_for_user(
@@ -247,7 +247,7 @@ async def delete_conversation(
     Raises:
         HTTPException 404 if the conversation does not exist.
     """
-    from app.repositories.ai_repository import AiConversationRepository
+    from repositories.ai_repository import AiConversationRepository
 
     conv_repo = AiConversationRepository(session)
     conversation = await conv_repo.get_by_id_for_user(
@@ -316,7 +316,7 @@ async def stream_ai_response(
     Raises:
         HTTPException 404 if the conversation does not exist.
     """
-    from app.repositories.ai_repository import AiConversationRepository
+    from repositories.ai_repository import AiConversationRepository
 
     conv_repo = AiConversationRepository(session)
     conversation = await conv_repo.get_by_id_for_user(

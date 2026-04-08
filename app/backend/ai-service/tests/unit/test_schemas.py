@@ -11,8 +11,8 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from app.models.ai import AiMessageRole, AiSuggestionStatus
-from app.schemas.ai import (
+from models.ai import AiMessageRole, AiSuggestionStatus
+from schemas.ai import (
     ConversationCreate,
     MessageCreate,
     ModelInfo,

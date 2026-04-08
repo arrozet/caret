@@ -14,9 +14,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import get_current_user
-from app.core.dependencies import get_db_session
-from app.main import app
+from core.auth import get_current_user
+from core.dependencies import get_db_session
+from main import app
 
 # ---------------------------------------------------------------------------
 # Helpers

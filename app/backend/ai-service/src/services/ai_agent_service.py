@@ -23,15 +23,15 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
-from app.core.models_catalog import DEFAULT_MODEL_ID, MODELS_BY_ID
-from app.models.ai import AiMessageRole
-from app.repositories.ai_repository import (
+from core.config import settings
+from core.models_catalog import DEFAULT_MODEL_ID, MODELS_BY_ID
+from models.ai import AiMessageRole
+from repositories.ai_repository import (
     AiConversationRepository,
     AiMessageRepository,
     AiSuggestionRepository,
 )
-from app.schemas.ai import (
+from schemas.ai import (
     ConversationListByDocumentResponse,
     ConversationListItemResponse,
     ConversationResponse,
@@ -290,7 +290,7 @@ class AiAgentService:
         """
         try:
             # Lazy import to avoid circular dependency between services.
-            from app.services.embedding_service import EmbeddingService  # noqa: PLC0415
+            from services.embedding_service import EmbeddingService  # noqa: PLC0415
 
             emb_service = EmbeddingService(self._session)
             chunks = await emb_service.search_similar_chunks(
@@ -407,7 +407,7 @@ class AiAgentService:
         token_count = 0
 
         if agent_type == "general":
-            from app.agents.general_agent import (  # noqa: PLC0415
+            from agents.general_agent import (  # noqa: PLC0415
                 GeneralAgentDeps,
                 build_general_agent,
             )

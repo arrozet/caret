@@ -16,9 +16,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import get_current_user
-from app.core.dependencies import get_db_session
-from app.main import app
+from core.auth import get_current_user
+from core.dependencies import get_db_session
+from main import app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -224,7 +224,7 @@ class TestListConversations:
         conv = _make_mock_conv(doc_id=doc_id)
 
         with patch(
-            "app.services.ai_agent_service.AiConversationRepository.list_for_document",
+            "services.ai_agent_service.AiConversationRepository.list_for_document",
             new_callable=AsyncMock,
             return_value=([conv], 1),
         ):
@@ -272,7 +272,7 @@ class TestCreateConversation:
         mock_conv = _make_mock_conv(doc_id=doc_id)
 
         with patch(
-            "app.services.ai_agent_service.AiConversationRepository.create",
+            "services.ai_agent_service.AiConversationRepository.create",
             new_callable=AsyncMock,
             return_value=mock_conv,
         ):
@@ -297,7 +297,7 @@ class TestCreateConversation:
         mock_conv.title = title
 
         with patch(
-            "app.services.ai_agent_service.AiConversationRepository.create",
+            "services.ai_agent_service.AiConversationRepository.create",
             new_callable=AsyncMock,
             return_value=mock_conv,
         ):
@@ -367,7 +367,7 @@ class TestListMessages:
         """GET /ai/conversations/{id}/messages returns 404 when conversation missing."""
         # Arrange
         with patch(
-            "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+            "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -389,12 +389,12 @@ class TestListMessages:
 
         with (
             patch(
-                "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+                "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
                 new_callable=AsyncMock,
                 return_value=mock_conv,
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
@@ -441,12 +441,12 @@ class TestDeleteConversation:
         conv_id = uuid.uuid4()
 
         with patch(
-            "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+            "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
             new_callable=AsyncMock,
             return_value=_make_mock_conv(),
         ):
             with patch(
-                "app.repositories.ai_repository.AiConversationRepository.delete",
+                "repositories.ai_repository.AiConversationRepository.delete",
                 new_callable=AsyncMock,
                 return_value=True,
             ):
@@ -463,7 +463,7 @@ class TestDeleteConversation:
         """DELETE /ai/conversations/{id} should return 404 when conversation not found."""
         # Arrange
         with patch(
-            "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+            "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -516,7 +516,7 @@ class TestStreamAiResponse:
         """POST /ai/conversations/{id}/stream returns 404 when conversation not found."""
         # Arrange
         with patch(
-            "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+            "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -557,12 +557,12 @@ class TestStreamAiResponse:
 
         with (
             patch(
-                "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+                "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
                 new_callable=AsyncMock,
                 return_value=mock_conv,
             ),
             patch(
-                "app.services.ai_agent_service.AiAgentService.stream_response",
+                "services.ai_agent_service.AiAgentService.stream_response",
                 return_value=_fake_stream(),
             ),
         ):
@@ -595,12 +595,12 @@ class TestStreamAiResponse:
 
         with (
             patch(
-                "app.repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+                "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
                 new_callable=AsyncMock,
                 return_value=mock_conv,
             ),
             patch(
-                "app.services.ai_agent_service.AiAgentService.stream_response",
+                "services.ai_agent_service.AiAgentService.stream_response",
                 return_value=_fake_stream(),
             ),
         ):

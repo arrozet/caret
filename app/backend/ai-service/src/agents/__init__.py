@@ -15,7 +15,7 @@ Public API:
   - GeneralAgent: Backward-compatible sentinel Agent instance (tests only).
 """
 
-from app.agents.general_agent import (
+from agents.general_agent import (
     GeneralAgent,
     GeneralAgentDeps,
     build_general_agent,

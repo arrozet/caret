@@ -14,7 +14,7 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-# Make sure the src directory is on sys.path so that `from app.xxx import ...`
+# Make sure the src directory is on sys.path so that `from core.xxx import ...`
 # always resolves, regardless of how alembic is invoked.
 _src_root = Path(__file__).parents[3]
 if str(_src_root) not in sys.path:
@@ -27,9 +27,9 @@ from sqlalchemy.ext.asyncio import create_async_engine  # noqa: E402
 
 # Import application settings (DATABASE_URL) and the ORM Base for
 # autogenerate support.
-from app.core.config import settings  # noqa: E402
-from app.db.session import _normalize_database_url  # noqa: E402
-from app.models.ai import Base  # noqa: F401,E402 — registers all ORM models
+from core.config import settings  # noqa: E402
+from db.session import _normalize_database_url  # noqa: E402
+from models.ai import Base  # noqa: F401,E402 — registers all ORM models
 
 # ---------------------------------------------------------------------------
 # Alembic Config object (gives access to values from alembic.ini)

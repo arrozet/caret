@@ -7,7 +7,7 @@ Mirrors the TypeScript auth_middleware in the document-service:
   - Attaches the decoded payload to the request via FastAPI Depends()
 
 Usage:
-    from app.core.auth import get_current_user, AuthUser
+    from core.auth import get_current_user, AuthUser
 
     @router.post("/conversations")
     async def create_conversation(
@@ -26,7 +26,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from jose.exceptions import ExpiredSignatureError
 
-from app.core.config import settings
+from core.config import settings
 
 # ---------------------------------------------------------------------------
 # Bearer token extractor

@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.ai import AiMessageRole
-from app.services.ai_agent_service import AiAgentService, _build_model
+from models.ai import AiMessageRole
+from services.ai_agent_service import AiAgentService, _build_model
 
 
 class _FakeAgentMessage:
@@ -95,7 +95,7 @@ class TestAiAgentServiceConversations:
         mock_conv = _make_mock_conversation(doc_id=doc_id, user_id=user_id)
 
         with patch(
-            "app.services.ai_agent_service.AiConversationRepository.create",
+            "services.ai_agent_service.AiConversationRepository.create",
             new_callable=AsyncMock,
             return_value=mock_conv,
         ):
@@ -122,7 +122,7 @@ class TestAiAgentServiceConversations:
         mock_conv.title = None
 
         with patch(
-            "app.services.ai_agent_service.AiConversationRepository.create",
+            "services.ai_agent_service.AiConversationRepository.create",
             new_callable=AsyncMock,
             return_value=mock_conv,
         ):
@@ -146,7 +146,7 @@ class TestAiAgentServiceConversations:
         existing = _make_mock_conversation(doc_id=doc_id, user_id=user_id)
 
         with patch(
-            "app.services.ai_agent_service.AiConversationRepository.list_for_document",
+            "services.ai_agent_service.AiConversationRepository.list_for_document",
             new_callable=AsyncMock,
             return_value=([existing], 1),
         ):
@@ -171,12 +171,12 @@ class TestAiAgentServiceConversations:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiConversationRepository.list_for_document",
+                "services.ai_agent_service.AiConversationRepository.list_for_document",
                 new_callable=AsyncMock,
                 return_value=([], 0),
             ),
             patch(
-                "app.services.ai_agent_service.AiConversationRepository.create",
+                "services.ai_agent_service.AiConversationRepository.create",
                 new_callable=AsyncMock,
                 return_value=new_conv,
             ),
@@ -199,7 +199,7 @@ class TestAiAgentServiceConversations:
         conv_id = uuid.uuid4()
 
         with patch(
-            "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+            "services.ai_agent_service.AiMessageRepository.list_for_conversation",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -225,7 +225,7 @@ class TestAiAgentServiceConversations:
         ]
 
         with patch(
-            "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+            "services.ai_agent_service.AiMessageRepository.list_for_conversation",
             new_callable=AsyncMock,
             return_value=mock_msgs,
         ):
@@ -296,18 +296,18 @@ class TestAiAgentServiceStreaming:
         with (
             patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
             patch(
-                "app.agents.general_agent.build_general_agent",
+                "agents.general_agent.build_general_agent",
                 return_value=mock_agent_instance,
             ),
         ):
@@ -382,18 +382,18 @@ class TestAiAgentServiceStreaming:
         with (
             patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
             patch(
-                "app.agents.general_agent.build_general_agent",
+                "agents.general_agent.build_general_agent",
                 return_value=mock_agent_instance,
             ),
         ):
@@ -442,19 +442,19 @@ class TestAiAgentServiceStreaming:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
             # Patch the Agent class itself to return our fully-controlled mock instance
             patch(
-                "app.services.ai_agent_service.Agent",
+                "services.ai_agent_service.Agent",
                 return_value=mock_agent_instance,
             ),
         ):
@@ -501,18 +501,18 @@ class TestAiAgentServiceStreaming:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
             patch(
-                "app.services.ai_agent_service.Agent",
+                "services.ai_agent_service.Agent",
                 return_value=mock_agent_instance,
             ),
         ):
@@ -565,18 +565,18 @@ class TestAiAgentServiceStreaming:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
             patch(
-                "app.services.ai_agent_service.Agent",
+                "services.ai_agent_service.Agent",
                 return_value=mock_agent_instance,
             ),
         ):
@@ -604,17 +604,17 @@ class TestAiAgentServiceStreaming:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 return_value=mock_user_msg,
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
             patch(
-                "app.services.ai_agent_service._build_model",
+                "services.ai_agent_service._build_model",
                 side_effect=RuntimeError("No LLM API key configured."),
             ),
         ):
@@ -656,18 +656,18 @@ class TestAiAgentServiceStreaming:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 return_value=mock_user_msg,
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
             patch(
-                "app.services.ai_agent_service.Agent",
+                "services.ai_agent_service.Agent",
                 return_value=mock_agent_instance,
             ),
         ):
@@ -716,18 +716,18 @@ class TestAiAgentServiceStreaming:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
             patch(
-                "app.services.ai_agent_service.Agent",
+                "services.ai_agent_service.Agent",
                 return_value=mock_agent_instance,
             ),
         ):
@@ -770,18 +770,18 @@ class TestAiAgentServiceStreaming:
 
         with (
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.create",
+                "services.ai_agent_service.AiMessageRepository.create",
                 new_callable=AsyncMock,
                 side_effect=[mock_user_msg, mock_assistant_msg],
             ),
             patch(
-                "app.services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
                 new_callable=AsyncMock,
                 return_value=[mock_user_msg],
             ),
-            patch("app.services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
             patch(
-                "app.services.ai_agent_service.Agent",
+                "services.ai_agent_service.Agent",
                 return_value=mock_agent_instance,
             ),
         ):
@@ -815,7 +815,7 @@ class TestBuildModel:
     def test_build_model_raises_when_no_keys_configured(self) -> None:
         """_build_model should raise RuntimeError when no API keys are set."""
         # Arrange
-        with patch("app.services.ai_agent_service.settings") as mock_settings:
+        with patch("services.ai_agent_service.settings") as mock_settings:
             mock_settings.XAI_API_KEY = ""
             mock_settings.OPENROUTER_API_KEY = ""
             mock_settings.OPENAI_API_KEY = ""
@@ -829,7 +829,7 @@ class TestBuildModel:
     def test_build_model_raises_for_grok_without_xai_key(self) -> None:
         """_build_model should raise RuntimeError for grok- model when XAI_API_KEY is missing."""
         # Arrange
-        with patch("app.services.ai_agent_service.settings") as mock_settings:
+        with patch("services.ai_agent_service.settings") as mock_settings:
             mock_settings.XAI_API_KEY = ""
             mock_settings.OPENROUTER_API_KEY = ""
             mock_settings.OPENAI_API_KEY = ""
@@ -843,9 +843,9 @@ class TestBuildModel:
         """_build_model should select OpenRouter when OPENROUTER_API_KEY is configured."""
         # Arrange
         with (
-            patch("app.services.ai_agent_service.settings") as mock_settings,
-            patch("app.services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
-            patch("app.services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
+            patch("services.ai_agent_service.settings") as mock_settings,
+            patch("services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
+            patch("services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
         ):
             mock_settings.XAI_API_KEY = ""
             mock_settings.OPENROUTER_API_KEY = "or-key-123"
@@ -871,9 +871,9 @@ class TestBuildModel:
         custom_model_id = "qwen/qwen3-coder:free"
 
         with (
-            patch("app.services.ai_agent_service.settings") as mock_settings,
-            patch("app.services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
-            patch("app.services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
+            patch("services.ai_agent_service.settings") as mock_settings,
+            patch("services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
+            patch("services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
         ):
             mock_settings.XAI_API_KEY = ""
             mock_settings.OPENROUTER_API_KEY = "or-key-123"
@@ -893,9 +893,9 @@ class TestBuildModel:
         """_build_model should use OpenAI when only OPENAI_API_KEY is configured."""
         # Arrange
         with (
-            patch("app.services.ai_agent_service.settings") as mock_settings,
-            patch("app.services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
-            patch("app.services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
+            patch("services.ai_agent_service.settings") as mock_settings,
+            patch("services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
+            patch("services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
         ):
             mock_settings.XAI_API_KEY = ""
             mock_settings.OPENROUTER_API_KEY = ""

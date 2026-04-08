@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.embedding_service import EmbeddingService, _split_into_chunks
+from services.embedding_service import EmbeddingService, _split_into_chunks
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -477,7 +477,7 @@ class TestEmbeddingServiceEmbedTexts:
         session = _make_mock_session()
         service = EmbeddingService(session)
 
-        with patch("app.services.embedding_service.settings") as mock_settings:
+        with patch("services.embedding_service.settings") as mock_settings:
             mock_settings.OPENAI_API_KEY = ""
             mock_settings.OPENROUTER_API_KEY = ""
             mock_settings.OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
@@ -505,9 +505,9 @@ class TestEmbeddingServiceEmbedTexts:
         mock_http_client.post = AsyncMock(return_value=mock_response)
 
         with (
-            patch("app.services.embedding_service.settings") as mock_settings,
+            patch("services.embedding_service.settings") as mock_settings,
             patch(
-                "app.services.embedding_service.httpx.AsyncClient",
+                "services.embedding_service.httpx.AsyncClient",
                 return_value=mock_http_client,
             ),
         ):
@@ -544,9 +544,9 @@ class TestEmbeddingServiceEmbedTexts:
         mock_http_client.post = AsyncMock(return_value=mock_response)
 
         with (
-            patch("app.services.embedding_service.settings") as mock_settings,
+            patch("services.embedding_service.settings") as mock_settings,
             patch(
-                "app.services.embedding_service.httpx.AsyncClient",
+                "services.embedding_service.httpx.AsyncClient",
                 return_value=mock_http_client,
             ),
         ):

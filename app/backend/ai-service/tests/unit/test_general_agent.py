@@ -19,7 +19,7 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-dummy-key-for-unit-tests")
 
 from unittest.mock import MagicMock  # noqa: E402
 
-from app.agents.general_agent import (  # noqa: E402
+from agents.general_agent import (  # noqa: E402
     GeneralAgent,
     GeneralAgentDeps,
     get_document_content,
@@ -59,7 +59,8 @@ class TestGeneralAgentDepsDefaults:
     """Verify the default values of the GeneralAgentDeps dataclass."""
 
     def test_general_agent_deps_defaults(self) -> None:
-        """GeneralAgentDeps() must initialise with document_content=None and empty proposed_changes."""
+        """GeneralAgentDeps() must initialise with document_content=None and
+        empty proposed_changes."""
         deps = GeneralAgentDeps()
         assert deps.document_content is None
         assert deps.proposed_changes == []

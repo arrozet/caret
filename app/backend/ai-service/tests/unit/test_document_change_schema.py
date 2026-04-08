@@ -12,7 +12,7 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.ai import DocumentChangePayload, StreamChunk
+from schemas.ai import DocumentChangePayload, StreamChunk
 
 
 class TestDocumentChangePayload:

@@ -2,7 +2,7 @@
 Smoke tests for the AI service health endpoint and configuration.
 """
 
-from app.core.config import Settings
+from core.config import Settings
 
 
 class TestSettings:

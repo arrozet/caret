@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import async_session_factory
+from db.session import async_session_factory
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

@@ -4,11 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
-from app.db.session import engine
-from app.routers.ai_router import meta_router as ai_meta_router
-from app.routers.ai_router import router as ai_router
-from app.routers.embedding_router import router as embedding_router
+from core.config import settings
+from db.session import engine
+from routers.ai_router import meta_router as ai_meta_router
+from routers.ai_router import router as ai_router
+from routers.embedding_router import router as embedding_router
 
 
 @asynccontextmanager

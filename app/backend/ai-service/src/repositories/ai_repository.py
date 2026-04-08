@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.ai import (
+from models.ai import (
     AiConversation,
     AiMessage,
     AiMessageRole,

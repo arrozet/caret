@@ -32,4 +32,4 @@ USER nobody
 
 EXPOSE 8000
 
-CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/uvicorn", "main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8000"]
