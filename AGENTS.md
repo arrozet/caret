@@ -66,9 +66,35 @@ These guidelines exist to **finish sooner**, **preserve useful context**, and **
 
 ### Code Style & Naming Conventions
 
-- **Variables and Functions**: Use `snake_case` for all variable and function names across the codebase (both frontend and backend).
-- **Classes**: Use `CamelCase` for class names (when applicable).
-- **Consistency**: Maintain consistent naming conventions throughout the entire project to ensure code readability and maintainability.
+Naming conventions vary by technology to follow each ecosystem's best practices:
+
+#### Frontend (React/TypeScript)
+
+La convención de nombres en React se basa en la legibilidad y estructura:
+
+- **Components**: Use `PascalCase` for all React components (e.g., `MyComponent.tsx`, `EditorPage.tsx`)
+- **Functions, Variables, and Properties**: Use `camelCase` for functions, variables, and properties (e.g., `userData`, `onClick`, `isVisible`)
+- **React Hooks**: Use `camelCase` starting with "use" (e.g., `useAuth`, `useDocument`, `useSaveDocument`)
+- **Event Handlers**: Prefix with "handle" using `camelCase` (e.g., `handleClick`, `handleSubmit`, `handleUserInput`)
+- **Constants**: Use `UPPER_SNAKE_CASE` for constants (e.g., `MAX_FILE_SIZE`, `API_BASE_URL`)
+
+#### Backend - Node.js Services (Document Service, Collaboration Service)
+
+- **Variables, Functions, and Methods**: Use `camelCase` for variables, functions, methods, and instances (e.g., `userAction`, `getUserById`, `documentRepository`)
+- **Classes and Constructors**: Use `PascalCase` for classes and constructors (e.g., `UserManager`, `DocumentService`, `CollaborationController`)
+- **Files**: Use `snake_case` for file names in lowercase with underscores separating words (e.g., `my_file.js`, `user_repository.ts`, `document_routes.ts`)
+
+#### Backend - Python Services (AI Service with FastAPI)
+
+- **Variables, Functions, and Methods**: Use `snake_case` for variables, functions, and methods (e.g., `user_id`, `create_user`, `get_all_items`)
+- **Classes and Models**: Use `PascalCase` for Python classes, including Pydantic models and configuration classes (e.g., `UserCreate`, `ItemResponse`, `DatabaseConfig`, `AIAgentService`)
+- **Files**: Use `snake_case` for Python module names (e.g., `ai_router.py`, `document_repository.py`, `config.py`)
+
+#### General Rules
+
+- **Consistency**: Maintain consistent naming conventions within each part of the codebase (frontend, Node.js backend, Python backend).
+- **Clarity**: Choose descriptive names that clearly convey purpose and intent.
+- **Avoid Abbreviations**: Use full words unless the abbreviation is universally understood (e.g., `id`, `url`, `api`).
 
 ### Documentation Standards
 
