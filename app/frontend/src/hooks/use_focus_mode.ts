@@ -10,7 +10,7 @@ import { useEffect, useRef, useCallback } from "react";
  * @param enabled - Whether focus mode tracking is active.
  * @param idle_ms - Idle timeout in milliseconds (default: 2000).
  */
-export function use_focus_mode(enabled: boolean = true, idle_ms: number = 2_000) {
+export function useFocusMode(enabled: boolean = true, idle_ms: number = 2_000) {
   const timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reset_timer = useCallback(() => {

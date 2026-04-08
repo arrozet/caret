@@ -9,10 +9,10 @@ import { use_theme_store } from "../stores/theme_store";
  *
  * Usage:
  * ```tsx
- * const { theme, resolved_theme, set_theme } = use_theme();
+ * const { theme, resolved_theme, set_theme } = useTheme();
  * ```
  */
-export function use_theme() {
+export function useTheme() {
   const theme = use_theme_store((state) => state.theme);
   const resolved_theme = use_theme_store((state) => state.resolved_theme);
   const set_theme_action = use_theme_store((state) => state.set_theme);

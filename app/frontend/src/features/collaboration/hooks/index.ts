@@ -5,8 +5,8 @@
  */
 
 // Session management hooks
-export { use_collaboration_session } from "./use_collaboration_session";
-export { use_collaboration_presence } from "./use_collaboration_presence";
+export { useCollaborationSession } from "./use_collaboration_session";
+export { useCollaborationPresence } from "./use_collaboration_presence";
 
 export type {
   UseCollaborationSessionParams,

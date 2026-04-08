@@ -33,7 +33,7 @@ export interface UseCollaborationSessionResult {
 /**
  * Create and manage collaboration session lifecycle for a single document room.
  */
-export function use_collaboration_session({
+export function useCollaborationSession({
   document_id,
   token,
   user_id,
@@ -49,6 +49,7 @@ export function use_collaboration_session({
 
   useEffect(() => {
     if (!enabled || !document_id || !token || !user_id || !user_name) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional cleanup when deps are invalid
       set_ydoc(null);
       set_provider(null);
       set_connection_status("disconnected");

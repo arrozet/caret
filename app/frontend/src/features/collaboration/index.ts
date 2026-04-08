@@ -48,7 +48,7 @@ export { CollabHarnessPage } from "./components";
 // Hooks
 // =============================================================================
 // Session management
-export { use_collaboration_presence, use_collaboration_session } from "./hooks";
+export { useCollaborationPresence, useCollaborationSession } from "./hooks";
 export type { UseCollaborationSessionParams, UseCollaborationSessionResult } from "./hooks";
 
 // Awareness hook

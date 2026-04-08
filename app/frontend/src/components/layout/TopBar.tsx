@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { use_auth_store } from "../../stores/auth_store";
-import { use_theme } from "../../hooks/use_theme";
-import { use_document } from "../../features/editor/hooks/use_document";
+import { useTheme } from "../../hooks/use_theme";
+import { useDocument } from "../../features/editor/hooks/use_document";
 import { Button } from "../ui/Button";
 import { CaretLogo } from "../ui/Logo";
 import { LogOut, Sun, Moon, Monitor, Settings } from "lucide-react";
@@ -29,7 +29,7 @@ export function TopBar() {
   const params = useParams<{ id: string }>();
   const user = use_auth_store((s) => s.user);
   const sign_out = use_auth_store((s) => s.sign_out);
-  const { theme, toggle_theme } = use_theme();
+  const { theme, toggle_theme } = useTheme();
 
   const ThemeIcon = theme_icons[theme];
 
@@ -37,9 +37,7 @@ export function TopBar() {
   const is_editor_page = location.pathname.startsWith("/documents/");
 
   /** Fetch document title for breadcrumb when on editor page. */
-  const { data: document } = use_document(
-    is_editor_page ? params.id : undefined,
-  );
+  const { data: document } = useDocument(is_editor_page ? params.id : undefined);
 
   /** Display title: use document title or fallback to "Untitled". */
   const display_title = document?.title || "Untitled";
@@ -87,12 +85,7 @@ export function TopBar() {
         </Button>
 
         {/* Theme toggle */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={toggle_theme}
-          aria-label={t(`theme.${theme}`)}
-        >
+        <Button variant="ghost" size="sm" onClick={toggle_theme} aria-label={t(`theme.${theme}`)}>
           <ThemeIcon className="h-4 w-4" />
         </Button>
 
@@ -102,12 +95,7 @@ export function TopBar() {
             <span className="hidden md:inline text-ui-sm text-text-secondary truncate max-w-[160px]">
               {user.email}
             </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={sign_out}
-              aria-label={t("auth.sign_out")}
-            >
+            <Button variant="ghost" size="sm" onClick={sign_out} aria-label={t("auth.sign_out")}>
               <LogOut className="h-4 w-4" />
             </Button>
           </>

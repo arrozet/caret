@@ -11,7 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef } from "react";
 import { Button } from "../../../components/ui/Button";
-import { use_theme } from "../../../hooks/use_theme";
+import { useTheme } from "../../../hooks/use_theme";
 import { use_auth_store } from "../../../stores/auth_store";
 import { Sun, Moon, Monitor, ArrowRight, Type, Users, Sparkles } from "lucide-react";
 import { CaretLogo } from "../../../components/ui/Logo";
@@ -197,7 +197,7 @@ export function LandingPage() {
   const navigate = useNavigate();
   const status = use_auth_store((s) => s.status);
   const is_authenticated = status === "authenticated";
-  const { theme, toggle_theme } = use_theme();
+  const { theme, toggle_theme } = useTheme();
   const should_reduce_motion = useReducedMotion() ?? false;
   const hero_ref = useRef<HTMLElement>(null);
   const { x: mouse_x, y: mouse_y } = useMousePosition();

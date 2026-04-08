@@ -10,7 +10,7 @@ import type { DocumentResponse } from "../api/document_api";
  * @param document_id - Document UUID to save.
  * @returns Standard useMutation result.
  */
-export function use_save_document(document_id: string) {
+export function useSaveDocument(document_id: string) {
   const query_client = useQueryClient();
 
   return useMutation<

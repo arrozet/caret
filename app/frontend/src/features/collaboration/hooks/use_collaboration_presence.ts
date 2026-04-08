@@ -4,7 +4,7 @@ import type { CollaborationPresenceUser } from "../utils";
 /**
  * Derive lightweight presence metrics from awareness users.
  */
-export function use_collaboration_presence(users: CollaborationPresenceUser[]) {
+export function useCollaborationPresence(users: CollaborationPresenceUser[]) {
   return useMemo(() => {
     return {
       users,

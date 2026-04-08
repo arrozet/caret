@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { use_collaboration_session } from "./use_collaboration_session";
+import { useCollaborationSession } from "./use_collaboration_session";
 
 const connect_mock = vi.fn();
 const disconnect_mock = vi.fn();
@@ -36,7 +36,7 @@ vi.mock("../utils", () => ({
 }));
 
 /** Unit tests for collaboration session lifecycle hook. */
-describe("use_collaboration_session", () => {
+describe("useCollaborationSession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -53,7 +53,7 @@ describe("use_collaboration_session", () => {
     };
 
     // Act
-    const { result } = renderHook(() => use_collaboration_session(params));
+    const { result } = renderHook(() => useCollaborationSession(params));
 
     // Assert
     expect(result.current.is_ready).toBe(false);
@@ -73,7 +73,7 @@ describe("use_collaboration_session", () => {
     };
 
     // Act
-    const { result } = renderHook(() => use_collaboration_session(params));
+    const { result } = renderHook(() => useCollaborationSession(params));
 
     // Assert
     expect(connect_mock).toHaveBeenCalledTimes(1);

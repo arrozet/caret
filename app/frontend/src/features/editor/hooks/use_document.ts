@@ -9,7 +9,7 @@ import type { DocumentResponse } from "../api/document_api";
  * @param document_id - Document UUID. The query is disabled if falsy.
  * @returns Standard useQuery result with typed document data.
  */
-export function use_document(document_id: string | undefined) {
+export function useDocument(document_id: string | undefined) {
   return useQuery<DocumentResponse>({
     queryKey: ["document", document_id],
     queryFn: () => get_document(document_id!),

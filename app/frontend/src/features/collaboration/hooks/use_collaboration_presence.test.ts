@@ -1,16 +1,16 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { use_collaboration_presence } from "./use_collaboration_presence";
+import { useCollaborationPresence } from "./use_collaboration_presence";
 
 /** Unit tests for collaboration presence derived state hook. */
-describe("use_collaboration_presence", () => {
+describe("useCollaborationPresence", () => {
   /** Verifies solo-state flags when only local user is present. */
   it("returns solo mode when only one user is present", () => {
     // Arrange
     const users = [{ id: "u1", name: "Ada", color: "#111111" }];
 
     // Act
-    const { result } = renderHook(() => use_collaboration_presence(users));
+    const { result } = renderHook(() => useCollaborationPresence(users));
 
     // Assert
     expect(result.current.users_count).toBe(1);
@@ -27,7 +27,7 @@ describe("use_collaboration_presence", () => {
     ];
 
     // Act
-    const { result } = renderHook(() => use_collaboration_presence(users));
+    const { result } = renderHook(() => useCollaborationPresence(users));
 
     // Assert
     expect(result.current.users_count).toBe(2);

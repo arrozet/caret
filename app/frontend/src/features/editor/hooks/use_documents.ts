@@ -8,7 +8,7 @@ import type { DocumentResponse } from "../api/document_api";
  * @param workspace_id - Workspace UUID. The query is disabled if falsy.
  * @returns Standard useQuery result with typed document array.
  */
-export function use_documents(workspace_id: string | undefined) {
+export function useDocuments(workspace_id: string | undefined) {
   return useQuery<DocumentResponse[]>({
     queryKey: ["documents", workspace_id],
     queryFn: () => list_documents(workspace_id!),

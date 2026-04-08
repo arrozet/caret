@@ -4,7 +4,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { use_auth_store } from "../../../stores/auth_store";
-import { use_theme } from "../../../hooks/use_theme";
+import { useTheme } from "../../../hooks/use_theme";
 import { Sun, Moon, Monitor } from "lucide-react";
 
 /** Which form is currently active. */
@@ -30,7 +30,7 @@ export function AuthPage() {
   const sign_in = use_auth_store((s) => s.sign_in);
   const sign_up = use_auth_store((s) => s.sign_up);
   const sign_in_with_oauth = use_auth_store((s) => s.sign_in_with_oauth);
-  const { theme, toggle_theme } = use_theme();
+  const { theme, toggle_theme } = useTheme();
 
   const [mode, set_mode] = useState<AuthMode>("sign_in");
   const [email, set_email] = useState("");
@@ -96,12 +96,7 @@ export function AuthPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-app px-4">
       {/* Theme toggle — top-right corner */}
       <div className="absolute top-4 right-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={toggle_theme}
-          aria-label={t(`theme.${theme}`)}
-        >
+        <Button variant="ghost" size="sm" onClick={toggle_theme} aria-label={t(`theme.${theme}`)}>
           <ThemeIcon className="h-5 w-5" />
         </Button>
       </div>
@@ -115,17 +110,13 @@ export function AuthPage() {
               {t("app_name")}
             </h1>
           </Link>
-          <p className="mt-2 text-ui-base text-text-secondary">
-            {t("auth.tagline")}
-          </p>
+          <p className="mt-2 text-ui-base text-text-secondary">{t("auth.tagline")}</p>
         </div>
 
         {/* Card */}
         <div className="rounded-[6px] border border-border-subtle bg-surface p-6 shadow-subtle">
           <h2 className="mb-6 text-ui-lg text-text-primary">
-            {mode === "sign_in"
-              ? t("auth.welcome_back")
-              : t("auth.create_account")}
+            {mode === "sign_in" ? t("auth.welcome_back") : t("auth.create_account")}
           </h2>
 
           {/* Google OAuth */}
@@ -145,9 +136,7 @@ export function AuthPage() {
           {/* Divider */}
           <div className="my-5 flex items-center gap-3">
             <div className="h-px flex-1 bg-border-subtle" />
-            <span className="text-ui-sm text-text-secondary">
-              {t("auth.or_divider")}
-            </span>
+            <span className="text-ui-sm text-text-secondary">{t("auth.or_divider")}</span>
             <div className="h-px flex-1 bg-border-subtle" />
           </div>
 
@@ -171,9 +160,7 @@ export function AuthPage() {
               value={password}
               onChange={(e) => set_password(e.target.value)}
               required
-              autoComplete={
-                mode === "sign_in" ? "current-password" : "new-password"
-              }
+              autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
               minLength={6}
             />
 
@@ -202,9 +189,7 @@ export function AuthPage() {
 
           {/* Toggle link */}
           <p className="mt-4 text-center text-ui-sm text-text-secondary">
-            {mode === "sign_in"
-              ? t("auth.no_account")
-              : t("auth.has_account")}{" "}
+            {mode === "sign_in" ? t("auth.no_account") : t("auth.has_account")}{" "}
             <button
               type="button"
               onClick={toggle_mode}

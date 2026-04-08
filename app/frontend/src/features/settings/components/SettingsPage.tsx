@@ -1,19 +1,10 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  ArrowLeft,
-  User,
-  Globe,
-  Palette,
-  Sun,
-  Moon,
-  Monitor,
-  Check,
-} from "lucide-react";
+import { ArrowLeft, User, Globe, Palette, Sun, Moon, Monitor, Check } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { use_auth_store } from "../../../stores/auth_store";
-import { use_theme } from "../../../hooks/use_theme";
+import { useTheme } from "../../../hooks/use_theme";
 
 /** Supported languages with display labels. */
 const LANGUAGES = [
@@ -44,7 +35,7 @@ export function SettingsPage() {
   const { t, i18n } = useTranslation("common");
   const user = use_auth_store((s) => s.user);
   const sign_out = use_auth_store((s) => s.sign_out);
-  const { theme, set_theme } = use_theme();
+  const { theme, set_theme } = useTheme();
 
   const current_language = i18n.language;
 
@@ -98,9 +89,7 @@ export function SettingsPage() {
                   <p className="text-ui-lg font-medium text-text-primary">
                     {user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}
                   </p>
-                  <p className="text-ui-sm text-text-secondary">
-                    {user?.email || "No email"}
-                  </p>
+                  <p className="text-ui-sm text-text-secondary">{user?.email || "No email"}</p>
                 </div>
               </div>
 
@@ -183,9 +172,7 @@ export function SettingsPage() {
                     {flag}
                   </span>
                   <span className="text-ui-base font-medium">{label}</span>
-                  {current_language === code && (
-                    <Check className="h-4 w-4 ml-auto" />
-                  )}
+                  {current_language === code && <Check className="h-4 w-4 ml-auto" />}
                 </button>
               ))}
             </div>
@@ -199,12 +186,11 @@ export function SettingsPage() {
             <div className="space-y-2">
               <p className="text-ui-base text-text-secondary">
                 {t("settings.about_description", {
-                  defaultValue: "Caret is an AI-first document editor for collaborative and structured writing.",
+                  defaultValue:
+                    "Caret is an AI-first document editor for collaborative and structured writing.",
                 })}
               </p>
-              <p className="text-ui-sm text-text-secondary">
-                Version 0.1.0 (Alpha)
-              </p>
+              <p className="text-ui-sm text-text-secondary">Version 0.1.0 (Alpha)</p>
             </div>
           </SettingsSection>
         </div>
@@ -236,9 +222,7 @@ function SettingsSection({ icon, title, children }: SettingsSectionProps) {
       {/* Section header */}
       <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-4">
         <span className="text-text-secondary">{icon}</span>
-        <h2 className="font-ui text-ui-lg font-semibold text-text-primary">
-          {title}
-        </h2>
+        <h2 className="font-ui text-ui-lg font-semibold text-text-primary">{title}</h2>
       </div>
       {/* Section content */}
       <div className="px-6 py-5">{children}</div>

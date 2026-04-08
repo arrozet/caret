@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { use_documents } from "./use_documents";
-import { use_document } from "./use_document";
+import { useDocuments } from "./use_documents";
+import { useDocument } from "./use_document";
 
 /**
  * Unit tests for document query hooks.
@@ -50,11 +50,7 @@ function create_wrapper() {
   });
 
   function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <QueryClientProvider client={query_client}>
-        {children}
-      </QueryClientProvider>
-    );
+    return <QueryClientProvider client={query_client}>{children}</QueryClientProvider>;
   }
 
   return Wrapper;
@@ -62,7 +58,7 @@ function create_wrapper() {
 
 /* ── tests ──────────────────────────────────────────── */
 
-describe("use_documents", () => {
+describe("useDocuments", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -71,10 +67,7 @@ describe("use_documents", () => {
     const { list_documents } = await import("../api/document_api");
     vi.mocked(list_documents).mockResolvedValue([MOCK_DOC]);
 
-    const { result } = renderHook(
-      () => use_documents("ws-1"),
-      { wrapper: create_wrapper() },
-    );
+    const { result } = renderHook(() => useDocuments("ws-1"), { wrapper: create_wrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(1);
@@ -83,16 +76,13 @@ describe("use_documents", () => {
   });
 
   it("does not fetch when workspace_id is undefined", () => {
-    const { result } = renderHook(
-      () => use_documents(undefined),
-      { wrapper: create_wrapper() },
-    );
+    const { result } = renderHook(() => useDocuments(undefined), { wrapper: create_wrapper() });
 
     expect(result.current.fetchStatus).toBe("idle");
   });
 });
 
-describe("use_document", () => {
+describe("useDocument", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -101,10 +91,7 @@ describe("use_document", () => {
     const { get_document } = await import("../api/document_api");
     vi.mocked(get_document).mockResolvedValue(MOCK_DOC);
 
-    const { result } = renderHook(
-      () => use_document("doc-1"),
-      { wrapper: create_wrapper() },
-    );
+    const { result } = renderHook(() => useDocument("doc-1"), { wrapper: create_wrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.id).toBe("doc-1");
@@ -112,10 +99,7 @@ describe("use_document", () => {
   });
 
   it("does not fetch when document_id is undefined", () => {
-    const { result } = renderHook(
-      () => use_document(undefined),
-      { wrapper: create_wrapper() },
-    );
+    const { result } = renderHook(() => useDocument(undefined), { wrapper: create_wrapper() });
 
     expect(result.current.fetchStatus).toBe("idle");
   });
