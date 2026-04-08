@@ -51,6 +51,20 @@ export interface WorkspaceResponse {
 }
 
 /**
+ * Response payload for the invite collaborator endpoint.
+ */
+export interface InviteCollaboratorResponse {
+  /** Workspace that now includes the invited member. */
+  workspace_id: string;
+  /** User id of the invited account. */
+  user_id: string;
+  /** Email used for the invite lookup. */
+  email: string;
+  /** Assigned role for this MVP flow. */
+  role: "member";
+}
+
+/**
  * Create a new document in a workspace.
  * @param title - Document title.
  * @param workspace_id - Target workspace UUID.
@@ -73,9 +87,7 @@ export function create_document(
  * @param workspace_id - Workspace UUID scope.
  * @returns Array of documents.
  */
-export function list_documents(
-  workspace_id: string,
-): Promise<DocumentResponse[]> {
+export function list_documents(workspace_id: string): Promise<DocumentResponse[]> {
   return api_fetch<DocumentResponse[]>(
     `/documents?workspace_id=${encodeURIComponent(workspace_id)}`,
   );
@@ -86,9 +98,7 @@ export function list_documents(
  * @param document_id - Document UUID.
  * @returns The document with content.
  */
-export function get_document(
-  document_id: string,
-): Promise<DocumentResponse> {
+export function get_document(document_id: string): Promise<DocumentResponse> {
   return api_fetch<DocumentResponse>(`/documents/${document_id}`);
 }
 
@@ -128,10 +138,7 @@ export function delete_document(document_id: string): Promise<void> {
  * @param slug - Optional URL slug.
  * @returns The created workspace.
  */
-export function create_workspace(
-  name: string,
-  slug?: string,
-): Promise<WorkspaceResponse> {
+export function create_workspace(name: string, slug?: string): Promise<WorkspaceResponse> {
   return api_fetch<WorkspaceResponse>("/workspaces", {
     method: "POST",
     body: JSON.stringify({ name, slug }),
@@ -144,4 +151,20 @@ export function create_workspace(
  */
 export function list_workspaces(): Promise<WorkspaceResponse[]> {
   return api_fetch<WorkspaceResponse[]>("/workspaces");
+}
+
+/**
+ * Invite an existing Caret user to the current document's workspace by email.
+ * @param document_id - Document UUID.
+ * @param email - Target user email.
+ * @returns Invitation result.
+ */
+export function invite_document_collaborator(
+  document_id: string,
+  email: string,
+): Promise<InviteCollaboratorResponse> {
+  return api_fetch<InviteCollaboratorResponse>(`/documents/${document_id}/invite`, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
 }

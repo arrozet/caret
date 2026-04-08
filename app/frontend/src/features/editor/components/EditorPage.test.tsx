@@ -14,6 +14,7 @@ const mock_add_tab = vi.fn();
 const mock_update_tab_title = vi.fn();
 const mock_index_document_embeddings = vi.fn();
 const mock_mutate_async = vi.fn();
+const mock_invite_mutate_async = vi.fn();
 
 const initial_json: JSONContent = {
   type: "doc",
@@ -63,7 +64,7 @@ vi.mock("react-router-dom", () => ({
 }));
 
 vi.mock("../hooks/use_document", () => ({
-  use_document: () => ({
+  useDocument: () => ({
     data: {
       id: "doc-1",
       workspace_id: "ws-1",
@@ -83,13 +84,20 @@ vi.mock("../hooks/use_document", () => ({
 }));
 
 vi.mock("../hooks/use_save_document", () => ({
-  use_save_document: () => ({
+  useSaveDocument: () => ({
     mutateAsync: mock_mutate_async,
   }),
 }));
 
+vi.mock("../hooks/use_invite_document_collaborator", () => ({
+  useInviteDocumentCollaborator: () => ({
+    mutateAsync: mock_invite_mutate_async,
+    isPending: false,
+  }),
+}));
+
 vi.mock("../../../hooks/use_focus_mode", () => ({
-  use_focus_mode: vi.fn(),
+  useFocusMode: vi.fn(),
 }));
 
 vi.mock("../../../stores/tabs_store", () => ({
@@ -111,7 +119,12 @@ vi.mock("../../../stores", () => {
     pending_document_change: current_pending_change,
   });
 
-  const auth_store = (selector?: (state: { user: { id: string; email: string }; session: { access_token: string } }) => unknown) => {
+  const auth_store = (
+    selector?: (state: {
+      user: { id: string; email: string };
+      session: { access_token: string };
+    }) => unknown,
+  ) => {
     const state = {
       user: {
         id: "user-1",
@@ -132,14 +145,14 @@ vi.mock("../../../stores", () => {
 
 vi.mock("../../collaboration", () => ({
   LOCAL_COLLAB_WS_BASE_URL: "ws://localhost:3003/document",
-  use_collaboration_session: () => ({
+  useCollaborationSession: () => ({
     ydoc: { id: "collab-doc" },
     provider: null,
     connection_status: "connected",
     users: [{ id: "user-1", name: "Ada", color: "#123456" }],
     is_ready: true,
   }),
-  use_collaboration_presence: (users: unknown[]) => ({
+  useCollaborationPresence: (users: unknown[]) => ({
     users,
     users_count: users.length,
     has_collaborators: users.length > 1,
@@ -197,6 +210,13 @@ describe("EditorPage", () => {
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-01T00:00:00.000Z",
     });
+
+    mock_invite_mutate_async.mockResolvedValue({
+      workspace_id: "ws-1",
+      user_id: "user-2",
+      email: "juan@nombre.es",
+      role: "member",
+    });
   });
 
   it("accept applies and persists proposed text even when initial preview setContent fails", async () => {
@@ -234,5 +254,25 @@ describe("EditorPage", () => {
 
     // Assert
     expect(collaboration_document).toEqual({ id: "collab-doc" });
+  });
+
+  /** Verifies invite dialog submits the email through collaboration invite mutation. */
+  it("submits collaborator invite by email", async () => {
+    // Arrange
+    render(<EditorPage />);
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: /invite/i }));
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "juan@nombre.es" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /send invite/i }));
+
+    // Assert
+    await waitFor(() => {
+      expect(mock_invite_mutate_async).toHaveBeenCalledWith({
+        email: "juan@nombre.es",
+      });
+    });
   });
 });

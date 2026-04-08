@@ -34,10 +34,7 @@ const pagination_key = new PluginKey("pagination");
  * doesn't change the inputs and therefore can't cause an infinite
  * re-render loop.
  */
-function compute_break_positions(
-  view: EditorView,
-  paper_size: PaperSize,
-): number[] {
+function compute_break_positions(view: EditorView, paper_size: PaperSize): number[] {
   const dims = PAGE_DIMENSIONS[paper_size];
   const content_height = dims.height - dims.padding * 2;
 
@@ -141,7 +138,8 @@ export const Pagination = Extension.create({
   },
 
   addProseMirrorPlugins() {
-    const extension = this;
+    // Store reference to extension options to avoid 'this' aliasing
+    const { options } = this;
     let last_positions: number[] = [];
     let raf_id: number | null = null;
 
@@ -176,12 +174,8 @@ export const Pagination = Extension.create({
               if (raf_id !== null) cancelAnimationFrame(raf_id);
               raf_id = requestAnimationFrame(() => {
                 raf_id = null;
-                const paper_size = extension.options
-                  .paper_size as PaperSize;
-                const positions = compute_break_positions(
-                  view,
-                  paper_size,
-                );
+                const paper_size = options.paper_size as PaperSize;
+                const positions = compute_break_positions(view, paper_size);
 
                 // Only dispatch if positions actually changed.
                 if (positions_equal(positions, last_positions)) return;

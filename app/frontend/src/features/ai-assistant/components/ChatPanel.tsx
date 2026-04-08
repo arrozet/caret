@@ -8,6 +8,29 @@ import type { ChatMessage } from "../hooks/use_ai_stream";
 import { delete_conversation, get_models, list_conversations } from "../api/ai_api";
 import type { ModelInfo } from "../api/ai_api";
 
+const FALLBACK_MODELS: ModelInfo[] = [
+  {
+    id: "grok-4-1-fast-reasoning",
+    name: "Grok 4.1 Fast Reasoning",
+    provider: "xAI",
+    gateway: "xai",
+    is_free: false,
+    is_stealth: false,
+    context_window: 2_000_000,
+    description: "Reasoning-enabled Grok model optimised for agentic tasks.",
+  },
+  {
+    id: "openrouter/healer-alpha",
+    name: "Healer Alpha",
+    provider: "OpenRouter",
+    gateway: "openrouter",
+    is_free: true,
+    is_stealth: true,
+    context_window: 262_144,
+    description: "Frontier omni-modal model with strong general capabilities.",
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -244,19 +267,44 @@ export function ChatPanel({
   const input_ref = useRef<HTMLTextAreaElement>(null);
   const close_button_ref = useRef<HTMLButtonElement>(null);
 
+  useEffect(() => {
+    if (!selected_model_id) {
+      set_selected_model_id("grok-4-1-fast-reasoning");
+    }
+  }, [selected_model_id, set_selected_model_id]);
+
   // Fetch available models on mount and pre-select the server default.
   useEffect(() => {
     get_models()
       .then((res) => {
         set_models(res.models);
-        const default_id = res.default_model_id ?? res.models[0]?.id;
-        if (default_id && !selected_model_id) set_selected_model_id(default_id);
+        const fallback_default_id =
+          res.models.find((model) => model.id === "grok-4-1-fast-reasoning")?.id ??
+          res.models[0]?.id;
+        const default_id = res.default_model_id ?? fallback_default_id;
+
+        if (!default_id) {
+          return;
+        }
+
+        // If current selection is missing from the catalog (e.g. stale store),
+        // force it back to a valid option so the selector is always usable.
+        const is_current_selection_valid =
+          selected_model_id !== undefined &&
+          res.models.some((model) => model.id === selected_model_id);
+
+        if (!is_current_selection_valid) {
+          set_selected_model_id(default_id);
+        }
       })
       .catch(() => {
-        // Silently fall back — the backend uses its configured default.
+        // Keep fallback selector options available when catalog fetch fails.
+        set_models([]);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const selectable_models = models.length > 0 ? models : FALLBACK_MODELS;
 
   // Load existing messages when panel opens with a pre-existing conversation.
   useEffect(() => {
@@ -575,39 +623,36 @@ export function ChatPanel({
           </button>
         </div>
 
-        {/* Model selector — only when more than one model is available */}
-        {models.length > 1 && (
-          <select
-            id="model-selector"
-            value={selected_model_id ?? ""}
-            onChange={(e) => set_selected_model_id(e.target.value || undefined)}
-            aria-label={t("model_selector")}
-            className="flex-1 min-w-0 rounded-[4px] border border-border-subtle bg-app px-2 py-1 text-ui-xs text-text-primary outline-none focus:border-accent-ai transition-colors duration-100"
-          >
-            {models.some((m) => m.is_free) && (
-              <optgroup label={t("model_group_free")}>
-                {models
-                  .filter((m) => m.is_free)
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-              </optgroup>
-            )}
-            {models.some((m) => !m.is_free) && (
-              <optgroup label={t("model_group_paid")}>
-                {models
-                  .filter((m) => !m.is_free)
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-              </optgroup>
-            )}
-          </select>
-        )}
+        <select
+          id="model-selector"
+          value={selected_model_id ?? ""}
+          onChange={(e) => set_selected_model_id(e.target.value || undefined)}
+          aria-label={t("model_selector")}
+          className="flex-1 min-w-0 rounded-[4px] border border-border-subtle bg-app px-2 py-1 text-ui-xs text-text-primary outline-none focus:border-accent-ai transition-colors duration-100"
+        >
+          {selectable_models.some((m) => m.is_free) && (
+            <optgroup label={t("model_group_free")}>
+              {selectable_models
+                .filter((m) => m.is_free)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </optgroup>
+          )}
+          {selectable_models.some((m) => !m.is_free) && (
+            <optgroup label={t("model_group_paid")}>
+              {selectable_models
+                .filter((m) => !m.is_free)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </optgroup>
+          )}
+        </select>
       </div>
 
       {/* Input area */}

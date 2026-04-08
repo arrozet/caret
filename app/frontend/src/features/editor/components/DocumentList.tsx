@@ -13,13 +13,9 @@ import {
   Info,
 } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
-import { use_documents } from "../hooks/use_documents";
-import { use_workspaces, use_create_workspace } from "../hooks/use_workspaces";
-import {
-  create_document,
-  update_document,
-  delete_document,
-} from "../api/document_api";
+import { useDocuments } from "../hooks/use_documents";
+import { useWorkspaces, useCreateWorkspace } from "../hooks/use_workspaces";
+import { create_document, update_document, delete_document } from "../api/document_api";
 import type { DocumentResponse } from "../api/document_api";
 
 /**
@@ -34,8 +30,8 @@ export function DocumentList() {
   const navigate = useNavigate();
   const query_client = useQueryClient();
 
-  const { data: workspaces, isLoading: workspaces_loading } = use_workspaces();
-  const create_workspace_mutation = use_create_workspace();
+  const { data: workspaces, isLoading: workspaces_loading } = useWorkspaces();
+  const create_workspace_mutation = useCreateWorkspace();
 
   /* Use the first workspace as the active workspace for this PoC */
   const active_workspace = workspaces?.[0];
@@ -44,13 +40,12 @@ export function DocumentList() {
     data: documents,
     isLoading: documents_loading,
     error: documents_error,
-  } = use_documents(active_workspace?.id);
+  } = useDocuments(active_workspace?.id);
 
   const [is_creating, set_is_creating] = useState(false);
 
   const create_doc_mutation = useMutation({
-    mutationFn: (workspace_id: string) =>
-      create_document("Untitled", workspace_id),
+    mutationFn: (workspace_id: string) => create_document("Untitled", workspace_id),
     onSuccess: (doc) => {
       query_client.invalidateQueries({ queryKey: ["documents"] });
       navigate(`/documents/${doc.id}`);
@@ -67,10 +62,9 @@ export function DocumentList() {
       let workspace_id = active_workspace?.id;
 
       if (!workspace_id) {
-        const new_workspace =
-          await create_workspace_mutation.mutateAsync({
-            name: "My Workspace",
-          });
+        const new_workspace = await create_workspace_mutation.mutateAsync({
+          name: "My Workspace",
+        });
         workspace_id = new_workspace.id;
       }
 
@@ -124,9 +118,7 @@ export function DocumentList() {
             <div className="h-16 w-16 bg-accent-main/10 text-accent-main rounded-full flex items-center justify-center mb-4">
               <FileText className="h-8 w-8" />
             </div>
-            <p className="text-ui-lg font-medium text-text-primary">
-              No documents yet
-            </p>
+            <p className="text-ui-lg font-medium text-text-primary">No documents yet</p>
             <p className="mt-1 mb-6 text-ui-base text-text-secondary max-w-sm">
               Create your first document to start writing. Documents are synced automatically.
             </p>
@@ -244,12 +236,11 @@ function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
       <div className="group relative flex flex-col rounded-lg border border-border-subtle bg-surface shadow-sm transition-all h-full min-h-[224px]">
         <div className="flex flex-1 flex-col items-center justify-center p-4 text-center">
           <Info className="h-8 w-8 text-accent-main mb-3" />
-          <p className="text-ui-base text-text-primary mb-1 font-medium">
-            Document Info
-          </p>
+          <p className="text-ui-base text-text-primary mb-1 font-medium">Document Info</p>
           <div className="text-ui-sm text-text-secondary mb-4 space-y-1">
             <p>
-              Created: {new Date(doc.created_at).toLocaleDateString(undefined, {
+              Created:{" "}
+              {new Date(doc.created_at).toLocaleDateString(undefined, {
                 month: "short",
                 day: "numeric",
                 year: "numeric",
@@ -257,11 +248,7 @@ function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
             </p>
           </div>
           <div className="flex gap-2 w-full justify-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => set_show_info(false)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => set_show_info(false)}>
               Close
             </Button>
           </div>
@@ -306,9 +293,13 @@ function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
 
   /* Rename mode / Normal document card */
   return (
-    <div className={`group relative flex flex-col rounded-lg border bg-surface shadow-sm transition-all h-full ${
-      is_renaming ? "border-accent-main shadow-elevated" : "border-border-subtle hover:shadow-elevated hover:border-accent-main/30"
-    }`}>
+    <div
+      className={`group relative flex flex-col rounded-lg border bg-surface shadow-sm transition-all h-full ${
+        is_renaming
+          ? "border-accent-main shadow-elevated"
+          : "border-border-subtle hover:shadow-elevated hover:border-accent-main/30"
+      }`}
+    >
       {/* Visual document preview area (mock) */}
       <button
         onClick={on_navigate}
@@ -345,14 +336,20 @@ function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
             />
             <div className="flex shrink-0">
               <button
-                onMouseDown={(e) => { e.preventDefault(); commit_rename(); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  commit_rename();
+                }}
                 className="p-1 rounded text-success hover:bg-success/10 cursor-pointer"
                 aria-label="Confirm rename"
               >
                 <Check className="h-4 w-4" />
               </button>
               <button
-                onMouseDown={(e) => { e.preventDefault(); cancel_rename(); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  cancel_rename();
+                }}
                 className="p-1 rounded text-text-secondary hover:bg-surface cursor-pointer"
                 aria-label="Cancel rename"
               >
@@ -394,10 +391,7 @@ function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
               {/* Dropdown menu */}
               {show_menu && (
                 <>
-                  <div
-                    className="fixed inset-0 z-30"
-                    onClick={() => set_show_menu(false)}
-                  />
+                  <div className="fixed inset-0 z-30" onClick={() => set_show_menu(false)} />
                   <div className="absolute right-0 top-full mt-1 z-40 w-36 rounded-md bg-surface border border-border-subtle shadow-elevated py-1">
                     <button
                       onClick={(e) => {

@@ -23,6 +23,8 @@ import { SelectionMenu } from "./SelectionMenu";
 import { Pagination } from "../extensions/pagination";
 import type { PaperSize } from "../extensions/pagination";
 import { GhostText } from "../extensions/ghost_text";
+import { SuggestionInsert } from "../extensions/suggestion_insert";
+import { SuggestionDelete } from "../extensions/suggestion_delete";
 import type * as Y from "yjs";
 
 /**
@@ -116,6 +118,8 @@ export function CaretEditor({
           paper_size,
         }),
         GhostText,
+        SuggestionInsert,
+        SuggestionDelete,
       ],
       content: content ?? {
         type: "doc",

@@ -1,12 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft, Check, AlertCircle, Sparkles } from "lucide-react";
+import { Loader2, ArrowLeft, Check, AlertCircle, Sparkles, UserPlus } from "lucide-react";
 import type { JSONContent, Editor } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
 import { Button } from "../../../components/ui/Button";
-import { use_document } from "../hooks/use_document";
-import { use_save_document } from "../hooks/use_save_document";
-import { use_focus_mode } from "../../../hooks/use_focus_mode";
+import { Input } from "../../../components/ui/Input";
+import { useDocument } from "../hooks/use_document";
+import { useSaveDocument } from "../hooks/use_save_document";
+import { useInviteDocumentCollaborator } from "../hooks/use_invite_document_collaborator";
+import { useFocusMode } from "../../../hooks/use_focus_mode";
 import { use_tabs_store } from "../../../stores/tabs_store";
 import { use_ai_store, use_auth_store } from "../../../stores";
 import { useGhostText } from "../hooks/use_ghost_text";
@@ -15,8 +17,8 @@ import type { DocumentChangePayload } from "../../ai-assistant/api/ai_api";
 import {
   CollaborationPresenceBar,
   LOCAL_COLLAB_WS_BASE_URL,
-  use_collaboration_presence,
-  use_collaboration_session,
+  useCollaborationPresence,
+  useCollaborationSession,
 } from "../../collaboration";
 
 /**
@@ -42,7 +44,9 @@ function is_collaboration_enabled(): boolean {
  * Resolve collaboration websocket base URL from Vite env.
  */
 function get_collaboration_ws_url(): string {
-  return (import.meta.env.VITE_COLLABORATION_WS_URL as string | undefined) ?? LOCAL_COLLAB_WS_BASE_URL;
+  return (
+    (import.meta.env.VITE_COLLABORATION_WS_URL as string | undefined) ?? LOCAL_COLLAB_WS_BASE_URL
+  );
 }
 
 /** Possible states for the save status indicator. */
@@ -50,7 +54,7 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 /** A single line entry in the review diff. */
 interface DiffLine {
-  type: "equal" | "removed" | "added" | "context_break";
+  type: "equal" | "removed" | "added";
   text: string;
 }
 
@@ -95,43 +99,55 @@ function compute_line_diff(original: string, proposed: string): DiffLine[] {
  * Compact a full diff by collapsing unchanged runs, while keeping two context
  * lines around each change block.
  */
-function compact_line_diff(lines: DiffLine[]): DiffLine[] {
-  const changed_indexes = lines
-    .map((line, index) => ({ line, index }))
-    .filter(({ line }) => line.type !== "equal")
-    .map(({ index }) => index);
+/**
+ * Build a tracked-changes preview document from original/proposed plain text.
+ * Equal lines stay unchanged, removed lines get `suggestion_delete` mark,
+ * added lines get `suggestion_insert` mark.
+ */
+function build_suggestion_preview_json(original_text: string, proposed_text: string): JSONContent {
+  const full_diff = compute_line_diff(original_text, proposed_text);
 
-  if (changed_indexes.length === 0) {
-    return [];
-  }
-
-  const keep_indexes = new Set<number>();
-  for (const index of changed_indexes) {
-    for (let i = Math.max(0, index - 2); i <= Math.min(lines.length - 1, index + 2); i++) {
-      keep_indexes.add(i);
-    }
-  }
-
-  const compacted: DiffLine[] = [];
-  let index = 0;
-  while (index < lines.length) {
-    if (keep_indexes.has(index)) {
-      compacted.push(lines[index]);
-      index++;
-      continue;
+  const paragraphs: JSONContent[] = full_diff.map((line) => {
+    if (line.text.length === 0) {
+      return { type: "paragraph" };
     }
 
-    let hidden_count = 0;
-    while (index < lines.length && !keep_indexes.has(index)) {
-      hidden_count++;
-      index++;
+    if (line.type === "equal") {
+      return {
+        type: "paragraph",
+        content: [{ type: "text", text: line.text }],
+      };
     }
-    if (hidden_count > 0) {
-      compacted.push({ type: "context_break", text: `${hidden_count} unchanged lines` });
-    }
-  }
 
-  return compacted;
+    if (line.type === "removed") {
+      return {
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            text: line.text,
+            marks: [{ type: "suggestion_delete" }],
+          },
+        ],
+      };
+    }
+
+    return {
+      type: "paragraph",
+      content: [
+        {
+          type: "text",
+          text: line.text,
+          marks: [{ type: "suggestion_insert" }],
+        },
+      ],
+    };
+  });
+
+  return {
+    type: "doc",
+    content: paragraphs.length > 0 ? paragraphs : [{ type: "paragraph" }],
+  };
 }
 
 interface DocumentChangeReviewOverlayProps {
@@ -155,11 +171,9 @@ function DocumentChangeReviewOverlay({
     pending_change.original_text ?? "",
     pending_change.proposed_text,
   );
-  const diff = compact_line_diff(full_diff);
 
   const added_count = full_diff.filter((line) => line.type === "added").length;
   const removed_count = full_diff.filter((line) => line.type === "removed").length;
-  const has_changes = added_count > 0 || removed_count > 0;
 
   return (
     <div className="absolute inset-x-3 top-3 z-40 pointer-events-none">
@@ -179,40 +193,10 @@ function DocumentChangeReviewOverlay({
           </div>
         </div>
 
-        {has_changes ? (
-          <div className="max-h-[300px] overflow-y-auto border-b border-border-subtle bg-app/80 font-mono text-[11px] leading-relaxed">
-            {diff.map((line, idx) => {
-              if (line.type === "context_break") {
-                return (
-                  <div key={`gap-${idx}`} className="px-3 py-1 text-center text-text-secondary/65">
-                    ... {line.text} ...
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={`${line.type}-${idx}-${line.text}`}
-                  className={[
-                    "flex items-start gap-2 px-3 py-px whitespace-pre-wrap break-all",
-                    line.type === "removed"
-                      ? "bg-diff-del-bg/70 text-diff-del-text"
-                      : line.type === "added"
-                        ? "bg-diff-add-bg/70 text-text-primary"
-                        : "text-text-secondary/60",
-                  ].join(" ")}
-                >
-                  <span className="select-none w-3 shrink-0 text-center">
-                    {line.type === "removed" ? "-" : line.type === "added" ? "+" : " "}
-                  </span>
-                  <span>{line.text || "\u00a0"}</span>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="px-3 py-2 text-ui-xs text-text-secondary">No textual changes detected.</p>
-        )}
+        <p className="border-b border-border-subtle px-3 py-2 text-ui-xs text-text-secondary">
+          Review inline suggestions in the document. Insertions are highlighted in green and
+          removals are shown with red strikethrough.
+        </p>
 
         <div className="flex items-center justify-end gap-2 px-3 py-2">
           <button
@@ -250,12 +234,17 @@ export function EditorPage() {
   const auth_user = use_auth_store((state) => state.user);
   const auth_session = use_auth_store((state) => state.session);
 
-  const { data: document, isLoading, error } = use_document(document_id);
-  const save_mutation = use_save_document(document_id ?? "");
+  const { data: document, isLoading, error } = useDocument(document_id);
+  const save_mutation = useSaveDocument(document_id ?? "");
+  const invite_collaborator_mutation = useInviteDocumentCollaborator(document_id ?? "");
 
   const [save_status, set_save_status] = useState<SaveStatus>("idle");
   const [title, set_title] = useState("");
   const [is_title_focused, set_is_title_focused] = useState(false);
+  const [is_invite_dialog_open, set_is_invite_dialog_open] = useState(false);
+  const [invite_email, set_invite_email] = useState("");
+  const [invite_error, set_invite_error] = useState<string | null>(null);
+  const [invite_success, set_invite_success] = useState<string | null>(null);
   const [is_accepting_change, set_is_accepting_change] = useState(false);
   const [editor_mount_key, set_editor_mount_key] = useState(0);
   const [editor_content_override, set_editor_content_override] = useState<JSONContent | null>(null);
@@ -295,7 +284,7 @@ export function EditorPage() {
     Boolean(auth_user?.id) &&
     Boolean(auth_session?.access_token);
 
-  const collaboration_session = use_collaboration_session({
+  const collaboration_session = useCollaborationSession({
     enabled: collaboration_enabled,
     document_id,
     token: auth_session?.access_token,
@@ -305,7 +294,7 @@ export function EditorPage() {
     server_url: get_collaboration_ws_url(),
   });
 
-  const collaboration_presence = use_collaboration_presence(collaboration_session.users);
+  const collaboration_presence = useCollaborationPresence(collaboration_session.users);
 
   const debug_log = useCallback((event: string, payload?: unknown) => {
     if (typeof window === "undefined") return;
@@ -356,7 +345,7 @@ export function EditorPage() {
   useGhostText({ editor: editor_instance, conversation_id: active_conversation_id });
 
   /** Activate focus mode: fade peripheral UI after 2s idle (FRONTEND.md §9). */
-  use_focus_mode(true);
+  useFocusMode(true);
 
   /**
    * Global Ctrl/Cmd+K keyboard shortcut to toggle the AI chat panel.
@@ -426,7 +415,7 @@ export function EditorPage() {
     saved_indicator_timer_ref.current = setTimeout(() => {
       set_save_status("idle");
     }, 2_000);
-  }, []);
+  }, [set_save_status]);
 
   /**
    * Handle editor content changes with debounced autosave.
@@ -474,7 +463,7 @@ export function EditorPage() {
         }
       }, AUTOSAVE_DELAY_MS);
     },
-    [save_mutation, show_saved, document_id, debug_log],
+    [save_mutation, show_saved, document_id, debug_log, set_save_status],
   );
 
   /**
@@ -501,7 +490,7 @@ export function EditorPage() {
         }
       }, TITLE_SAVE_DELAY_MS);
     },
-    [save_mutation, show_saved, document_id, update_tab_title],
+    [save_mutation, show_saved, document_id, update_tab_title, set_title, set_save_status],
   );
 
   /**
@@ -573,125 +562,11 @@ export function EditorPage() {
     [normalize_proposed_text],
   );
 
-  const to_editor_json_preserving_blocks = useCallback(
-    (base_content: JSONContent, proposed_text: string): JSONContent | null => {
-      const base_blocks = base_content.content;
-      if (!base_blocks || base_blocks.length === 0) return null;
-
-      const are_supported_blocks = base_blocks.every(
-        (block) => block.type === "paragraph" || block.type === "heading",
-      );
-      if (!are_supported_blocks) return null;
-
-      // Extract text from each base block to match against proposed text
-      const extract_block_text = (block: JSONContent): string => {
-        if (!block.content) return "";
-        return block.content
-          .map((node) => {
-            if (node.type === "text") return node.text ?? "";
-            if (node.type === "hardBreak") return "\n";
-            return "";
-          })
-          .join("");
-      };
-
-      const base_block_texts = base_blocks.map(extract_block_text);
-      const normalized_text = normalize_proposed_text(proposed_text);
-      const proposed_paragraphs = normalized_text.split(/\n{2,}/);
-
-      const changes_map = new Map<number, string>();
-
-      // If the proposed text structure matches the base structure exactly,
-      // we can do a 1:1 mapping
-      if (proposed_paragraphs.length === base_blocks.length) {
-        base_block_texts.forEach((base_text, index) => {
-          const proposed_text_for_block = proposed_paragraphs[index] ?? "";
-          // Normalize both for comparison (collapse whitespace)
-          const normalize_for_comparison = (text: string) => text.replace(/\s+/g, " ").trim();
-
-          if (
-            normalize_for_comparison(base_text) !==
-            normalize_for_comparison(proposed_text_for_block)
-          ) {
-            changes_map.set(index, proposed_text_for_block);
-          }
-        });
-      } else {
-        // Block count mismatch - proposed text has different structure.
-        // Fall back to replacing everything but try to preserve block types from beginning.
-
-        // Map as many blocks as we can 1:1 from the start
-        const min_length = Math.min(base_blocks.length, proposed_paragraphs.length);
-        for (let i = 0; i < min_length; i++) {
-          changes_map.set(i, proposed_paragraphs[i] ?? "");
-        }
-
-        // If proposed has more paragraphs, we need to return null and fall back to full replacement
-        if (proposed_paragraphs.length > base_blocks.length) {
-          return null;
-        }
-
-        // If proposed has fewer paragraphs, mark extra base blocks as deleted (empty content)
-        for (let i = proposed_paragraphs.length; i < base_blocks.length; i++) {
-          changes_map.set(i, "");
-        }
-      }
-
-      // Build next_blocks, preserving structure for unchanged blocks
-      const next_blocks = base_blocks
-        .map((block, index) => {
-          const changed_text = changes_map.get(index);
-          if (changed_text === undefined) {
-            // Unchanged block - preserve exactly as-is
-            return block;
-          }
-
-          if (changed_text === "") {
-            // Block was deleted - skip it
-            return null;
-          }
-
-          // Block changed - rebuild content with new text but preserve block type and marks
-          const lines = changed_text.split("\n");
-          const first_text_marks = block.content?.find(
-            (child) => child.type === "text" && child.marks,
-          )?.marks;
-          const next_inline: JSONContent[] = [];
-
-          lines.forEach((line, line_index) => {
-            if (line.length > 0) {
-              next_inline.push(
-                first_text_marks
-                  ? { type: "text", text: line, marks: first_text_marks }
-                  : { type: "text", text: line },
-              );
-            }
-
-            if (line_index < lines.length - 1) {
-              next_inline.push({ type: "hardBreak" });
-            }
-          });
-
-          return {
-            ...block,
-            content: next_inline.length > 0 ? next_inline : undefined,
-          };
-        })
-        .filter((block): block is JSONContent => block !== null);
-
-      return {
-        ...base_content,
-        content: next_blocks,
-      };
-    },
-    [normalize_proposed_text],
-  );
-
   /**
    * Apply editor content from UI-driven preview/revert flows.
    */
   const apply_editor_content_without_save = useCallback(
-    (next_content: JSONContent): boolean => {
+    (next_content: JSONContent, fallback_text?: string): boolean => {
       const active_editor = get_active_editor();
       if (!active_editor) {
         debug_log("apply_editor_content_without_save.no_active_editor");
@@ -700,10 +575,56 @@ export function EditorPage() {
       // We emit the update so the React view re-renders properly.
       // Autosaves during preview are blocked by checking use_ai_store.getState().pending_document_change.
       // Apply via commands API directly to avoid chain-state edge cases.
-      const applied = active_editor.commands.setContent(next_content, { emitUpdate: true });
+      let applied = active_editor.commands.setContent(next_content, { emitUpdate: true });
+
+      if (
+        !applied &&
+        fallback_text !== undefined &&
+        typeof active_editor.commands.selectAll === "function" &&
+        typeof active_editor.commands.deleteSelection === "function" &&
+        typeof active_editor.commands.insertContent === "function"
+      ) {
+        applied =
+          active_editor.commands.selectAll() &&
+          active_editor.commands.deleteSelection() &&
+          active_editor.commands.insertContent(fallback_text, {
+            updateSelection: true,
+          });
+      }
+
+      if (!applied) {
+        const insert_payload =
+          Array.isArray(next_content.content) && next_content.type === "doc"
+            ? next_content.content
+            : next_content;
+
+        if (typeof active_editor.chain === "function") {
+          applied = active_editor.chain().focus().selectAll().insertContent(insert_payload).run();
+        }
+      }
+
+      if (!applied) {
+        const insert_payload =
+          Array.isArray(next_content.content) && next_content.type === "doc"
+            ? next_content.content
+            : next_content;
+
+        if (
+          typeof active_editor.commands.clearContent === "function" &&
+          typeof active_editor.commands.insertContent === "function"
+        ) {
+          applied =
+            active_editor.commands.clearContent(true) &&
+            active_editor.commands.insertContent(insert_payload, {
+              updateSelection: true,
+            });
+        }
+      }
+
       debug_log("apply_editor_content_without_save.result", {
         applied,
         text_after: active_editor.getText(),
+        has_fallback_text: fallback_text !== undefined,
       });
       return applied;
     },
@@ -731,8 +652,11 @@ export function EditorPage() {
         original_content_ref.current = active_editor.getJSON();
       }
 
-      const next_content = to_editor_json(normalized_proposed_text);
-      const was_applied = apply_editor_content_without_save(next_content);
+      const next_content = build_suggestion_preview_json(
+        next_pending_change.original_text ?? "",
+        normalized_proposed_text,
+      );
+      const was_applied = apply_editor_content_without_save(next_content, normalized_proposed_text);
       if (!was_applied) {
         return false;
       }
@@ -740,7 +664,7 @@ export function EditorPage() {
       applied_preview_key_ref.current = preview_key;
       return true;
     },
-    [normalize_proposed_text, to_editor_json, apply_editor_content_without_save, get_active_editor],
+    [normalize_proposed_text, apply_editor_content_without_save, get_active_editor],
   );
 
   /**
@@ -767,7 +691,14 @@ export function EditorPage() {
     applied_preview_key_ref.current = null;
     set_pending_document_change(null);
     set_resolve_pending_change_token((prev) => prev + 1);
-  }, [apply_editor_content_without_save, set_pending_document_change]);
+  }, [
+    apply_editor_content_without_save,
+    set_pending_document_change,
+    set_is_accepting_change,
+    set_editor_content_override,
+    set_editor_mount_key,
+    set_resolve_pending_change_token,
+  ]);
 
   /**
    * Accept the pending change currently previewed in the editor.
@@ -786,15 +717,19 @@ export function EditorPage() {
 
     if (pending_change !== null && active_editor) {
       const accepted_text = normalize_proposed_text(pending_change.proposed_text);
-      const structured_content = to_editor_json_preserving_blocks(
-        active_editor.getJSON(),
-        accepted_text,
-      );
-      const next_content = structured_content ?? to_editor_json(accepted_text);
-      const was_applied = apply_editor_content_without_save(next_content);
+      const next_content = to_editor_json(accepted_text);
+      const was_applied = apply_editor_content_without_save(next_content, accepted_text);
       if (!was_applied) {
-        debug_log("handle_accept_pending_change.apply_failed");
-        set_save_status("error");
+        debug_log("handle_accept_pending_change.apply_failed_fallback");
+        // Fallback when direct editor apply fails (can happen in transient collab states).
+        // Persist and remount using accepted content so UI and storage still converge.
+        set_pending_document_change(null);
+        original_content_ref.current = null;
+        applied_preview_key_ref.current = null;
+        set_resolve_pending_change_token((prev) => prev + 1);
+        set_editor_content_override(next_content);
+        set_editor_mount_key((prev) => prev + 1);
+        handle_update(next_content, accepted_text);
         set_is_accepting_change(false);
         return;
       }
@@ -818,14 +753,7 @@ export function EditorPage() {
       // Persist and remount using the accepted content so UI and storage converge.
       debug_log("handle_accept_pending_change.no_active_editor_fallback");
       const accepted_text = normalize_proposed_text(pending_change.proposed_text);
-      const base_document_content = document?.content_json as JSONContent | undefined;
-      const base_content =
-        original_content_ref.current ?? editor_content_override ?? base_document_content ?? null;
-      const structured_content =
-        base_content !== null
-          ? to_editor_json_preserving_blocks(base_content, accepted_text)
-          : null;
-      const next_content = structured_content ?? to_editor_json(accepted_text);
+      const next_content = to_editor_json(accepted_text);
 
       set_pending_document_change(null);
       original_content_ref.current = null;
@@ -849,19 +777,64 @@ export function EditorPage() {
     pending_change,
     get_active_editor,
     debug_log,
-    document?.content_json,
-    editor_content_override,
     normalize_proposed_text,
     to_editor_json,
-    to_editor_json_preserving_blocks,
     apply_editor_content_without_save,
     handle_update,
     set_pending_document_change,
+    set_is_accepting_change,
+    set_resolve_pending_change_token,
+    set_editor_content_override,
+    set_editor_mount_key,
   ]);
 
   /** Navigate back to the document list. */
   function handle_back() {
     navigate("/documents");
+  }
+
+  /** Open the invite dialog and reset transient state. */
+  function open_invite_dialog() {
+    set_is_invite_dialog_open(true);
+    set_invite_email("");
+    set_invite_error(null);
+    set_invite_success(null);
+  }
+
+  /** Close the invite dialog and clear feedback messages. */
+  function close_invite_dialog() {
+    set_is_invite_dialog_open(false);
+    set_invite_error(null);
+    set_invite_success(null);
+  }
+
+  /**
+   * Invite a collaborator by email.
+   * Shows inline success/error feedback inside the dialog.
+   */
+  async function handle_invite_submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const normalized_email = invite_email.trim().toLowerCase();
+    if (!normalized_email) {
+      set_invite_success(null);
+      set_invite_error("Email is required.");
+      return;
+    }
+
+    set_invite_error(null);
+    set_invite_success(null);
+
+    try {
+      await invite_collaborator_mutation.mutateAsync({
+        email: normalized_email,
+      });
+      set_invite_success(`Invitation sent to ${normalized_email}.`);
+      set_invite_email("");
+    } catch (err) {
+      set_invite_success(null);
+      set_invite_error(err instanceof Error ? err.message : "Failed to invite collaborator.");
+    }
   }
 
   /* Loading state */
@@ -915,6 +888,15 @@ export function EditorPage() {
 
         {/* Save status indicator */}
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={open_invite_dialog}
+            className="inline-flex"
+          >
+            <UserPlus className="h-4 w-4" />
+            Invite
+          </Button>
           {collaboration_enabled && (
             <CollaborationPresenceBar
               connection_status={collaboration_session.connection_status}
@@ -977,6 +959,61 @@ export function EditorPage() {
           </Suspense>
         )}
       </div>
+
+      {is_invite_dialog_open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={close_invite_dialog}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border border-border-subtle bg-surface p-5 shadow-elevated"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="text-ui-lg font-semibold text-text-primary">Invite collaborator</h2>
+            <p className="mt-1 text-ui-sm text-text-secondary">
+              Enter an email from an existing Caret account.
+            </p>
+
+            <form className="mt-4 space-y-3" onSubmit={handle_invite_submit}>
+              <Input
+                id="invite-email"
+                type="email"
+                label="Email"
+                placeholder="juan@nombre.es"
+                value={invite_email}
+                onChange={(event) => set_invite_email(event.target.value)}
+                autoFocus
+              />
+
+              {invite_error !== null && (
+                <p className="text-ui-sm text-error" role="alert">
+                  {invite_error}
+                </p>
+              )}
+
+              {invite_success !== null && (
+                <p className="text-ui-sm text-accent-main" role="status">
+                  {invite_success}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="ghost" size="sm" onClick={close_invite_dialog}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  is_loading={invite_collaborator_mutation.isPending}
+                >
+                  Send invite
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

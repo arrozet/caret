@@ -296,6 +296,23 @@ body {
   pointer-events: none;
 }
 
+/* Suggestion-mode marks (MVP tracked changes) */
+.caret-editor .suggestion-insert {
+  background: rgb(16 185 129 / 0.18);
+  border-bottom: 2px solid rgb(16 185 129 / 0.9);
+  border-radius: 2px;
+}
+
+.caret-editor .suggestion-delete {
+  color: rgb(var(--color-text-secondary-rgb));
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: rgb(244 63 94 / 0.9);
+  background: rgb(244 63 94 / 0.12);
+  border-bottom: 2px solid rgb(244 63 94 / 0.85);
+  border-radius: 2px;
+}
+
 /* Links */
 .caret-editor a {
   color: var(--color-accent-main);
