@@ -20,7 +20,7 @@ RUN uv sync --frozen --no-dev
 # alembic.ini must be present at WORKDIR so that `alembic -c alembic.ini`
 # resolves correctly when run via `docker compose exec`.
 COPY alembic.ini ./
-COPY app/ ./app/
+COPY src/ ./src/
 
 # Make the venv readable by all users so the non-root runner can execute it
 RUN chmod -R a+rX /app/.venv
@@ -32,4 +32,4 @@ USER nobody
 
 EXPOSE 8000
 
-CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8000"]

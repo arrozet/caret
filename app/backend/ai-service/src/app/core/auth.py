@@ -95,10 +95,7 @@ async def _get_jwks() -> list[dict]:  # type: ignore[type-arg]
     global _jwks_cache
 
     now = time.monotonic()
-    if (
-        _jwks_cache is not None
-        and now - _jwks_cache.fetched_at < settings.JWKS_CACHE_TTL_SECONDS
-    ):
+    if _jwks_cache is not None and now - _jwks_cache.fetched_at < settings.JWKS_CACHE_TTL_SECONDS:
         return _jwks_cache.keys
 
     keys = await _fetch_jwks()

@@ -14,12 +14,11 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-# Make sure the project root (/app in Docker, the ai-service directory
-# locally) is on sys.path so that `from app.xxx import ...` always resolves,
-# regardless of how alembic is invoked.
-_project_root = Path(__file__).parents[3]
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
+# Make sure the src directory is on sys.path so that `from app.xxx import ...`
+# always resolves, regardless of how alembic is invoked.
+_src_root = Path(__file__).parents[3]
+if str(_src_root) not in sys.path:
+    sys.path.insert(0, str(_src_root))
 
 from alembic import context  # noqa: E402
 from sqlalchemy import pool  # noqa: E402
