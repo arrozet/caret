@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  build_collaboration_server_url,
-  derive_user_color,
-  extract_presence_users,
+  buildCollaborationServerUrl,
+  deriveUserColor,
+  extractPresenceUsers,
   LOCAL_COLLAB_WS_BASE_URL,
-} from "./collaboration_client";
+} from "./collaborationClient";
 
 /** Unit tests for collaboration utility helpers and awareness mapping. */
 describe("collaboration_client utilities", () => {
@@ -14,7 +14,7 @@ describe("collaboration_client utilities", () => {
     const document_id = "doc-123";
 
     // Act
-    const room_url = build_collaboration_server_url(document_id, LOCAL_COLLAB_WS_BASE_URL);
+    const room_url = buildCollaborationServerUrl(document_id, LOCAL_COLLAB_WS_BASE_URL);
 
     // Assert
     expect(room_url).toBe("ws://localhost:3003/document/doc-123");
@@ -26,8 +26,8 @@ describe("collaboration_client utilities", () => {
     const user_id = "user-abc";
 
     // Act
-    const first = derive_user_color(user_id);
-    const second = derive_user_color(user_id);
+    const first = deriveUserColor(user_id);
+    const second = deriveUserColor(user_id);
 
     // Assert
     expect(first).toBe(second);
@@ -50,7 +50,7 @@ describe("collaboration_client utilities", () => {
     };
 
     // Act
-    const users = extract_presence_users(provider as never);
+    const users = extractPresenceUsers(provider as never);
 
     // Assert
     expect(users).toHaveLength(2);

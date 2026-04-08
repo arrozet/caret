@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { update_document } from "../api/document_api";
-import type { DocumentResponse } from "../api/document_api";
+import { updateDocument } from "../api/documentApi";
+import type { DocumentResponse } from "../api/documentApi";
 
 /**
  * TanStack Query mutation hook for saving document content.
@@ -10,20 +10,20 @@ import type { DocumentResponse } from "../api/document_api";
  * @param document_id - Document UUID to save.
  * @returns Standard useMutation result.
  */
-export function useSaveDocument(document_id: string) {
-  const query_client = useQueryClient();
+export function useSaveDocument(documentId: string) {
+  const queryClient = useQueryClient();
 
   return useMutation<
     DocumentResponse,
     Error,
     { title?: string; content_json?: Record<string, unknown>; content_text?: string }
   >({
-    mutationFn: (data) => update_document(document_id, data),
-    onSuccess: (updated_doc) => {
+    mutationFn: (data) => updateDocument(documentId, data),
+    onSuccess: (updatedDoc) => {
       /* Update the single-document cache immediately */
-      query_client.setQueryData(["document", document_id], updated_doc);
+      queryClient.setQueryData(["document", documentId], updatedDoc);
       /* Invalidate the list so it picks up the new updated_at */
-      query_client.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
     },
   });
 }

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { list_workspaces, create_workspace } from "../api/document_api";
-import type { WorkspaceResponse } from "../api/document_api";
+import { listWorkspaces, createWorkspace } from "../api/documentApi";
+import type { WorkspaceResponse } from "../api/documentApi";
 
 /**
  * TanStack Query hook to fetch all workspaces for the authenticated user.
@@ -9,7 +9,7 @@ import type { WorkspaceResponse } from "../api/document_api";
 export function useWorkspaces() {
   return useQuery<WorkspaceResponse[]>({
     queryKey: ["workspaces"],
-    queryFn: list_workspaces,
+    queryFn: listWorkspaces,
   });
 }
 
@@ -19,12 +19,12 @@ export function useWorkspaces() {
  * @returns Standard useMutation result.
  */
 export function useCreateWorkspace() {
-  const query_client = useQueryClient();
+  const queryClient = useQueryClient();
 
   return useMutation<WorkspaceResponse, Error, { name: string; slug?: string }>({
-    mutationFn: ({ name, slug }) => create_workspace(name, slug),
+    mutationFn: ({ name, slug }) => createWorkspace(name, slug),
     onSuccess: () => {
-      query_client.invalidateQueries({ queryKey: ["workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     },
   });
 }

@@ -1,4 +1,4 @@
-import { api_fetch } from "../../../lib/api_client";
+import { api_fetch } from "../../../lib/apiClient";
 
 /**
  * Shape of a document as returned by the API.
@@ -71,14 +71,14 @@ export interface InviteCollaboratorResponse {
  * @param folder_id - Optional folder placement.
  * @returns The created document.
  */
-export function create_document(
+export function createDocument(
   title: string,
-  workspace_id: string,
-  folder_id?: string,
+  workspaceId: string,
+  folderId?: string,
 ): Promise<DocumentResponse> {
   return api_fetch<DocumentResponse>("/documents", {
     method: "POST",
-    body: JSON.stringify({ title, workspace_id, folder_id }),
+    body: JSON.stringify({ title, workspace_id: workspaceId, folder_id: folderId }),
   });
 }
 
@@ -87,9 +87,9 @@ export function create_document(
  * @param workspace_id - Workspace UUID scope.
  * @returns Array of documents.
  */
-export function list_documents(workspace_id: string): Promise<DocumentResponse[]> {
+export function listDocuments(workspaceId: string): Promise<DocumentResponse[]> {
   return api_fetch<DocumentResponse[]>(
-    `/documents?workspace_id=${encodeURIComponent(workspace_id)}`,
+    `/documents?workspace_id=${encodeURIComponent(workspaceId)}`,
   );
 }
 
@@ -98,8 +98,8 @@ export function list_documents(workspace_id: string): Promise<DocumentResponse[]
  * @param document_id - Document UUID.
  * @returns The document with content.
  */
-export function get_document(document_id: string): Promise<DocumentResponse> {
-  return api_fetch<DocumentResponse>(`/documents/${document_id}`);
+export function getDocument(documentId: string): Promise<DocumentResponse> {
+  return api_fetch<DocumentResponse>(`/documents/${documentId}`);
 }
 
 /**
@@ -108,15 +108,15 @@ export function get_document(document_id: string): Promise<DocumentResponse> {
  * @param data - Partial update fields.
  * @returns The updated document.
  */
-export function update_document(
-  document_id: string,
+export function updateDocument(
+  documentId: string,
   data: {
     title?: string;
     content_json?: Record<string, unknown>;
     content_text?: string;
   },
 ): Promise<DocumentResponse> {
-  return api_fetch<DocumentResponse>(`/documents/${document_id}`, {
+  return api_fetch<DocumentResponse>(`/documents/${documentId}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
@@ -126,8 +126,8 @@ export function update_document(
  * Soft-delete a document.
  * @param document_id - Document UUID.
  */
-export function delete_document(document_id: string): Promise<void> {
-  return api_fetch<void>(`/documents/${document_id}`, {
+export function deleteDocument(documentId: string): Promise<void> {
+  return api_fetch<void>(`/documents/${documentId}`, {
     method: "DELETE",
   });
 }
@@ -138,7 +138,7 @@ export function delete_document(document_id: string): Promise<void> {
  * @param slug - Optional URL slug.
  * @returns The created workspace.
  */
-export function create_workspace(name: string, slug?: string): Promise<WorkspaceResponse> {
+export function createWorkspace(name: string, slug?: string): Promise<WorkspaceResponse> {
   return api_fetch<WorkspaceResponse>("/workspaces", {
     method: "POST",
     body: JSON.stringify({ name, slug }),
@@ -149,7 +149,7 @@ export function create_workspace(name: string, slug?: string): Promise<Workspace
  * List all workspaces the authenticated user belongs to.
  * @returns Array of workspaces.
  */
-export function list_workspaces(): Promise<WorkspaceResponse[]> {
+export function listWorkspaces(): Promise<WorkspaceResponse[]> {
   return api_fetch<WorkspaceResponse[]>("/workspaces");
 }
 
@@ -159,11 +159,11 @@ export function list_workspaces(): Promise<WorkspaceResponse[]> {
  * @param email - Target user email.
  * @returns Invitation result.
  */
-export function invite_document_collaborator(
-  document_id: string,
+export function inviteDocumentCollaborator(
+  documentId: string,
   email: string,
 ): Promise<InviteCollaboratorResponse> {
-  return api_fetch<InviteCollaboratorResponse>(`/documents/${document_id}/invite`, {
+  return api_fetch<InviteCollaboratorResponse>(`/documents/${documentId}/invite`, {
     method: "POST",
     body: JSON.stringify({ email }),
   });

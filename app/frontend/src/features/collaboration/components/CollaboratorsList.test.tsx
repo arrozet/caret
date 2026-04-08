@@ -3,8 +3,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { CollaboratorsList } from "./CollaboratorsList";
 import type { AwarenessClient } from "../types";
 
@@ -76,7 +75,6 @@ describe("CollaboratorsList", () => {
   });
 
   it("calls on_collaborator_click when avatar is clicked", async () => {
-    const user = userEvent.setup();
     const handle_click = vi.fn();
     const collaborator = create_mock_collaborator({ client_id: 1, name: "Alice" });
 
@@ -84,7 +82,7 @@ describe("CollaboratorsList", () => {
       <CollaboratorsList collaborators={[collaborator]} on_collaborator_click={handle_click} />,
     );
 
-    await user.click(screen.getByLabelText("Avatar for Alice"));
+    fireEvent.click(screen.getByLabelText("Avatar for Alice"));
 
     expect(handle_click).toHaveBeenCalledWith(collaborator);
   });

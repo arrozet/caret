@@ -7,12 +7,18 @@ export interface CaretIconProps extends SVGMotionProps<SVGSVGElement> {
 
 /**
  * Caret icon component (the symbol '^').
- * 
+ *
  * Styled following the "Swiss Focus" design system.
  * By default, uses the signature brand color (accent-caret).
  * Includes `isThinking` (spinning) and `isWriting` (blinking) animations for AI states.
  */
-export function CaretIcon({ className = "", isThinking, isWriting, style, ...props }: CaretIconProps) {
+export function CaretIcon({
+  className = "",
+  isThinking,
+  isWriting,
+  style,
+  ...props
+}: CaretIconProps) {
   return (
     <motion.svg
       viewBox="0 0 24 24"
@@ -47,7 +53,15 @@ export function CaretIcon({ className = "", isThinking, isWriting, style, ...pro
 /**
  * Full Caret logo component (icon + text).
  */
-export function CaretLogo({ className = "", isThinking, isWriting }: { className?: string, isThinking?: boolean, isWriting?: boolean }) {
+export function CaretLogo({
+  className = "",
+  isThinking,
+  isWriting,
+}: {
+  className?: string;
+  isThinking?: boolean;
+  isWriting?: boolean;
+}) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <CaretIcon className="h-6 w-6" isThinking={isThinking} isWriting={isWriting} />

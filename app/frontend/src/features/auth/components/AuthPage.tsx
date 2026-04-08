@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
-import { use_auth_store } from "../../../stores/auth_store";
-import { useTheme } from "../../../hooks/use_theme";
+import { useAuthStore } from "../../../stores/authStore";
+import { useTheme } from "../../../hooks/useTheme";
 import { Sun, Moon, Monitor } from "lucide-react";
 
 /** Which form is currently active. */
@@ -27,17 +27,17 @@ const theme_icons = {
 export function AuthPage() {
   const { t } = useTranslation("common");
   const navigate = useNavigate();
-  const sign_in = use_auth_store((s) => s.sign_in);
-  const sign_up = use_auth_store((s) => s.sign_up);
-  const sign_in_with_oauth = use_auth_store((s) => s.sign_in_with_oauth);
-  const { theme, toggle_theme } = useTheme();
+  const signIn = useAuthStore((state) => state.signIn);
+  const signUp = useAuthStore((state) => state.signUp);
+  const signInWithOauth = useAuthStore((state) => state.signInWithOauth);
+  const { theme, toggleTheme } = useTheme();
 
-  const [mode, set_mode] = useState<AuthMode>("sign_in");
+  const [mode, setMode] = useState<AuthMode>("sign_in");
   const [email, set_email] = useState("");
   const [password, set_password] = useState("");
   const [error, set_error] = useState<string | null>(null);
-  const [is_loading, set_is_loading] = useState(false);
-  const [is_oauth_loading, set_is_oauth_loading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isOauthLoading, setIsOauthLoading] = useState(false);
 
   const ThemeIcon = theme_icons[theme];
 
@@ -46,15 +46,15 @@ export function AuthPage() {
    * Supabase redirects to Google, then back to the app.
    * The onAuthStateChange listener handles session detection.
    */
-  async function handle_google_sign_in() {
+  async function handleGoogleSignIn() {
     set_error(null);
-    set_is_oauth_loading(true);
+    setIsOauthLoading(true);
 
-    const error_message = await sign_in_with_oauth("google");
+    const errorMessage = await signInWithOauth("google");
 
-    if (error_message) {
-      set_is_oauth_loading(false);
-      set_error(error_message);
+    if (errorMessage) {
+      setIsOauthLoading(false);
+      set_error(errorMessage);
     }
     /* If no error, the browser is redirecting to Google — no need to reset loading */
   }
@@ -63,18 +63,18 @@ export function AuthPage() {
    * Handle form submission for both sign-in and sign-up.
    * On success, navigate to the main editor page.
    */
-  async function handle_submit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     set_error(null);
-    set_is_loading(true);
+    setIsLoading(true);
 
-    const action = mode === "sign_in" ? sign_in : sign_up;
-    const error_message = await action(email, password);
+    const action = mode === "sign_in" ? signIn : signUp;
+    const errorMessage = await action(email, password);
 
-    set_is_loading(false);
+    setIsLoading(false);
 
-    if (error_message) {
-      set_error(error_message);
+    if (errorMessage) {
+      set_error(errorMessage);
       return;
     }
 
@@ -87,8 +87,8 @@ export function AuthPage() {
   }
 
   /** Toggle between sign-in and sign-up modes. */
-  function toggle_mode() {
-    set_mode((prev) => (prev === "sign_in" ? "sign_up" : "sign_in"));
+  function toggleMode() {
+    setMode((prev) => (prev === "sign_in" ? "sign_up" : "sign_in"));
     set_error(null);
   }
 
@@ -96,7 +96,7 @@ export function AuthPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-app px-4">
       {/* Theme toggle — top-right corner */}
       <div className="absolute top-4 right-4">
-        <Button variant="ghost" size="sm" onClick={toggle_theme} aria-label={t(`theme.${theme}`)}>
+        <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label={t(`theme.${theme}`)}>
           <ThemeIcon className="h-5 w-5" />
         </Button>
       </div>
@@ -124,12 +124,12 @@ export function AuthPage() {
             type="button"
             variant="secondary"
             size="md"
-            onClick={handle_google_sign_in}
-            disabled={is_oauth_loading || is_loading}
-            is_loading={is_oauth_loading}
+            onClick={handleGoogleSignIn}
+            disabled={isOauthLoading || isLoading}
+            isLoading={isOauthLoading}
             className="w-full"
           >
-            {!is_oauth_loading && <GoogleIcon />}
+            {!isOauthLoading && <GoogleIcon />}
             {t("auth.continue_with_google")}
           </Button>
 
@@ -140,7 +140,7 @@ export function AuthPage() {
             <div className="h-px flex-1 bg-border-subtle" />
           </div>
 
-          <form onSubmit={handle_submit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <Input
               id="email"
               label={t("auth.email")}
@@ -174,10 +174,10 @@ export function AuthPage() {
               type="submit"
               variant="primary"
               size="md"
-              is_loading={is_loading}
+              isLoading={isLoading}
               className="w-full"
             >
-              {is_loading
+              {isLoading
                 ? mode === "sign_in"
                   ? t("auth.signing_in")
                   : t("auth.signing_up")
@@ -192,7 +192,7 @@ export function AuthPage() {
             {mode === "sign_in" ? t("auth.no_account") : t("auth.has_account")}{" "}
             <button
               type="button"
-              onClick={toggle_mode}
+              onClick={toggleMode}
               className="cursor-pointer text-accent-main hover:underline"
             >
               {mode === "sign_in" ? t("auth.sign_up") : t("auth.sign_in")}

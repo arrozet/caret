@@ -20,21 +20,21 @@ interface AvatarProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 /** Size-specific classes for the avatar container. */
-const size_classes: Record<AvatarSize, string> = {
+const sizeClasses: Record<AvatarSize, string> = {
   sm: "h-6 w-6 text-[10px]",
   md: "h-8 w-8 text-ui-sm",
   lg: "h-10 w-10 text-ui-base",
 };
 
 /** Size-specific classes for the presence indicator dot. */
-const presence_dot_sizes: Record<AvatarSize, string> = {
+const presenceDotSizes: Record<AvatarSize, string> = {
   sm: "h-1.5 w-1.5",
   md: "h-2 w-2",
   lg: "h-2.5 w-2.5",
 };
 
 /** Presence status color classes. */
-const presence_colors: Record<PresenceStatus, string> = {
+const presenceColors: Record<PresenceStatus, string> = {
   online: "bg-success",
   away: "bg-warning",
   offline: "bg-error",
@@ -47,7 +47,7 @@ const presence_colors: Record<PresenceStatus, string> = {
  * @param name - The user's display name.
  * @returns Single uppercase letter or "?".
  */
-function get_initials(name?: string): string {
+function getInitials(name?: string): string {
   if (!name || name.trim().length === 0) {
     return "?";
   }
@@ -73,31 +73,31 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(function Avatar(
   { name, src, size = "md", presence_status, color, className = "", ...rest },
   ref,
 ) {
-  const initials = get_initials(name);
+  const initials = getInitials(name);
 
   // Base container classes
-  const container_classes = [
+  const containerClasses = [
     "relative inline-flex items-center justify-center",
     "rounded-full",
     "font-ui font-semibold",
     "select-none",
     "overflow-hidden",
-    size_classes[size],
+    sizeClasses[size],
     className,
   ]
     .filter(Boolean)
     .join(" ");
 
   // Background style: custom color or default accent
-  const background_style = color ? { backgroundColor: color } : undefined;
+  const backgroundStyle = color ? { backgroundColor: color } : undefined;
 
-  const background_class = color ? "text-white" : "bg-accent-main/10 text-accent-main";
+  const backgroundClass = color ? "text-white" : "bg-accent-main/10 text-accent-main";
 
   return (
     <div
       ref={ref}
-      className={`${container_classes} ${background_class}`}
-      style={background_style}
+      className={`${containerClasses} ${backgroundClass}`}
+      style={backgroundStyle}
       title={name}
       aria-label={name ? `Avatar for ${name}` : "User avatar"}
       {...rest}
@@ -119,8 +119,8 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(function Avatar(
             "absolute bottom-0 right-0",
             "rounded-full",
             "ring-2 ring-surface",
-            presence_dot_sizes[size],
-            presence_colors[presence_status],
+            presenceDotSizes[size],
+            presenceColors[presence_status],
           ].join(" ")}
           aria-label={`Status: ${presence_status}`}
         />

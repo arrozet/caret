@@ -9,17 +9,17 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { GhostText, ghost_text_plugin_key } from "./ghost_text";
+import { GhostText, ghostTextPluginKey } from "./GhostText";
 
 describe("GhostText extension", () => {
   it("should have the correct name", () => {
     expect(GhostText.name).toBe("ghost_text");
   });
 
-  it("should export ghost_text_plugin_key with the correct key", () => {
+  it("should export ghostTextPluginKey with the correct key", () => {
     // PluginKey.key is a runtime property (not declared in @types/prosemirror-state).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((ghost_text_plugin_key as any).key).toContain("ghost_text");
+    expect((ghostTextPluginKey as any).key).toContain("ghost_text");
   });
 
   it("should define setGhostText and clearGhostText commands", () => {

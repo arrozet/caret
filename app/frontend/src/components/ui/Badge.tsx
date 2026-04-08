@@ -18,7 +18,7 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 /** Size-specific classes for the badge. */
-const size_classes: Record<BadgeSize, { dot: string; label: string }> = {
+const sizeClasses: Record<BadgeSize, { dot: string; label: string }> = {
   sm: {
     dot: "h-2 w-2",
     label: "h-5 px-1.5 text-[10px]",
@@ -30,7 +30,7 @@ const size_classes: Record<BadgeSize, { dot: string; label: string }> = {
 };
 
 /** Variant-specific color classes. */
-const variant_classes: Record<BadgeVariant, string> = {
+const variantClasses: Record<BadgeVariant, string> = {
   default: "bg-text-ghost text-white",
   success: "bg-success text-white",
   warning: "bg-warning text-white",
@@ -60,14 +60,14 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
   { size = "md", variant = "default", pulse = false, children, className = "", ...rest },
   ref,
 ) {
-  const is_dot = !children;
+  const isDot = !children;
 
-  const base_classes = [
+  const baseClasses = [
     "inline-flex items-center justify-center",
     "rounded-full",
     "font-ui font-medium",
-    variant_classes[variant],
-    is_dot ? size_classes[size].dot : size_classes[size].label,
+    variantClasses[variant],
+    isDot ? sizeClasses[size].dot : sizeClasses[size].label,
     className,
   ]
     .filter(Boolean)
@@ -75,7 +75,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
 
   return (
     <span ref={ref} className="relative inline-flex" {...rest}>
-      <span className={base_classes}>{children}</span>
+      <span className={baseClasses}>{children}</span>
       {pulse && (
         <span
           className={[
@@ -83,7 +83,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
             "rounded-full",
             "animate-ping",
             "opacity-75",
-            variant_classes[variant],
+            variantClasses[variant],
           ].join(" ")}
           aria-hidden="true"
         />

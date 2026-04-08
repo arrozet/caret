@@ -5,13 +5,13 @@
  */
 
 // Session management hooks
-export { useCollaborationSession } from "./use_collaboration_session";
-export { useCollaborationPresence } from "./use_collaboration_presence";
+export { useCollaborationSession } from "./useCollaborationSession";
+export { useCollaborationPresence } from "./useCollaborationPresence";
 
 export type {
   UseCollaborationSessionParams,
   UseCollaborationSessionResult,
-} from "./use_collaboration_session";
+} from "./useCollaborationSession";
 
 // Awareness hook
-export { useAwareness } from "./use_awareness";
+export { useAwareness } from "./useAwareness";

@@ -13,7 +13,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
  * Base style classes for the input element.
  * Follows FRONTEND.md §12 (input states) and §5 (radius-base = 4px).
  */
-const input_classes = [
+const inputClasses = [
   "block w-full",
   "rounded-[4px]",
   "border border-border-subtle",
@@ -27,7 +27,7 @@ const input_classes = [
 ].join(" ");
 
 /** Error-state overrides. */
-const error_classes = "border-error focus:border-error focus:ring-error/40";
+const errorClasses = "border-error focus:border-error focus:ring-error/40";
 
 /**
  * Reusable Input primitive.
@@ -46,44 +46,34 @@ const error_classes = "border-error focus:border-error focus:ring-error/40";
  * />
  * ```
  */
-export const Input = forwardRef<HTMLInputElement, InputProps>(
-  function Input({ label, error, id, className = "", ...rest }, ref) {
-    const combined_classes = [
-      input_classes,
-      error ? error_classes : "",
-      className,
-    ]
-      .filter(Boolean)
-      .join(" ");
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  { label, error, id, className = "", ...rest },
+  ref,
+) {
+  const combinedClasses = [inputClasses, error ? errorClasses : "", className]
+    .filter(Boolean)
+    .join(" ");
 
-    return (
-      <div className="flex flex-col gap-1">
-        {label && (
-          <label
-            htmlFor={id}
-            className="text-ui-sm font-medium text-text-primary"
-          >
-            {label}
-          </label>
-        )}
-        <input
-          ref={ref}
-          id={id}
-          className={combined_classes}
-          aria-invalid={error ? "true" : undefined}
-          aria-describedby={error && id ? `${id}-error` : undefined}
-          {...rest}
-        />
-        {error && (
-          <p
-            id={id ? `${id}-error` : undefined}
-            className="text-ui-sm text-error"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  },
-);
+  return (
+    <div className="flex flex-col gap-1">
+      {label && (
+        <label htmlFor={id} className="text-ui-sm font-medium text-text-primary">
+          {label}
+        </label>
+      )}
+      <input
+        ref={ref}
+        id={id}
+        className={combinedClasses}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={error && id ? `${id}-error` : undefined}
+        {...rest}
+      />
+      {error && (
+        <p id={id ? `${id}-error` : undefined} className="text-ui-sm text-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+});

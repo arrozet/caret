@@ -1,14 +1,6 @@
 import { BubbleMenu } from "@tiptap/react/menus";
 import type { Editor } from "@tiptap/react";
-import {
-  Bold,
-  Italic,
-  Underline,
-  Strikethrough,
-  Highlighter,
-  Code,
-  Link2,
-} from "lucide-react";
+import { Bold, Italic, Underline, Strikethrough, Highlighter, Code, Link2 } from "lucide-react";
 
 /** Props for the SelectionMenu component. */
 interface SelectionMenuProps {
@@ -35,7 +27,7 @@ export function SelectionMenu({ editor }: SelectionMenuProps) {
    * Toggle a hyperlink on the current selection.
    * If already a link, unset it; otherwise prompt for a URL.
    */
-  function handle_link() {
+  function handleLink() {
     if (editor.isActive("link")) {
       editor.chain().focus().unsetLink().run();
       return;
@@ -113,7 +105,7 @@ export function SelectionMenu({ editor }: SelectionMenuProps) {
 
       <ToolbarButton
         active={editor.isActive("link")}
-        onClick={handle_link}
+        onClick={handleLink}
         label={editor.isActive("link") ? "Remove link" : "Add link"}
         title="Link"
       >

@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, User, Globe, Palette, Sun, Moon, Monitor, Check } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
-import { use_auth_store } from "../../../stores/auth_store";
-import { useTheme } from "../../../hooks/use_theme";
+import { useAuthStore } from "../../../stores/authStore";
+import { useTheme } from "../../../hooks/useTheme";
 
 /** Supported languages with display labels. */
 const LANGUAGES = [
@@ -33,37 +33,37 @@ const THEMES = [
 export function SettingsPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation("common");
-  const user = use_auth_store((s) => s.user);
-  const sign_out = use_auth_store((s) => s.sign_out);
-  const { theme, set_theme } = useTheme();
+  const user = useAuthStore((state) => state.user);
+  const signOut = useAuthStore((state) => state.signOut);
+  const { theme, setTheme } = useTheme();
 
-  const current_language = i18n.language;
+  const currentLanguage = i18n.language;
 
   /** Change the application language. */
-  const handle_language_change = useCallback(
-    (lang_code: string) => {
-      i18n.changeLanguage(lang_code);
+  const handleLanguageChange = useCallback(
+    (languageCode: string) => {
+      i18n.changeLanguage(languageCode);
     },
     [i18n],
   );
 
   /** Navigate back. */
-  const handle_back = useCallback(() => {
+  const handleBack = useCallback(() => {
     navigate("/documents");
   }, [navigate]);
 
   /** Sign out and redirect. */
-  const handle_sign_out = useCallback(async () => {
-    await sign_out();
+  const handleSignOut = useCallback(async () => {
+    await signOut();
     navigate("/login");
-  }, [sign_out, navigate]);
+  }, [signOut, navigate]);
 
   return (
     <div className="flex flex-1 flex-col p-4 md:p-8">
       <div className="mx-auto w-full max-w-[var(--max-width-document)]">
         {/* Header */}
         <div className="mb-8 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={handle_back}>
+          <Button variant="ghost" size="sm" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">{t("settings.back", { defaultValue: "Back" })}</span>
           </Button>
@@ -115,7 +115,7 @@ export function SettingsPage() {
 
               {/* Sign out button */}
               <div className="pt-2">
-                <Button variant="secondary" size="md" onClick={handle_sign_out}>
+                <Button variant="secondary" size="md" onClick={handleSignOut}>
                   {t("auth.sign_out")}
                 </Button>
               </div>
@@ -131,7 +131,7 @@ export function SettingsPage() {
               {THEMES.map(({ value, label, icon: Icon }) => (
                 <button
                   key={value}
-                  onClick={() => set_theme(value)}
+                  onClick={() => setTheme(value)}
                   className={[
                     "flex items-center gap-2 rounded-base border px-4 py-3 cursor-pointer",
                     "transition-all duration-[150ms]",
@@ -158,21 +158,21 @@ export function SettingsPage() {
               {LANGUAGES.map(({ code, label, flag }) => (
                 <button
                   key={code}
-                  onClick={() => handle_language_change(code)}
+                  onClick={() => handleLanguageChange(code)}
                   className={[
                     "flex items-center gap-3 rounded-base border px-4 py-3 cursor-pointer",
                     "transition-all duration-[150ms]",
-                    current_language === code
+                    currentLanguage === code
                       ? "border-accent-main bg-accent-main/5 text-accent-main"
                       : "border-border-subtle text-text-secondary hover:border-text-secondary hover:text-text-primary",
                   ].join(" ")}
-                  aria-pressed={current_language === code}
+                  aria-pressed={currentLanguage === code}
                 >
                   <span className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-surface border border-border-subtle text-ui-sm font-semibold">
                     {flag}
                   </span>
                   <span className="text-ui-base font-medium">{label}</span>
-                  {current_language === code && <Check className="h-4 w-4 ml-auto" />}
+                  {currentLanguage === code && <Check className="h-4 w-4 ml-auto" />}
                 </button>
               ))}
             </div>

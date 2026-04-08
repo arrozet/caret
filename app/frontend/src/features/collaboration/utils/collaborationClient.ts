@@ -40,7 +40,7 @@ export interface CreateCollaborationSessionParams {
 /**
  * Build the websocket server URL from configured base and document id.
  */
-export function build_collaboration_server_url(
+export function buildCollaborationServerUrl(
   document_id: string,
   base_url: string = LOCAL_COLLAB_WS_BASE_URL,
 ): string {
@@ -51,7 +51,7 @@ export function build_collaboration_server_url(
 /**
  * Create an isolated Y.Doc + WebsocketProvider session for one document room.
  */
-export function create_collaboration_session({
+export function createCollaborationSession({
   document_id,
   token,
   server_url = LOCAL_COLLAB_WS_BASE_URL,
@@ -73,7 +73,7 @@ export function create_collaboration_session({
 /**
  * Destroy provider and Y.Doc resources in a deterministic order.
  */
-export function destroy_collaboration_session(session: CollaborationSession): void {
+export function destroyCollaborationSession(session: CollaborationSession): void {
   session.provider.disconnect();
   session.provider.destroy();
   session.ydoc.destroy();
@@ -82,7 +82,7 @@ export function destroy_collaboration_session(session: CollaborationSession): vo
 /**
  * Derive a stable display color from a user identifier.
  */
-export function derive_user_color(user_id: string): string {
+export function deriveUserColor(user_id: string): string {
   const palette = [
     "#0066CC",
     "#D97706",
@@ -107,7 +107,7 @@ export function derive_user_color(user_id: string): string {
 /**
  * Read current awareness states and map them into UI-friendly user entries.
  */
-export function extract_presence_users(provider: WebsocketProvider): CollaborationPresenceUser[] {
+export function extractPresenceUsers(provider: WebsocketProvider): CollaborationPresenceUser[] {
   const users = new Map<string, CollaborationPresenceUser>();
 
   provider.awareness.getStates().forEach((state) => {
@@ -132,7 +132,7 @@ export function extract_presence_users(provider: WebsocketProvider): Collaborati
     const safe_color =
       typeof user.color === "string" && user.color.trim().length > 0
         ? user.color.trim()
-        : derive_user_color(user.id);
+        : deriveUserColor(user.id);
 
     users.set(user.id, {
       id: user.id,

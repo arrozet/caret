@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { Awareness } from "y-protocols/awareness";
-import { useAwareness } from "./use_awareness";
+import { useAwareness } from "./useAwareness";
 import type { AwarenessUserState } from "../types";
 
 /**

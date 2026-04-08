@@ -19,7 +19,7 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { TextSelection } from "@tiptap/pm/state";
 
 /** Plugin key for accessing the ghost text plugin state. */
-export const ghost_text_plugin_key = new PluginKey<string>("ghost_text");
+export const ghostTextPluginKey = new PluginKey<string>("ghost_text");
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -42,7 +42,7 @@ export const GhostText = Extension.create({
         (text: string) =>
         ({ dispatch, tr }) => {
           if (dispatch) {
-            tr.setMeta(ghost_text_plugin_key, { type: "set", text });
+            tr.setMeta(ghostTextPluginKey, { type: "set", text });
             dispatch(tr);
           }
           return true;
@@ -51,7 +51,7 @@ export const GhostText = Extension.create({
         () =>
         ({ dispatch, tr }) => {
           if (dispatch) {
-            tr.setMeta(ghost_text_plugin_key, { type: "clear" });
+            tr.setMeta(ghostTextPluginKey, { type: "clear" });
             dispatch(tr);
           }
           return true;
@@ -62,7 +62,7 @@ export const GhostText = Extension.create({
   addProseMirrorPlugins() {
     return [
       new Plugin<string>({
-        key: ghost_text_plugin_key,
+        key: ghostTextPluginKey,
 
         state: {
           /** Initialises the plugin state to an empty string (no suggestion). */
@@ -79,7 +79,7 @@ export const GhostText = Extension.create({
            *   cleared automatically because it is now stale.
            */
           apply(tr, current_text) {
-            const meta = tr.getMeta(ghost_text_plugin_key) as
+            const meta = tr.getMeta(ghostTextPluginKey) as
               | { type: "set"; text: string }
               | { type: "clear" }
               | undefined;
@@ -101,8 +101,8 @@ export const GhostText = Extension.create({
            * positioned immediately after the cursor.
            */
           decorations(state) {
-            const ghost_text = ghost_text_plugin_key.getState(state) ?? "";
-            if (!ghost_text) return DecorationSet.empty;
+            const ghostText = ghostTextPluginKey.getState(state) ?? "";
+            if (!ghostText) return DecorationSet.empty;
 
             const selection = state.selection as TextSelection;
             const cursor = selection.$cursor;
@@ -112,7 +112,7 @@ export const GhostText = Extension.create({
               const span = document.createElement("span");
               span.className =
                 "ghost-text pointer-events-none select-none text-neutral-400 italic opacity-60";
-              span.textContent = ghost_text;
+              span.textContent = ghostText;
               span.setAttribute("data-testid", "ghost-text-widget");
               return span;
             });

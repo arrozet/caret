@@ -118,7 +118,7 @@ export const COLLABORATOR_COLORS = [
  * @param user_id - The user's unique identifier.
  * @returns A hex color string from the predefined palette.
  */
-export function get_user_color(user_id: string): string {
+export function getUserColor(user_id: string): string {
   let hash = 0;
   for (let i = 0; i < user_id.length; i++) {
     const char = user_id.charCodeAt(i);
@@ -136,7 +136,7 @@ export function get_user_color(user_id: string): string {
  * @param config - Awareness configuration for timeout values.
  * @returns The computed presence status.
  */
-export function compute_presence_status(
+export function computePresenceStatus(
   last_active: number,
   config: AwarenessConfig = DEFAULT_AWARENESS_CONFIG,
 ): PresenceStatus {

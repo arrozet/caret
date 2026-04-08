@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useCollaborationPresence } from "./use_collaboration_presence";
+import { useCollaborationPresence } from "./useCollaborationPresence";
 
 /** Unit tests for collaboration presence derived state hook. */
 describe("useCollaborationPresence", () => {

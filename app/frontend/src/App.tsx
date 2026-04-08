@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { use_auth_store } from "./stores/auth_store";
+import { useAuthStore } from "./stores/authStore";
 import { AuthPage } from "./features/auth";
 import { LandingPage } from "./features/landing";
 import { SettingsPage } from "./features/settings";
@@ -19,8 +19,8 @@ import "./App.css";
  * Protected routes are wrapped with AuthGuard.
  */
 function App() {
-  const initialize = use_auth_store((s) => s.initialize);
-  const is_dev_mode = import.meta.env.DEV;
+  const initialize = useAuthStore((state) => state.initialize);
+  const isDevMode = import.meta.env.DEV;
 
   useEffect(() => {
     initialize();
@@ -32,9 +32,7 @@ function App() {
         {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<AuthPage />} />
-        {is_dev_mode ? (
-          <Route path="/debug/collab-harness" element={<CollabHarnessPage />} />
-        ) : null}
+        {isDevMode ? <Route path="/debug/collab-harness" element={<CollabHarnessPage />} /> : null}
 
         {/* Protected routes */}
         <Route

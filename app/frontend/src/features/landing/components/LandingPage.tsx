@@ -11,8 +11,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef } from "react";
 import { Button } from "../../../components/ui/Button";
-import { useTheme } from "../../../hooks/use_theme";
-import { use_auth_store } from "../../../stores/auth_store";
+import { useTheme } from "../../../hooks/useTheme";
+import { useAuthStore } from "../../../stores/authStore";
 import { Sun, Moon, Monitor, ArrowRight, Type, Users, Sparkles } from "lucide-react";
 import { CaretLogo } from "../../../components/ui/Logo";
 import { AnimatedMockup } from "./AnimatedMockup";
@@ -26,22 +26,22 @@ import { AnimatedMockup } from "./AnimatedMockup";
  * Used to drive cursor-reactive background glows.
  */
 function useMousePosition() {
-  const mouse_x = useMotionValue(0);
-  const mouse_y = useMotionValue(0);
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
 
-  const spring_x = useSpring(mouse_x, { stiffness: 150, damping: 20 });
-  const spring_y = useSpring(mouse_y, { stiffness: 150, damping: 20 });
+  const springX = useSpring(mouseX, { stiffness: 150, damping: 20 });
+  const springY = useSpring(mouseY, { stiffness: 150, damping: 20 });
 
   useEffect(() => {
     const handle = (e: MouseEvent) => {
-      mouse_x.set(e.clientX);
-      mouse_y.set(e.clientY);
+      mouseX.set(e.clientX);
+      mouseY.set(e.clientY);
     };
     window.addEventListener("mousemove", handle);
     return () => window.removeEventListener("mousemove", handle);
-  }, [mouse_x, mouse_y]);
+  }, [mouseX, mouseY]);
 
-  return { x: spring_x, y: spring_y };
+  return { x: springX, y: springY };
 }
 
 /* ================================================================
@@ -49,7 +49,7 @@ function useMousePosition() {
    ================================================================ */
 
 /** Stagger container: reveals children one after another. */
-const container_variants = {
+const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -58,7 +58,7 @@ const container_variants = {
 };
 
 /** Generic slide-up + fade item. */
-const item_variants = {
+const itemVariants = {
   hidden: { opacity: 0, y: 22 },
   visible: {
     opacity: 1,
@@ -79,26 +79,26 @@ const item_variants = {
 function MagneticButton({ children, disabled }: { children: React.ReactNode; disabled: boolean }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const spring_x = useSpring(x, { stiffness: 260, damping: 24 });
-  const spring_y = useSpring(y, { stiffness: 260, damping: 24 });
+  const springX = useSpring(x, { stiffness: 260, damping: 24 });
+  const springY = useSpring(y, { stiffness: 260, damping: 24 });
 
-  const handle_move = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (disabled) return;
     const rect = e.currentTarget.getBoundingClientRect();
     x.set((e.clientX - rect.left - rect.width / 2) * 0.2);
     y.set((e.clientY - rect.top - rect.height / 2) * 0.2);
   };
 
-  const handle_leave = () => {
+  const handleLeave = () => {
     x.set(0);
     y.set(0);
   };
 
   return (
     <motion.div
-      onMouseMove={handle_move}
-      onMouseLeave={handle_leave}
-      style={{ x: spring_x, y: spring_y }}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
+      style={{ x: springX, y: springY }}
       whileTap={{ scale: 0.97 }}
     >
       {children}
@@ -195,28 +195,28 @@ const theme_icons = { light: Sun, dark: Moon, system: Monitor } as const;
 export function LandingPage() {
   const { t } = useTranslation("common");
   const navigate = useNavigate();
-  const status = use_auth_store((s) => s.status);
-  const is_authenticated = status === "authenticated";
-  const { theme, toggle_theme } = useTheme();
-  const should_reduce_motion = useReducedMotion() ?? false;
-  const hero_ref = useRef<HTMLElement>(null);
-  const { x: mouse_x, y: mouse_y } = useMousePosition();
+  const status = useAuthStore((state) => state.status);
+  const isAuthenticated = status === "authenticated";
+  const { theme, toggleTheme } = useTheme();
+  const shouldReduceMotion = useReducedMotion() ?? false;
+  const heroRef = useRef<HTMLElement>(null);
+  const { x: mouseX, y: mouseY } = useMousePosition();
 
   /* Page-level scroll drives the top progress bar */
-  const { scrollYProgress: page_progress } = useScroll();
+  const { scrollYProgress: pageProgress } = useScroll();
 
   /* Hero-section scroll drives hero parallax */
-  const { scrollYProgress: hero_progress } = useScroll({
-    target: hero_ref,
+  const { scrollYProgress: heroProgress } = useScroll({
+    target: heroRef,
     offset: ["start start", "end start"],
   });
-  const hero_y = useTransform(hero_progress, [0, 1], [0, 60]);
-  const hero_opacity = useTransform(hero_progress, [0, 0.9], [1, 0.7]);
-  const glow_opacity = useTransform(hero_progress, [0, 1], [1, 0.4]);
+  const heroY = useTransform(heroProgress, [0, 1], [0, 60]);
+  const heroOpacity = useTransform(heroProgress, [0, 0.9], [1, 0.7]);
+  const glowOpacity = useTransform(heroProgress, [0, 1], [1, 0.4]);
 
   /* Cursor-reactive background glows */
-  const primary_glow = useMotionTemplate`radial-gradient(600px circle at ${mouse_x}px ${mouse_y}px, rgb(var(--color-accent-main-rgb) / 0.1), transparent 70%)`;
-  const caret_glow = useMotionTemplate`radial-gradient(400px circle at ${mouse_x}px ${mouse_y}px, rgb(var(--color-accent-caret-rgb) / 0.05), transparent 80%)`;
+  const primaryGlow = useMotionTemplate`radial-gradient(600px circle at ${mouseX}px ${mouseY}px, rgb(var(--color-accent-main-rgb) / 0.1), transparent 70%)`;
+  const caretGlow = useMotionTemplate`radial-gradient(400px circle at ${mouseX}px ${mouseY}px, rgb(var(--color-accent-caret-rgb) / 0.05), transparent 80%)`;
 
   const ThemeIcon = theme_icons[theme];
 
@@ -225,7 +225,7 @@ export function LandingPage() {
       {/* ── Scroll progress bar ─────────────────────────────────── */}
       <motion.div
         className="fixed top-0 left-0 right-0 z-[200] h-[2px] origin-left bg-gradient-to-r from-accent-main via-accent-caret to-accent-caret"
-        style={{ scaleX: page_progress }}
+        style={{ scaleX: pageProgress }}
       />
 
       {/* ── Background glows ────────────────────────────────────── */}
@@ -234,13 +234,13 @@ export function LandingPage() {
         <motion.div
           className="absolute inset-0 hidden md:block"
           style={{
-            background: primary_glow,
-            opacity: should_reduce_motion ? 0.6 : glow_opacity,
+            background: primaryGlow,
+            opacity: shouldReduceMotion ? 0.6 : glowOpacity,
           }}
         />
         <motion.div
           className="absolute inset-0 hidden md:block mix-blend-screen"
-          style={{ background: caret_glow }}
+          style={{ background: caretGlow }}
         />
         <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,rgb(var(--color-app-bg))_90%)]" />
       </div>
@@ -249,7 +249,7 @@ export function LandingPage() {
       <motion.span
         aria-hidden
         className="pointer-events-none fixed top-[10vh] right-[4vw] z-[-1] hidden select-none font-document text-[16vw] font-light leading-none text-text-primary/[0.04] md:block"
-        animate={should_reduce_motion ? undefined : { y: [0, -18, 0], rotate: [0, 2, 0] }}
+        animate={shouldReduceMotion ? undefined : { y: [0, -18, 0], rotate: [0, 2, 0] }}
         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
       >
         ^
@@ -270,31 +270,31 @@ export function LandingPage() {
           transition={{ duration: 0.4, ease: "easeOut" }}
           className="flex items-center gap-2"
         >
-          <Button variant="ghost" size="sm" onClick={toggle_theme} aria-label={t(`theme.${theme}`)}>
+          <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label={t(`theme.${theme}`)}>
             <ThemeIcon className="h-4 w-4" />
           </Button>
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => navigate(is_authenticated ? "/documents" : "/login")}
+            onClick={() => navigate(isAuthenticated ? "/documents" : "/login")}
           >
-            {is_authenticated ? "Dashboard" : t("auth.sign_in")}
+            {isAuthenticated ? "Dashboard" : t("auth.sign_in")}
           </Button>
         </motion.div>
       </header>
 
       {/* ── Hero (BOLDER, MASSIVE SCALE) ───────────────────────── */}
       <section
-        ref={hero_ref}
+        ref={heroRef}
         className="relative flex flex-col items-center justify-start pt-32 pb-20 md:pt-40 md:pb-24 overflow-hidden"
       >
         <motion.div
           initial="hidden"
           animate="visible"
-          variants={container_variants}
+          variants={containerVariants}
           style={{
-            y: should_reduce_motion ? 0 : hero_y,
-            opacity: should_reduce_motion ? 1 : hero_opacity,
+            y: shouldReduceMotion ? 0 : heroY,
+            opacity: shouldReduceMotion ? 1 : heroOpacity,
           }}
           className="w-full flex flex-col relative z-10"
         >
@@ -319,7 +319,7 @@ export function LandingPage() {
                   <motion.span
                     className="absolute -right-[12px] md:-right-[24px] bottom-[10px] md:bottom-[18px] h-[10px] w-[10px] md:h-[20px] md:w-[20px] rounded-full bg-accent-caret"
                     animate={
-                      should_reduce_motion
+                      shouldReduceMotion
                         ? undefined
                         : { scale: [1, 1.2, 1], opacity: [0.8, 1, 0.8] }
                     }
@@ -332,7 +332,7 @@ export function LandingPage() {
             {/* Centered Description & CTA */}
             <div className="mt-12 md:mt-20 flex flex-col items-center w-full">
               <motion.p
-                variants={item_variants}
+                variants={itemVariants}
                 className="font-ui text-xl md:text-2xl leading-relaxed text-text-secondary max-w-2xl text-center"
               >
                 Stop fighting your document. Start writing. <br className="hidden md:block" />
@@ -341,23 +341,23 @@ export function LandingPage() {
               </motion.p>
 
               <motion.div
-                variants={item_variants}
+                variants={itemVariants}
                 className="mt-10 flex flex-col sm:flex-row gap-4 justify-center"
               >
-                <MagneticButton disabled={should_reduce_motion}>
+                <MagneticButton disabled={shouldReduceMotion}>
                   <Button
                     variant="primary"
                     size="lg"
-                    onClick={() => navigate(is_authenticated ? "/documents" : "/login")}
+                    onClick={() => navigate(isAuthenticated ? "/documents" : "/login")}
                     className="min-w-[200px] h-14 text-base shadow-elevated bg-accent-main text-white border border-accent-main hover:bg-[#0052A3] transition-all duration-300"
                   >
                     <span className="flex items-center justify-center gap-2 font-medium tracking-wide">
-                      {is_authenticated ? "Go to Dashboard" : "Start writing"}
+                      {isAuthenticated ? "Go to Dashboard" : "Start writing"}
                       <ArrowRight className="h-5 w-5" />
                     </span>
                   </Button>
                 </MagneticButton>
-                <MagneticButton disabled={should_reduce_motion}>
+                <MagneticButton disabled={shouldReduceMotion}>
                   <Button
                     variant="secondary"
                     size="lg"
@@ -386,7 +386,7 @@ export function LandingPage() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-50px" }}
-          variants={container_variants}
+          variants={containerVariants}
           className="mx-auto flex w-full max-w-[1400px] flex-col items-start justify-between gap-16 md:flex-row md:gap-8"
         >
           {[
@@ -394,7 +394,7 @@ export function LandingPage() {
             { label: "AI-native", sub: "Inline, context-aware intelligence" },
             { label: "Offline-first", sub: "Local-first sync architecture" },
           ].map(({ label, sub }) => (
-            <motion.div key={label} variants={item_variants} className="flex flex-col gap-4">
+            <motion.div key={label} variants={itemVariants} className="flex flex-col gap-4">
               <span className="font-ui text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter text-text-primary">
                 {label}.
               </span>
@@ -465,35 +465,35 @@ export function LandingPage() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-50px" }}
-          variants={container_variants}
+          variants={containerVariants}
           className="mx-auto w-full max-w-[1400px] text-center flex flex-col items-center"
         >
           <motion.div
-            variants={item_variants}
+            variants={itemVariants}
             className="mb-12 h-2 w-24 bg-accent-caret rounded-full"
           />
           <motion.h3
-            variants={item_variants}
+            variants={itemVariants}
             className="font-document text-6xl md:text-[8vw] lg:text-[120px] leading-[0.9] tracking-tighter text-text-primary"
           >
             Ready to write?
           </motion.h3>
           <motion.p
-            variants={item_variants}
+            variants={itemVariants}
             className="mt-8 max-w-2xl text-2xl md:text-3xl text-text-secondary leading-relaxed"
           >
             No setup. No friction. Sign in and create your first document in seconds.
           </motion.p>
-          <motion.div variants={item_variants} className="mt-16 inline-block">
-            <MagneticButton disabled={should_reduce_motion}>
+          <motion.div variants={itemVariants} className="mt-16 inline-block">
+            <MagneticButton disabled={shouldReduceMotion}>
               <Button
                 variant="primary"
                 size="lg"
-                onClick={() => navigate(is_authenticated ? "/documents" : "/login")}
+                onClick={() => navigate(isAuthenticated ? "/documents" : "/login")}
                 className="min-w-[240px] h-20 text-xl shadow-strong bg-accent-main text-white border-2 border-accent-main hover:bg-transparent hover:text-accent-main transition-all duration-300 rounded-none"
               >
                 <span className="flex items-center justify-center gap-3 font-semibold uppercase tracking-wide">
-                  {is_authenticated ? "Go to Dashboard" : "Get started free"}
+                  {isAuthenticated ? "Go to Dashboard" : "Get started free"}
                   <ArrowRight className="h-6 w-6" />
                 </span>
               </Button>

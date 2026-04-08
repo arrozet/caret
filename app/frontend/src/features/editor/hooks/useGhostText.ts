@@ -11,19 +11,19 @@
  * handled consistently with the rest of the AI assistant feature.
  *
  * @param editor - The Tiptap editor instance (may be null during initial render).
- * @param conversation_id - The current AI conversation UUID (may be null if not started).
+ * @param conversationId - The current AI conversation UUID (may be null if not started).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
-import { stream_ai_response } from "../../ai-assistant/api/ai_api";
+import { streamAiResponse } from "../../ai-assistant/api/aiApi";
 
 /** Options for the useGhostText hook. */
 interface UseGhostTextOptions {
   /** Tiptap editor instance. */
   editor: Editor | null;
   /** Current AI conversation UUID (null if no conversation is active). */
-  conversation_id: string | null;
+  conversationId: string | null;
 }
 
 /** Return type of the useGhostText hook. */
@@ -46,7 +46,7 @@ interface UseGhostTextReturn {
  * @param editor - The active Tiptap editor instance.
  * @returns The full text content of the paragraph that contains the cursor.
  */
-function get_cursor_context(editor: Editor): string {
+function getCursorContext(editor: Editor): string {
   const { state } = editor;
   const { $head } = state.selection;
   const paragraph_start = $head.start();
@@ -65,21 +65,21 @@ function get_cursor_context(editor: Editor): string {
  * @param options - Configuration options.
  * @returns State and handlers for the ghost text feature.
  */
-export function useGhostText({ editor, conversation_id }: UseGhostTextOptions): UseGhostTextReturn {
-  const [is_loading, set_is_loading] = useState(false);
+export function useGhostText({ editor, conversationId }: UseGhostTextOptions): UseGhostTextReturn {
+  const [isLoading, setIsLoading] = useState(false);
   const [suggestion, set_suggestion] = useState("");
 
   /** Holds the AbortController for the current in-flight stream, if any. */
-  const abort_ref = useRef<AbortController | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   /**
    * Cancel any in-flight request and clear ghost text from the editor.
    */
   const dismiss_suggestion = useCallback(() => {
-    abort_ref.current?.abort();
-    abort_ref.current = null;
+    abortRef.current?.abort();
+    abortRef.current = null;
     set_suggestion("");
-    set_is_loading(false);
+    setIsLoading(false);
     if (editor && !editor.isDestroyed) {
       editor.commands.clearGhostText();
     }
@@ -105,20 +105,20 @@ export function useGhostText({ editor, conversation_id }: UseGhostTextOptions): 
    * time so the user can preview the suggestion as it grows.
    */
   const trigger_suggestion = useCallback(async () => {
-    if (!editor || !conversation_id) return;
+    if (!editor || !conversationId) return;
 
     dismiss_suggestion();
 
-    const context = get_cursor_context(editor);
+    const context = getCursorContext(editor);
     if (!context.trim()) return;
 
-    set_is_loading(true);
+    setIsLoading(true);
     const controller = new AbortController();
-    abort_ref.current = controller;
+    abortRef.current = controller;
 
     try {
-      const generator = stream_ai_response({
-        conversation_id,
+      const generator = streamAiResponse({
+        conversation_id: conversationId,
         message: `Continue the following text naturally (respond with only the continuation, no preamble): "${context}"`,
         document_context: context,
         signal: controller.signal,
@@ -135,7 +135,7 @@ export function useGhostText({ editor, conversation_id }: UseGhostTextOptions): 
           editor.commands.setGhostText(accumulated);
           set_suggestion(accumulated);
         } else if (chunk.type === "done") {
-          set_is_loading(false);
+          setIsLoading(false);
         } else if (chunk.type === "error") {
           dismiss_suggestion();
           return;
@@ -146,9 +146,9 @@ export function useGhostText({ editor, conversation_id }: UseGhostTextOptions): 
         dismiss_suggestion();
       }
     } finally {
-      set_is_loading(false);
+      setIsLoading(false);
     }
-  }, [editor, conversation_id, dismiss_suggestion]);
+  }, [editor, conversationId, dismiss_suggestion]);
 
   /**
    * Register keyboard shortcuts on the editor DOM element.
@@ -169,10 +169,10 @@ export function useGhostText({ editor, conversation_id }: UseGhostTextOptions): 
 
     // view.dom may be unavailable briefly after the editor instance is created
     // but before Tiptap finishes mounting the ProseMirror view.
-    const dom_el = editor.view?.dom;
-    if (!dom_el) return;
+    const domEl = editor.view?.dom;
+    if (!domEl) return;
 
-    const handle_keydown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.code === "Space") {
         event.preventDefault();
         trigger_suggestion();
@@ -192,12 +192,12 @@ export function useGhostText({ editor, conversation_id }: UseGhostTextOptions): 
       }
     };
 
-    dom_el.addEventListener("keydown", handle_keydown);
-    return () => dom_el.removeEventListener("keydown", handle_keydown);
+    domEl.addEventListener("keydown", handleKeyDown);
+    return () => domEl.removeEventListener("keydown", handleKeyDown);
   }, [editor, suggestion, trigger_suggestion, accept_suggestion, dismiss_suggestion]);
 
   return {
-    is_loading,
+    is_loading: isLoading,
     suggestion,
     trigger_suggestion,
     accept_suggestion,

@@ -4,4 +4,4 @@
  *
  * Examples: useTheme, useMediaQuery, useLocalStorage, useDebounce.
  */
-export { useTheme } from "./use_theme";
+export { useTheme } from "./useTheme";

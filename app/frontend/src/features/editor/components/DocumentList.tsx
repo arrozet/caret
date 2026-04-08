@@ -13,10 +13,10 @@ import {
   Info,
 } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
-import { useDocuments } from "../hooks/use_documents";
-import { useWorkspaces, useCreateWorkspace } from "../hooks/use_workspaces";
-import { create_document, update_document, delete_document } from "../api/document_api";
-import type { DocumentResponse } from "../api/document_api";
+import { useDocuments } from "../hooks/useDocuments";
+import { useWorkspaces, useCreateWorkspace } from "../hooks/useWorkspaces";
+import { createDocument, updateDocument, deleteDocument } from "../api/documentApi";
+import type { DocumentResponse } from "../api/documentApi";
 
 /**
  * Document list page.
@@ -28,26 +28,26 @@ import type { DocumentResponse } from "../api/document_api";
  */
 export function DocumentList() {
   const navigate = useNavigate();
-  const query_client = useQueryClient();
+  const queryClient = useQueryClient();
 
-  const { data: workspaces, isLoading: workspaces_loading } = useWorkspaces();
-  const create_workspace_mutation = useCreateWorkspace();
+  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
+  const createWorkspaceMutation = useCreateWorkspace();
 
   /* Use the first workspace as the active workspace for this PoC */
-  const active_workspace = workspaces?.[0];
+  const activeWorkspace = workspaces?.[0];
 
   const {
     data: documents,
-    isLoading: documents_loading,
-    error: documents_error,
-  } = useDocuments(active_workspace?.id);
+    isLoading: documentsLoading,
+    error: documentsError,
+  } = useDocuments(activeWorkspace?.id);
 
-  const [is_creating, set_is_creating] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
-  const create_doc_mutation = useMutation({
-    mutationFn: (workspace_id: string) => create_document("Untitled", workspace_id),
+  const createDocMutation = useMutation({
+    mutationFn: (workspaceId: string) => createDocument("Untitled", workspaceId),
     onSuccess: (doc) => {
-      query_client.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
       navigate(`/documents/${doc.id}`);
     },
   });
@@ -57,24 +57,24 @@ export function DocumentList() {
    * If no workspace exists, creates a default one first.
    */
   async function handle_create_document() {
-    set_is_creating(true);
+    setIsCreating(true);
     try {
-      let workspace_id = active_workspace?.id;
+      let workspaceId = activeWorkspace?.id;
 
-      if (!workspace_id) {
-        const new_workspace = await create_workspace_mutation.mutateAsync({
+      if (!workspaceId) {
+        const newWorkspace = await createWorkspaceMutation.mutateAsync({
           name: "My Workspace",
         });
-        workspace_id = new_workspace.id;
+        workspaceId = newWorkspace.id;
       }
 
-      await create_doc_mutation.mutateAsync(workspace_id);
+      await createDocMutation.mutateAsync(workspaceId);
     } finally {
-      set_is_creating(false);
+      setIsCreating(false);
     }
   }
 
-  const is_loading = workspaces_loading || documents_loading;
+  const isLoading = workspacesLoading || documentsLoading;
 
   return (
     <div className="flex flex-1 flex-col bg-app h-full">
@@ -89,8 +89,8 @@ export function DocumentList() {
             variant="primary"
             size="md"
             onClick={handle_create_document}
-            disabled={is_creating}
-            is_loading={is_creating}
+            disabled={isCreating}
+            isLoading={isCreating}
             className="shadow-sm"
           >
             <Plus className="h-4 w-4" />
@@ -99,21 +99,21 @@ export function DocumentList() {
         </div>
 
         {/* Loading state */}
-        {is_loading && (
+        {isLoading && (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-text-secondary" />
           </div>
         )}
 
         {/* Error state */}
-        {documents_error && (
+        {documentsError && (
           <div className="rounded-base border border-error bg-error/10 p-4 text-ui-base text-error">
-            Failed to load documents: {documents_error.message}
+            Failed to load documents: {documentsError.message}
           </div>
         )}
 
         {/* Empty state */}
-        {!is_loading && !documents_error && documents?.length === 0 && (
+        {!isLoading && !documentsError && documents?.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center bg-surface border border-border-subtle rounded-lg shadow-sm">
             <div className="h-16 w-16 bg-accent-main/10 text-accent-main rounded-full flex items-center justify-center mb-4">
               <FileText className="h-8 w-8" />
@@ -126,8 +126,8 @@ export function DocumentList() {
               variant="primary"
               size="md"
               onClick={handle_create_document}
-              disabled={is_creating}
-              is_loading={is_creating}
+              disabled={isCreating}
+              isLoading={isCreating}
             >
               <Plus className="h-4 w-4" />
               Blank document
@@ -136,7 +136,7 @@ export function DocumentList() {
         )}
 
         {/* Document Grid */}
-        {!is_loading && documents && documents.length > 0 && (
+        {!isLoading && documents && documents.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {documents.map((doc) => (
               <DocumentCard
@@ -178,7 +178,7 @@ function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
   const menu_ref = useRef<HTMLDivElement>(null);
 
   const rename_mutation = useMutation({
-    mutationFn: (title: string) => update_document(doc.id, { title }),
+    mutationFn: (title: string) => updateDocument(doc.id, { title }),
     onSuccess: () => {
       query_client.invalidateQueries({ queryKey: ["documents"] });
       set_is_renaming(false);
@@ -186,7 +186,7 @@ function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
   });
 
   const delete_mutation = useMutation({
-    mutationFn: () => delete_document(doc.id),
+    mutationFn: () => deleteDocument(doc.id),
     onSuccess: () => {
       query_client.invalidateQueries({ queryKey: ["documents"] });
       set_show_delete_confirm(false);
@@ -280,7 +280,7 @@ function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
               variant="danger"
               size="sm"
               onClick={() => delete_mutation.mutateAsync()}
-              is_loading={delete_mutation.isPending}
+              isLoading={delete_mutation.isPending}
               disabled={delete_mutation.isPending}
             >
               Delete

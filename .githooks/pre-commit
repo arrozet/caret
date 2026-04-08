@@ -21,6 +21,7 @@ FRONTEND="$ROOT/app/frontend"
 
 # ─── Determine which files are staged ─────────────────────────────────────────
 staged_files=$(git diff --cached --name-only)
+staged_files_for_lint=$(git diff --cached --name-only --diff-filter=ACMR)
 
 service_has_changes() {
   local service="$1"
@@ -48,7 +49,7 @@ run_node_lint() {
   fi
 
   local staged_ts
-  staged_ts=$(echo "$staged_files" | grep "^${service_prefix}.*\.\(ts\|tsx\|js\|jsx\)$" || true)
+  staged_ts=$(echo "$staged_files_for_lint" | grep "^${service_prefix}.*\.\(ts\|tsx\|js\|jsx\)$" || true)
 
   if [ -z "$staged_ts" ]; then
     echo -e "  ${YELLOW}⟳ $service (lint)${NC}  (no staged TS/JS files — skipped)"
@@ -86,7 +87,7 @@ run_python_lint() {
   local dir="$BACKEND/$service"
 
   local staged_py
-  staged_py=$(echo "$staged_files" | grep "^app/backend/${service}/.*\.py$" || true)
+  staged_py=$(echo "$staged_files_for_lint" | grep "^app/backend/${service}/.*\.py$" || true)
 
   if [ -z "$staged_py" ]; then
     echo -e "  ${YELLOW}⟳ $service (lint)${NC}  (no staged Python files — skipped)"

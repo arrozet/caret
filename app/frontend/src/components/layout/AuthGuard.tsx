@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { use_auth_store } from "../../stores/auth_store";
+import { useAuthStore } from "../../stores/authStore";
 import { Loader2 } from "lucide-react";
 
 interface AuthGuardProps {
@@ -15,7 +15,7 @@ interface AuthGuardProps {
  * renders a centered loading spinner to avoid flash of login page.
  */
 export function AuthGuard({ children }: AuthGuardProps) {
-  const status = use_auth_store((s) => s.status);
+  const status = useAuthStore((state) => state.status);
 
   if (status === "loading") {
     return (

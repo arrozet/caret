@@ -3,8 +3,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { LivePresenceIndicator } from "./LivePresenceIndicator";
 
 describe("LivePresenceIndicator", () => {
@@ -75,7 +74,6 @@ describe("LivePresenceIndicator", () => {
 
   describe("interactions", () => {
     it("calls on_click when clicked", async () => {
-      const user = userEvent.setup();
       const handle_click = vi.fn();
 
       render(
@@ -86,7 +84,7 @@ describe("LivePresenceIndicator", () => {
         />,
       );
 
-      await user.click(screen.getByRole("button"));
+      fireEvent.click(screen.getByRole("button"));
 
       expect(handle_click).toHaveBeenCalledTimes(1);
     });
@@ -98,7 +96,6 @@ describe("LivePresenceIndicator", () => {
     });
 
     it("handles keyboard activation with Enter", async () => {
-      const user = userEvent.setup();
       const handle_click = vi.fn();
 
       render(
@@ -111,7 +108,7 @@ describe("LivePresenceIndicator", () => {
 
       const button = screen.getByRole("button");
       button.focus();
-      await user.keyboard("{Enter}");
+      fireEvent.keyDown(button, { key: "Enter", code: "Enter" });
 
       expect(handle_click).toHaveBeenCalledTimes(1);
     });

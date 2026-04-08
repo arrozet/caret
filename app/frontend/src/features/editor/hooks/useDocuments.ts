@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { list_documents } from "../api/document_api";
-import type { DocumentResponse } from "../api/document_api";
+import { listDocuments } from "../api/documentApi";
+import type { DocumentResponse } from "../api/documentApi";
 
 /**
  * TanStack Query hook to fetch all documents in a workspace.
@@ -8,10 +8,10 @@ import type { DocumentResponse } from "../api/document_api";
  * @param workspace_id - Workspace UUID. The query is disabled if falsy.
  * @returns Standard useQuery result with typed document array.
  */
-export function useDocuments(workspace_id: string | undefined) {
+export function useDocuments(workspaceId: string | undefined) {
   return useQuery<DocumentResponse[]>({
-    queryKey: ["documents", workspace_id],
-    queryFn: () => list_documents(workspace_id!),
-    enabled: !!workspace_id,
+    queryKey: ["documents", workspaceId],
+    queryFn: () => listDocuments(workspaceId!),
+    enabled: !!workspaceId,
   });
 }

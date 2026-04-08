@@ -14,20 +14,18 @@ interface ThemeState {
   /** The user's explicit preference (or "system" for OS-level). */
   theme: Theme;
   /** The theme actually applied to the DOM ("light" or "dark"). */
-  resolved_theme: ResolvedTheme;
+  resolvedTheme: ResolvedTheme;
   /** Update the theme preference and apply it to the DOM. */
-  set_theme: (theme: Theme) => void;
+  setTheme: (theme: Theme) => void;
 }
 
 /**
  * Resolve a theme preference to a concrete "light" or "dark" value.
  * When the user selects "system", we read the OS-level preference.
  */
-function resolve_theme(theme: Theme): ResolvedTheme {
+function resolveTheme(theme: Theme): ResolvedTheme {
   if (theme === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
   return theme;
 }
@@ -37,7 +35,7 @@ function resolve_theme(theme: Theme): ResolvedTheme {
  * Adds or removes the "dark" class on <html> (required by Tailwind's
  * class-based dark mode).
  */
-function apply_theme_to_dom(resolved: ResolvedTheme): void {
+function applyThemeToDom(resolved: ResolvedTheme): void {
   const root = document.documentElement;
   if (resolved === "dark") {
     root.classList.add("dark");
@@ -50,7 +48,7 @@ function apply_theme_to_dom(resolved: ResolvedTheme): void {
  * Read the persisted theme from localStorage.
  * Falls back to "system" if nothing is stored or the value is invalid.
  */
-function read_stored_theme(): Theme {
+function readStoredTheme(): Theme {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === "light" || stored === "dark" || stored === "system") {
     return stored;
@@ -59,11 +57,11 @@ function read_stored_theme(): Theme {
 }
 
 /* Compute initial state before the store is created */
-const initial_theme = read_stored_theme();
-const initial_resolved = resolve_theme(initial_theme);
+const initialTheme = readStoredTheme();
+const initialResolved = resolveTheme(initialTheme);
 
 /* Apply theme immediately to avoid a flash of wrong theme */
-apply_theme_to_dom(initial_resolved);
+applyThemeToDom(initialResolved);
 
 /**
  * Global theme store.
@@ -74,15 +72,15 @@ apply_theme_to_dom(initial_resolved);
  * State management strategy (FRONTEND.md §21):
  *   Global UI state -> Zustand
  */
-export const use_theme_store = create<ThemeState>((set) => ({
-  theme: initial_theme,
-  resolved_theme: initial_resolved,
+export const useThemeStore = create<ThemeState>((set) => ({
+  theme: initialTheme,
+  resolvedTheme: initialResolved,
 
-  set_theme(theme: Theme) {
-    const resolved = resolve_theme(theme);
-    apply_theme_to_dom(resolved);
+  setTheme(theme: Theme) {
+    const resolved = resolveTheme(theme);
+    applyThemeToDom(resolved);
     localStorage.setItem(THEME_STORAGE_KEY, theme);
-    set({ theme, resolved_theme: resolved });
+    set({ theme, resolvedTheme: resolved });
   },
 }));
 
@@ -90,13 +88,11 @@ export const use_theme_store = create<ThemeState>((set) => ({
  * Listen for OS-level theme changes so "system" mode stays in sync.
  * This runs once at module load time.
  */
-window
-  .matchMedia("(prefers-color-scheme: dark)")
-  .addEventListener("change", () => {
-    const state = use_theme_store.getState();
-    if (state.theme === "system") {
-      const resolved = resolve_theme("system");
-      apply_theme_to_dom(resolved);
-      use_theme_store.setState({ resolved_theme: resolved });
-    }
-  });
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  const state = useThemeStore.getState();
+  if (state.theme === "system") {
+    const resolved = resolveTheme("system");
+    applyThemeToDom(resolved);
+    useThemeStore.setState({ resolvedTheme: resolved });
+  }
+});

@@ -22,9 +22,9 @@ import { EditorToolbar } from "./EditorToolbar";
 import { SelectionMenu } from "./SelectionMenu";
 import { Pagination } from "../extensions/pagination";
 import type { PaperSize } from "../extensions/pagination";
-import { GhostText } from "../extensions/ghost_text";
-import { SuggestionInsert } from "../extensions/suggestion_insert";
-import { SuggestionDelete } from "../extensions/suggestion_delete";
+import { GhostText } from "../extensions/GhostText";
+import { SuggestionInsert } from "../extensions/SuggestionInsert";
+import { SuggestionDelete } from "../extensions/SuggestionDelete";
 import type * as Y from "yjs";
 
 /**
@@ -34,13 +34,13 @@ interface CaretEditorProps {
   /** Initial document content as Tiptap/ProseMirror JSON. */
   content?: JSONContent;
   /** Callback fired whenever the editor content changes. */
-  on_update?: (json: JSONContent, text: string) => void;
+  onUpdate?: (json: JSONContent, text: string) => void;
   /** Whether the editor is read-only. */
   editable?: boolean;
   /** Callback to expose the editor instance to parent components. */
-  on_editor_ready?: (editor: Editor) => void;
+  onEditorReady?: (editor: Editor) => void;
   /** Shared Y.js document for real-time collaboration mode. */
-  collaboration_document?: Y.Doc | null;
+  collaborationDocument?: Y.Doc | null;
 }
 
 /**
@@ -56,12 +56,12 @@ interface CaretEditorProps {
  */
 export function CaretEditor({
   content,
-  on_update,
+  onUpdate,
   editable = true,
-  on_editor_ready,
-  collaboration_document = null,
+  onEditorReady,
+  collaborationDocument = null,
 }: CaretEditorProps) {
-  const [paper_size, set_paper_size] = useState<PaperSize>("a4");
+  const [paperSize, setPaperSize] = useState<PaperSize>("a4");
 
   const editor = useEditor(
     {
@@ -69,17 +69,17 @@ export function CaretEditor({
         StarterKit.configure({
           heading: { levels: [1, 2, 3] },
           // Disable undo/redo when using collaboration (Y.js handles history)
-          undoRedo: collaboration_document ? false : undefined,
+          undoRedo: collaborationDocument ? false : undefined,
           // Tiptap v3 StarterKit bundles Link and Underline by default.
           // Disable them here to avoid "Duplicate extension names" warnings;
           // we register both below with our own configuration options.
           link: false,
           underline: false,
         }),
-        ...(collaboration_document
+        ...(collaborationDocument
           ? [
               Collaboration.configure({
-                document: collaboration_document,
+                document: collaborationDocument,
                 field: "content",
               }),
             ]
@@ -115,7 +115,7 @@ export function CaretEditor({
         TableHeader,
         TableCell,
         Pagination.configure({
-          paper_size,
+          paperSize,
         }),
         GhostText,
         SuggestionInsert,
@@ -132,17 +132,17 @@ export function CaretEditor({
         },
       },
       onUpdate: ({ editor: ed }) => {
-        if (on_update) {
-          on_update(ed.getJSON(), ed.getText());
+        if (onUpdate) {
+          onUpdate(ed.getJSON(), ed.getText());
         }
       },
       onCreate: ({ editor: ed }) => {
-        if (on_editor_ready) {
-          on_editor_ready(ed);
+        if (onEditorReady) {
+          onEditorReady(ed);
         }
       },
     },
-    [collaboration_document, editable],
+    [collaborationDocument, editable],
   );
 
   // Keep the Pagination extension in sync with the selected paper size.
@@ -151,12 +151,12 @@ export function CaretEditor({
       editor.extensionManager.extensions
         .filter((ext) => ext.name === "pagination")
         .forEach((ext) => {
-          ext.options.paper_size = paper_size;
+          ext.options.paperSize = paperSize;
         });
       // Trigger a re-render of decorations by dispatching a no-op transaction.
       editor.view.dispatch(editor.state.tr);
     }
-  }, [paper_size, editor]);
+  }, [paperSize, editor]);
 
   return (
     <div className="flex flex-col h-full w-full bg-app">
@@ -164,11 +164,7 @@ export function CaretEditor({
       {editable && editor && (
         <div className="shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle flex justify-center">
           <div className="w-full max-w-[var(--max-width-document-wide)]">
-            <EditorToolbar
-              editor={editor}
-              paper_size={paper_size}
-              set_paper_size={set_paper_size}
-            />
+            <EditorToolbar editor={editor} paperSize={paperSize} setPaperSize={setPaperSize} />
           </div>
         </div>
       )}
@@ -178,7 +174,7 @@ export function CaretEditor({
 
       {/* Editor Content Area - Scrollable container for the "Paper" */}
       <div className="flex-1 overflow-y-auto bg-app p-4 sm:p-8 md:py-12 flex flex-col items-center">
-        <div className={`editor-canvas paper-size-${paper_size} w-full flex justify-center`}>
+        <div className={`editor-canvas paper-size-${paperSize} w-full flex justify-center`}>
           <EditorContent editor={editor} className="w-full max-w-full" />
         </div>
       </div>

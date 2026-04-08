@@ -4,13 +4,13 @@
  * Tests verify that:
  * - The hook initialises with empty suggestion and not loading
  * - trigger_suggestion is a no-op when editor is null
- * - trigger_suggestion is a no-op when conversation_id is null
+ * - trigger_suggestion is a no-op when conversationId is null
  * - accept_suggestion and dismiss_suggestion are exposed as functions
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useGhostText } from "./use_ghost_text";
+import { useGhostText } from "./useGhostText";
 
 describe("useGhostText", () => {
   beforeEach(() => {
@@ -21,7 +21,7 @@ describe("useGhostText", () => {
     const { result } = renderHook(() =>
       useGhostText({
         editor: null,
-        conversation_id: null,
+        conversationId: null,
       }),
     );
     expect(result.current.suggestion).toBe("");
@@ -32,7 +32,7 @@ describe("useGhostText", () => {
     const { result } = renderHook(() =>
       useGhostText({
         editor: null,
-        conversation_id: "conv-123",
+        conversationId: "conv-123",
       }),
     );
     await act(async () => {
@@ -41,7 +41,7 @@ describe("useGhostText", () => {
     expect(result.current.is_loading).toBe(false);
   });
 
-  it("should not trigger suggestion when conversation_id is null", async () => {
+  it("should not trigger suggestion when conversationId is null", async () => {
     const mock_editor = {
       view: {
         dom: {
@@ -54,7 +54,7 @@ describe("useGhostText", () => {
     const { result } = renderHook(() =>
       useGhostText({
         editor: mock_editor,
-        conversation_id: null,
+        conversationId: null,
       }),
     );
     await act(async () => {
@@ -67,7 +67,7 @@ describe("useGhostText", () => {
     const { result } = renderHook(() =>
       useGhostText({
         editor: null,
-        conversation_id: null,
+        conversationId: null,
       }),
     );
     expect(typeof result.current.accept_suggestion).toBe("function");

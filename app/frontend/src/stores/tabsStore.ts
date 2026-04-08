@@ -13,15 +13,15 @@ export interface Tab {
 /** Shape of the tabs store managed by Zustand. */
 interface TabsState {
   /** Ordered list of currently open document tabs. */
-  open_tabs: Tab[];
+  openTabs: Tab[];
   /** Open (or focus) a tab. If the tab already exists, it becomes active. */
-  add_tab: (tab: Tab) => void;
+  addTab: (tab: Tab) => void;
   /** Update the title of an existing tab (e.g. after a rename save). */
-  update_tab_title: (id: string, title: string) => void;
+  updateTabTitle: (id: string, title: string) => void;
   /** Close a single tab by document ID. */
-  close_tab: (id: string) => void;
+  closeTab: (id: string) => void;
   /** Close all open tabs. */
-  close_all_tabs: () => void;
+  closeAllTabs: () => void;
 }
 
 /**
@@ -35,34 +35,32 @@ interface TabsState {
  * State management strategy (FRONTEND.md §21):
  *   Global UI state -> Zustand
  */
-export const use_tabs_store = create<TabsState>((set) => ({
-  open_tabs: [],
+export const useTabsStore = create<TabsState>((set) => ({
+  openTabs: [],
 
-  add_tab(tab: Tab) {
+  addTab(tab: Tab) {
     set((state) => {
-      const already_open = state.open_tabs.some((t) => t.id === tab.id);
-      if (already_open) {
+      const alreadyOpen = state.openTabs.some((t) => t.id === tab.id);
+      if (alreadyOpen) {
         return state;
       }
-      return { open_tabs: [...state.open_tabs, tab] };
+      return { openTabs: [...state.openTabs, tab] };
     });
   },
 
-  update_tab_title(id: string, title: string) {
+  updateTabTitle(id: string, title: string) {
     set((state) => ({
-      open_tabs: state.open_tabs.map((t) =>
-        t.id === id ? { ...t, title } : t
-      ),
+      openTabs: state.openTabs.map((t) => (t.id === id ? { ...t, title } : t)),
     }));
   },
 
-  close_tab(id: string) {
+  closeTab(id: string) {
     set((state) => ({
-      open_tabs: state.open_tabs.filter((t) => t.id !== id),
+      openTabs: state.openTabs.filter((t) => t.id !== id),
     }));
   },
 
-  close_all_tabs() {
-    set({ open_tabs: [] });
+  closeAllTabs() {
+    set({ openTabs: [] });
   },
 }));

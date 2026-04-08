@@ -34,9 +34,9 @@ export interface EditorToolbarProps {
   /** The Tiptap editor instance to control. */
   editor: Editor;
   /** The current paper size */
-  paper_size?: "a4" | "a3" | "letter";
+  paperSize?: "a4" | "a3" | "letter";
   /** Function to change paper size */
-  set_paper_size?: (size: "a4" | "a3" | "letter") => void;
+  setPaperSize?: (size: "a4" | "a3" | "letter") => void;
 }
 
 /**
@@ -44,13 +44,13 @@ export interface EditorToolbarProps {
  */
 interface ToolbarButtonProps {
   /** Click handler. */
-  on_click: () => void;
+  onClick: () => void;
   /** Whether this formatting option is currently active. */
-  is_active?: boolean;
+  isActive?: boolean;
   /** Whether the button is disabled. */
-  is_disabled?: boolean;
+  isDisabled?: boolean;
   /** Accessible label for the button. */
-  aria_label: string;
+  ariaLabel: string;
   /** Keyboard shortcut hint displayed in tooltip. */
   shortcut?: string;
   /** Icon element to render. */
@@ -62,30 +62,30 @@ interface ToolbarButtonProps {
  * Follows FRONTEND.md §12 interactive states.
  */
 function ToolbarButton({
-  on_click,
-  is_active = false,
-  is_disabled = false,
-  aria_label,
+  onClick,
+  isActive = false,
+  isDisabled = false,
+  ariaLabel,
   shortcut,
   children,
 }: ToolbarButtonProps) {
   return (
     <button
       type="button"
-      onClick={on_click}
-      disabled={is_disabled}
+      onClick={onClick}
+      disabled={isDisabled}
       className={[
         "inline-flex items-center justify-center",
         "h-8 w-8 rounded-[4px]",
         "transition-all duration-[100ms] ease-in-out",
         "cursor-pointer",
         "disabled:opacity-40 disabled:cursor-not-allowed",
-        is_active
+        isActive
           ? "bg-accent-main/10 text-accent-main"
           : "text-text-secondary hover:text-text-primary hover:bg-surface",
       ].join(" ")}
-      aria-label={aria_label}
-      title={shortcut ? `${aria_label} (${shortcut})` : aria_label}
+      aria-label={ariaLabel}
+      title={shortcut ? `${ariaLabel} (${shortcut})` : ariaLabel}
     >
       {children}
     </button>
@@ -103,9 +103,9 @@ function ToolbarDivider() {
  * Font family selector dropdown.
  */
 function FontFamilySelect({ editor }: { editor: Editor }) {
-  const current_font = editor.getAttributes("textStyle").fontFamily || "";
+  const currentFont = editor.getAttributes("textStyle").fontFamily || "";
 
-  const handle_change = useCallback(
+  const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       const value = e.target.value;
       if (value === "") {
@@ -119,19 +119,33 @@ function FontFamilySelect({ editor }: { editor: Editor }) {
 
   return (
     <select
-      value={current_font}
-      onChange={handle_change}
+      value={currentFont}
+      onChange={handleChange}
       className="h-8 rounded-[4px] border border-border-subtle bg-surface px-2 text-ui-sm text-text-primary cursor-pointer focus:outline-none focus:border-accent-main focus:ring-1 focus:ring-accent-main/40"
       aria-label="Font family"
       title="Font family"
     >
-      <option value="" className="bg-surface text-text-primary">Default (Merriweather)</option>
-      <option value="Inter" className="bg-surface text-text-primary">Inter</option>
-      <option value="Georgia" className="bg-surface text-text-primary">Georgia</option>
-      <option value="Arial" className="bg-surface text-text-primary">Arial</option>
-      <option value="Times New Roman" className="bg-surface text-text-primary">Times New Roman</option>
-      <option value="Courier New" className="bg-surface text-text-primary">Courier New</option>
-      <option value="Verdana" className="bg-surface text-text-primary">Verdana</option>
+      <option value="" className="bg-surface text-text-primary">
+        Default (Merriweather)
+      </option>
+      <option value="Inter" className="bg-surface text-text-primary">
+        Inter
+      </option>
+      <option value="Georgia" className="bg-surface text-text-primary">
+        Georgia
+      </option>
+      <option value="Arial" className="bg-surface text-text-primary">
+        Arial
+      </option>
+      <option value="Times New Roman" className="bg-surface text-text-primary">
+        Times New Roman
+      </option>
+      <option value="Courier New" className="bg-surface text-text-primary">
+        Courier New
+      </option>
+      <option value="Verdana" className="bg-surface text-text-primary">
+        Verdana
+      </option>
     </select>
   );
 }
@@ -139,24 +153,30 @@ function FontFamilySelect({ editor }: { editor: Editor }) {
 /**
  * Paper size selector dropdown.
  */
-function PaperSizeSelect({ 
-  value, 
-  on_change 
-}: { 
-  value: "a4" | "a3" | "letter", 
-  on_change: (val: "a4" | "a3" | "letter") => void 
+function PaperSizeSelect({
+  value,
+  onChange,
+}: {
+  value: "a4" | "a3" | "letter";
+  onChange: (val: "a4" | "a3" | "letter") => void;
 }) {
   return (
     <select
       value={value}
-      onChange={(e) => on_change(e.target.value as "a4" | "a3" | "letter")}
+      onChange={(e) => onChange(e.target.value as "a4" | "a3" | "letter")}
       className="h-8 rounded-[4px] border border-border-subtle bg-surface px-2 text-ui-sm text-text-primary cursor-pointer focus:outline-none focus:border-accent-main focus:ring-1 focus:ring-accent-main/40"
       aria-label="Paper size"
       title="Paper size"
     >
-      <option value="a4" className="bg-surface text-text-primary">A4</option>
-      <option value="letter" className="bg-surface text-text-primary">Letter</option>
-      <option value="a3" className="bg-surface text-text-primary">A3</option>
+      <option value="a4" className="bg-surface text-text-primary">
+        A4
+      </option>
+      <option value="letter" className="bg-surface text-text-primary">
+        Letter
+      </option>
+      <option value="a3" className="bg-surface text-text-primary">
+        A3
+      </option>
     </select>
   );
 }
@@ -172,10 +192,10 @@ function PaperSizeSelect({
  * Positioned at the top of the document surface, inside the editor
  * sheet container.
  */
-export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: EditorToolbarProps) {
-  const add_link = useCallback(() => {
-    const previous_url = editor.getAttributes("link").href;
-    const url = window.prompt("URL", previous_url);
+export function EditorToolbar({ editor, paperSize = "a4", setPaperSize }: EditorToolbarProps) {
+  const addLink = useCallback(() => {
+    const previousUrl = editor.getAttributes("link").href;
+    const url = window.prompt("URL", previousUrl);
 
     if (url === null) {
       return;
@@ -189,7 +209,7 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [editor]);
 
-  const add_image = useCallback(() => {
+  const addImage = useCallback(() => {
     const url = window.prompt("Image URL");
 
     if (url) {
@@ -197,7 +217,7 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
     }
   }, [editor]);
 
-  const insert_table = useCallback(() => {
+  const insertTable = useCallback(() => {
     editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   }, [editor]);
 
@@ -209,17 +229,17 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
     >
       {/* Undo / Redo */}
       <ToolbarButton
-        on_click={() => editor.chain().focus().undo().run()}
-        is_disabled={!editor.can().undo()}
-        aria_label="Undo"
+        onClick={() => editor.chain().focus().undo().run()}
+        isDisabled={!editor.can().undo()}
+        ariaLabel="Undo"
         shortcut="Ctrl+Z"
       >
         <Undo2 className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().redo().run()}
-        is_disabled={!editor.can().redo()}
-        aria_label="Redo"
+        onClick={() => editor.chain().focus().redo().run()}
+        isDisabled={!editor.can().redo()}
+        ariaLabel="Redo"
         shortcut="Ctrl+Y"
       >
         <Redo2 className="h-4 w-4" />
@@ -228,9 +248,9 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
       <ToolbarDivider />
 
       {/* Page Setup */}
-      {set_paper_size && (
+      {setPaperSize && (
         <>
-          <PaperSizeSelect value={paper_size} on_change={set_paper_size} />
+          <PaperSizeSelect value={paperSize} onChange={setPaperSize} />
           <ToolbarDivider />
         </>
       )}
@@ -242,41 +262,41 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
 
       {/* Text formatting */}
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleBold().run()}
-        is_active={editor.isActive("bold")}
-        aria_label="Bold"
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        isActive={editor.isActive("bold")}
+        ariaLabel="Bold"
         shortcut="Ctrl+B"
       >
         <Bold className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleItalic().run()}
-        is_active={editor.isActive("italic")}
-        aria_label="Italic"
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        isActive={editor.isActive("italic")}
+        ariaLabel="Italic"
         shortcut="Ctrl+I"
       >
         <Italic className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleUnderline().run()}
-        is_active={editor.isActive("underline")}
-        aria_label="Underline"
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        isActive={editor.isActive("underline")}
+        ariaLabel="Underline"
         shortcut="Ctrl+U"
       >
         <Underline className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleStrike().run()}
-        is_active={editor.isActive("strike")}
-        aria_label="Strikethrough"
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+        isActive={editor.isActive("strike")}
+        ariaLabel="Strikethrough"
         shortcut="Ctrl+Shift+S"
       >
         <Strikethrough className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleHighlight().run()}
-        is_active={editor.isActive("highlight")}
-        aria_label="Highlight"
+        onClick={() => editor.chain().focus().toggleHighlight().run()}
+        isActive={editor.isActive("highlight")}
+        ariaLabel="Highlight"
       >
         <Highlighter className="h-4 w-4" />
       </ToolbarButton>
@@ -285,25 +305,25 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
 
       {/* Headings */}
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        is_active={editor.isActive("heading", { level: 1 })}
-        aria_label="Heading 1"
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        isActive={editor.isActive("heading", { level: 1 })}
+        ariaLabel="Heading 1"
         shortcut="Ctrl+Alt+1"
       >
         <Heading1 className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        is_active={editor.isActive("heading", { level: 2 })}
-        aria_label="Heading 2"
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        isActive={editor.isActive("heading", { level: 2 })}
+        ariaLabel="Heading 2"
         shortcut="Ctrl+Alt+2"
       >
         <Heading2 className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        is_active={editor.isActive("heading", { level: 3 })}
-        aria_label="Heading 3"
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        isActive={editor.isActive("heading", { level: 3 })}
+        ariaLabel="Heading 3"
         shortcut="Ctrl+Alt+3"
       >
         <Heading3 className="h-4 w-4" />
@@ -313,17 +333,17 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
 
       {/* Lists */}
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleBulletList().run()}
-        is_active={editor.isActive("bulletList")}
-        aria_label="Bullet list"
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        isActive={editor.isActive("bulletList")}
+        ariaLabel="Bullet list"
         shortcut="Ctrl+Shift+8"
       >
         <List className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleOrderedList().run()}
-        is_active={editor.isActive("orderedList")}
-        aria_label="Numbered list"
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        isActive={editor.isActive("orderedList")}
+        ariaLabel="Numbered list"
         shortcut="Ctrl+Shift+7"
       >
         <ListOrdered className="h-4 w-4" />
@@ -333,30 +353,30 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
 
       {/* Block formatting */}
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleBlockquote().run()}
-        is_active={editor.isActive("blockquote")}
-        aria_label="Blockquote"
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        isActive={editor.isActive("blockquote")}
+        ariaLabel="Blockquote"
         shortcut="Ctrl+Shift+B"
       >
         <Quote className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleCodeBlock().run()}
-        is_active={editor.isActive("codeBlock")}
-        aria_label="Code block"
+        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        isActive={editor.isActive("codeBlock")}
+        ariaLabel="Code block"
       >
         <Code className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().setHorizontalRule().run()}
-        aria_label="Horizontal rule"
+        onClick={() => editor.chain().focus().setHorizontalRule().run()}
+        ariaLabel="Horizontal rule"
       >
         <Minus className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().toggleTaskList().run()}
-        is_active={editor.isActive("taskList")}
-        aria_label="Task list"
+        onClick={() => editor.chain().focus().toggleTaskList().run()}
+        isActive={editor.isActive("taskList")}
+        ariaLabel="Task list"
         shortcut="Ctrl+Shift+9"
       >
         <CheckSquare className="h-4 w-4" />
@@ -366,23 +386,20 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
 
       {/* Insert objects */}
       <ToolbarButton
-        on_click={add_link}
-        is_active={editor.isActive("link")}
-        aria_label="Link"
+        onClick={addLink}
+        isActive={editor.isActive("link")}
+        ariaLabel="Link"
         shortcut="Ctrl+K"
       >
         <Link2 className="h-4 w-4" />
       </ToolbarButton>
-      <ToolbarButton
-        on_click={add_image}
-        aria_label="Insert Image"
-      >
+      <ToolbarButton onClick={addImage} ariaLabel="Insert Image">
         <ImageIcon className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={insert_table}
-        is_active={editor.isActive("table")}
-        aria_label="Insert Table"
+        onClick={insertTable}
+        isActive={editor.isActive("table")}
+        ariaLabel="Insert Table"
       >
         <TableIcon className="h-4 w-4" />
       </ToolbarButton>
@@ -391,30 +408,30 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
 
       {/* Text alignment */}
       <ToolbarButton
-        on_click={() => editor.chain().focus().setTextAlign("left").run()}
-        is_active={editor.isActive({ textAlign: "left" })}
-        aria_label="Align left"
+        onClick={() => editor.chain().focus().setTextAlign("left").run()}
+        isActive={editor.isActive({ textAlign: "left" })}
+        ariaLabel="Align left"
       >
         <AlignLeft className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().setTextAlign("center").run()}
-        is_active={editor.isActive({ textAlign: "center" })}
-        aria_label="Align center"
+        onClick={() => editor.chain().focus().setTextAlign("center").run()}
+        isActive={editor.isActive({ textAlign: "center" })}
+        ariaLabel="Align center"
       >
         <AlignCenter className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().setTextAlign("right").run()}
-        is_active={editor.isActive({ textAlign: "right" })}
-        aria_label="Align right"
+        onClick={() => editor.chain().focus().setTextAlign("right").run()}
+        isActive={editor.isActive({ textAlign: "right" })}
+        ariaLabel="Align right"
       >
         <AlignRight className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
-        on_click={() => editor.chain().focus().setTextAlign("justify").run()}
-        is_active={editor.isActive({ textAlign: "justify" })}
-        aria_label="Justify"
+        onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+        isActive={editor.isActive({ textAlign: "justify" })}
+        ariaLabel="Justify"
       >
         <AlignJustify className="h-4 w-4" />
       </ToolbarButton>
@@ -423,10 +440,8 @@ export function EditorToolbar({ editor, paper_size = "a4", set_paper_size }: Edi
 
       {/* Clear formatting */}
       <ToolbarButton
-        on_click={() =>
-          editor.chain().focus().clearNodes().unsetAllMarks().run()
-        }
-        aria_label="Clear formatting"
+        onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
+        ariaLabel="Clear formatting"
       >
         <RemoveFormatting className="h-4 w-4" />
       </ToolbarButton>

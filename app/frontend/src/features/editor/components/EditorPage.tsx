@@ -5,15 +5,14 @@ import type { JSONContent, Editor } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
-import { useDocument } from "../hooks/use_document";
-import { useSaveDocument } from "../hooks/use_save_document";
-import { useInviteDocumentCollaborator } from "../hooks/use_invite_document_collaborator";
-import { useFocusMode } from "../../../hooks/use_focus_mode";
-import { use_tabs_store } from "../../../stores/tabs_store";
-import { use_ai_store, use_auth_store } from "../../../stores";
-import { useGhostText } from "../hooks/use_ghost_text";
-import { index_document_embeddings } from "../../ai-assistant/api/ai_api";
-import type { DocumentChangePayload } from "../../ai-assistant/api/ai_api";
+import { useDocument } from "../hooks/useDocument";
+import { useSaveDocument } from "../hooks/useSaveDocument";
+import { useInviteDocumentCollaborator } from "../hooks/useInviteDocumentCollaborator";
+import { useFocusMode } from "../../../hooks/useFocusMode";
+import { useTabsStore, useAiStore, useAuthStore } from "../../../stores";
+import { useGhostText } from "../hooks/useGhostText";
+import { indexDocumentEmbeddings } from "../../ai-assistant/api/aiApi";
+import type { DocumentChangePayload } from "../../ai-assistant/api/aiApi";
 import {
   CollaborationPresenceBar,
   LOCAL_COLLAB_WS_BASE_URL,
@@ -36,14 +35,14 @@ const TITLE_SAVE_DELAY_MS = 500;
 /**
  * Resolve collaboration feature flag from Vite env.
  */
-function is_collaboration_enabled(): boolean {
+function isCollaborationEnabled(): boolean {
   return import.meta.env.VITE_ENABLE_COLLABORATION !== "false";
 }
 
 /**
  * Resolve collaboration websocket base URL from Vite env.
  */
-function get_collaboration_ws_url(): string {
+function getCollaborationWsUrl(): string {
   return (
     (import.meta.env.VITE_COLLABORATION_WS_URL as string | undefined) ?? LOCAL_COLLAB_WS_BASE_URL
   );
@@ -231,8 +230,8 @@ function DocumentChangeReviewOverlay({
 export function EditorPage() {
   const { id: document_id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const auth_user = use_auth_store((state) => state.user);
-  const auth_session = use_auth_store((state) => state.session);
+  const auth_user = useAuthStore((state) => state.user);
+  const auth_session = useAuthStore((state) => state.session);
 
   const { data: document, isLoading, error } = useDocument(document_id);
   const save_mutation = useSaveDocument(document_id ?? "");
@@ -279,7 +278,7 @@ export function EditorPage() {
   const [editor_instance, set_editor_instance] = useState<Editor | null>(null);
 
   const collaboration_enabled =
-    is_collaboration_enabled() &&
+    isCollaborationEnabled() &&
     Boolean(document_id) &&
     Boolean(auth_user?.id) &&
     Boolean(auth_session?.access_token);
@@ -291,7 +290,7 @@ export function EditorPage() {
     user_id: auth_user?.id,
     user_name:
       auth_user?.user_metadata?.full_name ?? auth_user?.email ?? auth_user?.id ?? "Collaborator",
-    server_url: get_collaboration_ws_url(),
+    server_url: getCollaborationWsUrl(),
   });
 
   const collaboration_presence = useCollaborationPresence(collaboration_session.users);
@@ -329,20 +328,20 @@ export function EditorPage() {
     }
   }, [editor_instance, debug_log]);
 
-  const { add_tab, update_tab_title } = use_tabs_store();
+  const { addTab, updateTabTitle } = useTabsStore();
 
   /** AI panel state and active conversation from the global store. */
   const {
-    is_panel_open,
-    toggle_panel,
-    active_conversation_id,
-    pending_document_change,
-    set_pending_document_change,
-  } = use_ai_store();
-  const pending_change = pending_document_change;
+    isPanelOpen,
+    togglePanel,
+    activeConversationId,
+    pendingDocumentChange,
+    setPendingDocumentChange,
+  } = useAiStore();
+  const pending_change = pendingDocumentChange;
 
   /** Wire up the ghost text (inline AI completion) feature for the editor. */
-  useGhostText({ editor: editor_instance, conversation_id: active_conversation_id });
+  useGhostText({ editor: editor_instance, conversationId: activeConversationId });
 
   /** Activate focus mode: fade peripheral UI after 2s idle (FRONTEND.md §9). */
   useFocusMode(true);
@@ -352,15 +351,15 @@ export function EditorPage() {
    * Registered at the EditorPage level so it works regardless of focus.
    */
   useEffect(() => {
-    function handle_keydown(e: KeyboardEvent) {
+    function handleKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
-        toggle_panel();
+        togglePanel();
       }
     }
-    window.addEventListener("keydown", handle_keydown);
-    return () => window.removeEventListener("keydown", handle_keydown);
-  }, [toggle_panel]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [togglePanel]);
 
   /** Reset editor override state when switching documents. */
   useEffect(() => {
@@ -384,10 +383,10 @@ export function EditorPage() {
    */
   useEffect(() => {
     if (document_id && document?.title) {
-      add_tab({ id: document_id, title: document.title });
-      update_tab_title(document_id, document.title);
+      addTab({ id: document_id, title: document.title });
+      updateTabTitle(document_id, document.title);
     }
-  }, [document_id, document?.title, add_tab, update_tab_title]);
+  }, [document_id, document?.title, addTab, updateTabTitle]);
 
   /** Clean up timers on unmount. */
   useEffect(() => {
@@ -425,10 +424,10 @@ export function EditorPage() {
    * so RAG context stays up-to-date (fire-and-forget; errors are silenced
    * to avoid disrupting the editing experience).
    */
-  const handle_update = useCallback(
+  const handleUpdate = useCallback(
     (json: JSONContent, text: string) => {
       // Don't autosave while previewing an AI change, to avoid saving unaccepted changes.
-      if (use_ai_store.getState().pending_document_change !== null) {
+      if (useAiStore.getState().pendingDocumentChange !== null) {
         debug_log("handle_update.blocked_by_pending_change");
         return;
       }
@@ -453,7 +452,7 @@ export function EditorPage() {
 
           // Re-index embeddings in the background; never block the UI on this.
           if (document_id && text.trim()) {
-            index_document_embeddings(document_id, text).catch(() => {
+            indexDocumentEmbeddings(document_id, text).catch(() => {
               // Silently ignore embedding errors — RAG is best-effort.
             });
           }
@@ -469,7 +468,7 @@ export function EditorPage() {
   /**
    * Handle title changes with debounced save.
    */
-  const handle_title_change = useCallback(
+  const handleTitleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const new_title = e.target.value;
       set_title(new_title);
@@ -483,20 +482,20 @@ export function EditorPage() {
         set_save_status("saving");
         try {
           await save_mutation.mutateAsync({ title: new_title.trim() });
-          if (document_id) update_tab_title(document_id, new_title.trim());
+          if (document_id) updateTabTitle(document_id, new_title.trim());
           show_saved();
         } catch {
           set_save_status("error");
         }
       }, TITLE_SAVE_DELAY_MS);
     },
-    [save_mutation, show_saved, document_id, update_tab_title, set_title, set_save_status],
+    [save_mutation, show_saved, document_id, updateTabTitle, set_title, set_save_status],
   );
 
   /**
    * Handle title blur — save immediately if changed.
    */
-  const handle_title_blur = async () => {
+  const handleTitleBlur = async () => {
     set_is_title_focused(false);
     if (title_timer_ref.current) {
       clearTimeout(title_timer_ref.current);
@@ -506,7 +505,7 @@ export function EditorPage() {
       set_save_status("saving");
       try {
         await save_mutation.mutateAsync({ title: trimmed });
-        if (document_id) update_tab_title(document_id, trimmed);
+        if (document_id) updateTabTitle(document_id, trimmed);
         show_saved();
       } catch {
         set_save_status("error");
@@ -573,7 +572,7 @@ export function EditorPage() {
         return false;
       }
       // We emit the update so the React view re-renders properly.
-      // Autosaves during preview are blocked by checking use_ai_store.getState().pending_document_change.
+      // Autosaves during preview are blocked by checking useAiStore.getState().pendingDocumentChange.
       // Apply via commands API directly to avoid chain-state edge cases.
       let applied = active_editor.commands.setContent(next_content, { emitUpdate: true });
 
@@ -679,7 +678,7 @@ export function EditorPage() {
   /**
    * Reject the current pending change and restore the original editor content.
    */
-  const handle_reject_pending_change = useCallback(() => {
+  const handleRejectPendingChange = useCallback(() => {
     set_is_accepting_change(false);
     if (original_content_ref.current !== null) {
       apply_editor_content_without_save(original_content_ref.current);
@@ -689,11 +688,11 @@ export function EditorPage() {
 
     original_content_ref.current = null;
     applied_preview_key_ref.current = null;
-    set_pending_document_change(null);
+    setPendingDocumentChange(null);
     set_resolve_pending_change_token((prev) => prev + 1);
   }, [
     apply_editor_content_without_save,
-    set_pending_document_change,
+    setPendingDocumentChange,
     set_is_accepting_change,
     set_editor_content_override,
     set_editor_mount_key,
@@ -705,7 +704,7 @@ export function EditorPage() {
    * The previewed content is already visible, so this action simply commits it
    * to autosave and clears review state.
    */
-  const handle_accept_pending_change = useCallback(() => {
+  const handleAcceptPendingChange = useCallback(() => {
     if (is_accepting_change) return;
     set_is_accepting_change(true);
 
@@ -716,34 +715,34 @@ export function EditorPage() {
     });
 
     if (pending_change !== null && active_editor) {
-      const accepted_text = normalize_proposed_text(pending_change.proposed_text);
-      const next_content = to_editor_json(accepted_text);
-      const was_applied = apply_editor_content_without_save(next_content, accepted_text);
-      if (!was_applied) {
+      const acceptedText = normalize_proposed_text(pending_change.proposed_text);
+      const nextContent = to_editor_json(acceptedText);
+      const wasApplied = apply_editor_content_without_save(nextContent, acceptedText);
+      if (!wasApplied) {
         debug_log("handle_accept_pending_change.apply_failed_fallback");
         // Fallback when direct editor apply fails (can happen in transient collab states).
         // Persist and remount using accepted content so UI and storage still converge.
-        set_pending_document_change(null);
+        setPendingDocumentChange(null);
         original_content_ref.current = null;
         applied_preview_key_ref.current = null;
         set_resolve_pending_change_token((prev) => prev + 1);
-        set_editor_content_override(next_content);
+        set_editor_content_override(nextContent);
         set_editor_mount_key((prev) => prev + 1);
-        handle_update(next_content, accepted_text);
+        handleUpdate(nextContent, acceptedText);
         set_is_accepting_change(false);
         return;
       }
 
       // Clear pending state first so handle_update allows the save to go through
-      set_pending_document_change(null);
+      setPendingDocumentChange(null);
       original_content_ref.current = null;
       applied_preview_key_ref.current = null;
       set_resolve_pending_change_token((prev) => prev + 1);
       // Hard fallback: remount editor with accepted content to guarantee visible UI update.
-      set_editor_content_override(next_content);
+      set_editor_content_override(nextContent);
       set_editor_mount_key((prev) => prev + 1);
 
-      handle_update(next_content, accepted_text);
+      handleUpdate(nextContent, acceptedText);
       set_is_accepting_change(false);
       return;
     }
@@ -752,24 +751,24 @@ export function EditorPage() {
       // Fallback path when the live editor instance is temporarily unavailable.
       // Persist and remount using the accepted content so UI and storage converge.
       debug_log("handle_accept_pending_change.no_active_editor_fallback");
-      const accepted_text = normalize_proposed_text(pending_change.proposed_text);
-      const next_content = to_editor_json(accepted_text);
+      const acceptedText = normalize_proposed_text(pending_change.proposed_text);
+      const nextContent = to_editor_json(acceptedText);
 
-      set_pending_document_change(null);
+      setPendingDocumentChange(null);
       original_content_ref.current = null;
       applied_preview_key_ref.current = null;
       set_resolve_pending_change_token((prev) => prev + 1);
-      set_editor_content_override(next_content);
+      set_editor_content_override(nextContent);
       set_editor_mount_key((prev) => prev + 1);
 
-      handle_update(next_content, accepted_text);
+      handleUpdate(nextContent, acceptedText);
       set_is_accepting_change(false);
       return;
     }
 
     original_content_ref.current = null;
     applied_preview_key_ref.current = null;
-    set_pending_document_change(null);
+    setPendingDocumentChange(null);
     set_resolve_pending_change_token((prev) => prev + 1);
     set_is_accepting_change(false);
   }, [
@@ -780,8 +779,8 @@ export function EditorPage() {
     normalize_proposed_text,
     to_editor_json,
     apply_editor_content_without_save,
-    handle_update,
-    set_pending_document_change,
+    handleUpdate,
+    setPendingDocumentChange,
     set_is_accepting_change,
     set_resolve_pending_change_token,
     set_editor_content_override,
@@ -794,7 +793,7 @@ export function EditorPage() {
   }
 
   /** Open the invite dialog and reset transient state. */
-  function open_invite_dialog() {
+  function openInviteDialog() {
     set_is_invite_dialog_open(true);
     set_invite_email("");
     set_invite_error(null);
@@ -802,7 +801,7 @@ export function EditorPage() {
   }
 
   /** Close the invite dialog and clear feedback messages. */
-  function close_invite_dialog() {
+  function closeInviteDialog() {
     set_is_invite_dialog_open(false);
     set_invite_error(null);
     set_invite_success(null);
@@ -812,7 +811,7 @@ export function EditorPage() {
    * Invite a collaborator by email.
    * Shows inline success/error feedback inside the dialog.
    */
-  async function handle_invite_submit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleInviteSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const normalized_email = invite_email.trim().toLowerCase();
@@ -878,9 +877,9 @@ export function EditorPage() {
         <input
           type="text"
           value={title}
-          onChange={handle_title_change}
+          onChange={handleTitleChange}
           onFocus={() => set_is_title_focused(true)}
-          onBlur={handle_title_blur}
+          onBlur={handleTitleBlur}
           placeholder="Untitled"
           className="min-w-0 max-w-sm bg-transparent border-none outline-none font-ui text-ui-lg font-semibold text-text-primary placeholder:text-text-secondary/50 focus:border-b-2 focus:border-accent-main px-1 py-0.5 transition-all"
           aria-label="Document title"
@@ -888,12 +887,7 @@ export function EditorPage() {
 
         {/* Save status indicator */}
         <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={open_invite_dialog}
-            className="inline-flex"
-          >
+          <Button variant="secondary" size="sm" onClick={openInviteDialog} className="inline-flex">
             <UserPlus className="h-4 w-4" />
             Invite
           </Button>
@@ -915,8 +909,8 @@ export function EditorPage() {
           {pending_change !== null && (
             <DocumentChangeReviewOverlay
               pending_change={pending_change}
-              on_accept={handle_accept_pending_change}
-              on_reject={handle_reject_pending_change}
+              on_accept={handleAcceptPendingChange}
+              on_reject={handleRejectPendingChange}
               is_accepting={is_accepting_change}
             />
           )}
@@ -924,9 +918,9 @@ export function EditorPage() {
           <CaretEditor
             key={editor_mount_key}
             content={(editor_content_override ?? document.content_json) as JSONContent | undefined}
-            on_update={handle_update}
-            collaboration_document={collaboration_session.ydoc}
-            on_editor_ready={(ed) => {
+            onUpdate={handleUpdate}
+            collaborationDocument={collaboration_session.ydoc}
+            onEditorReady={(ed) => {
               // In React StrictMode the editor may mount twice in development.
               // Reset preview bookkeeping whenever we receive a new editor instance
               // so pending AI changes are re-applied to the live instance.
@@ -939,17 +933,17 @@ export function EditorPage() {
               set_editor_instance(ed);
               debug_log("on_editor_ready", {
                 mount_key: editor_mount_key,
-                has_pending: pending_document_change !== null,
+                hasPending: pendingDocumentChange !== null,
               });
-              if (pending_document_change !== null) {
-                apply_pending_preview_if_needed(pending_document_change);
+              if (pendingDocumentChange !== null) {
+                apply_pending_preview_if_needed(pendingDocumentChange);
               }
             }}
           />
         </div>
 
         {/* AI Chat Panel — rendered via React.lazy, only mounted when open */}
-        {is_panel_open && (
+        {isPanelOpen && (
           <Suspense fallback={null}>
             <ChatPanel
               document_id={document_id ?? ""}
@@ -963,7 +957,7 @@ export function EditorPage() {
       {is_invite_dialog_open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={close_invite_dialog}
+          onClick={closeInviteDialog}
         >
           <div
             className="w-full max-w-md rounded-lg border border-border-subtle bg-surface p-5 shadow-elevated"
@@ -974,7 +968,7 @@ export function EditorPage() {
               Enter an email from an existing Caret account.
             </p>
 
-            <form className="mt-4 space-y-3" onSubmit={handle_invite_submit}>
+            <form className="mt-4 space-y-3" onSubmit={handleInviteSubmit}>
               <Input
                 id="invite-email"
                 type="email"
@@ -998,14 +992,14 @@ export function EditorPage() {
               )}
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="ghost" size="sm" onClick={close_invite_dialog}>
+                <Button type="button" variant="ghost" size="sm" onClick={closeInviteDialog}>
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   variant="primary"
                   size="sm"
-                  is_loading={invite_collaborator_mutation.isPending}
+                  isLoading={invite_collaborator_mutation.isPending}
                 >
                   Send invite
                 </Button>

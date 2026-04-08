@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { use_auth_store } from "../../stores/auth_store";
-import { useTheme } from "../../hooks/use_theme";
-import { useDocument } from "../../features/editor/hooks/use_document";
+import { useAuthStore } from "../../stores/authStore";
+import { useTheme } from "../../hooks/useTheme";
+import { useDocument } from "../../features/editor/hooks/useDocument";
 import { Button } from "../ui/Button";
 import { CaretLogo } from "../ui/Logo";
 import { LogOut, Sun, Moon, Monitor, Settings } from "lucide-react";
@@ -27,20 +27,20 @@ export function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
-  const user = use_auth_store((s) => s.user);
-  const sign_out = use_auth_store((s) => s.sign_out);
-  const { theme, toggle_theme } = useTheme();
+  const user = useAuthStore((state) => state.user);
+  const signOut = useAuthStore((state) => state.signOut);
+  const { theme, toggleTheme } = useTheme();
 
   const ThemeIcon = theme_icons[theme];
 
   /** Whether we're on a document editing page. */
-  const is_editor_page = location.pathname.startsWith("/documents/");
+  const isEditorPage = location.pathname.startsWith("/documents/");
 
   /** Fetch document title for breadcrumb when on editor page. */
-  const { data: document } = useDocument(is_editor_page ? params.id : undefined);
+  const { data: document } = useDocument(isEditorPage ? params.id : undefined);
 
   /** Display title: use document title or fallback to "Untitled". */
-  const display_title = document?.title || "Untitled";
+  const displayTitle = document?.title || "Untitled";
 
   return (
     <header className="ui-peripheral fixed top-0 right-0 left-0 z-30 flex h-14 items-center justify-between border-b border-border-subtle bg-surface px-4 md:px-6">
@@ -55,11 +55,11 @@ export function TopBar() {
         </button>
 
         {/* Breadcrumb separator + document title for editor pages */}
-        {is_editor_page && (
+        {isEditorPage && (
           <>
             <span className="text-text-secondary select-none">/</span>
             <span className="truncate text-ui-base text-text-secondary max-w-[200px] md:max-w-[300px]">
-              {display_title}
+              {displayTitle}
             </span>
           </>
         )}
@@ -68,7 +68,7 @@ export function TopBar() {
       {/* Right: Actions */}
       <div className="flex shrink-0 items-center gap-1 md:gap-2">
         {/* Collab avatars placeholder — future Phase 3 */}
-        {is_editor_page && (
+        {isEditorPage && (
           <div className="hidden md:flex items-center gap-1 mr-2" aria-label="Collaborators">
             {/* Avatars will render here in Phase 3 */}
           </div>
@@ -85,7 +85,7 @@ export function TopBar() {
         </Button>
 
         {/* Theme toggle */}
-        <Button variant="ghost" size="sm" onClick={toggle_theme} aria-label={t(`theme.${theme}`)}>
+        <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label={t(`theme.${theme}`)}>
           <ThemeIcon className="h-4 w-4" />
         </Button>
 
@@ -95,7 +95,7 @@ export function TopBar() {
             <span className="hidden md:inline text-ui-sm text-text-secondary truncate max-w-[160px]">
               {user.email}
             </span>
-            <Button variant="ghost" size="sm" onClick={sign_out} aria-label={t("auth.sign_out")}>
+            <Button variant="ghost" size="sm" onClick={signOut} aria-label={t("auth.sign_out")}>
               <LogOut className="h-4 w-4" />
             </Button>
           </>

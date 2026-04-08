@@ -1,39 +1,39 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { use_theme_store } from "../stores/theme_store";
+import { useThemeStore } from "../stores/themeStore";
 
 /**
  * Smoke tests for the theme Zustand store.
  * Validates default state and theme toggling logic.
  */
-describe("use_theme_store", () => {
+describe("useThemeStore", () => {
   beforeEach(() => {
     // Reset store state before each test
-    use_theme_store.getState().set_theme("system");
+    useThemeStore.getState().setTheme("system");
   });
 
   it("defaults to system theme", () => {
-    const state = use_theme_store.getState();
+    const state = useThemeStore.getState();
     expect(state.theme).toBe("system");
   });
 
   it("sets theme to dark", () => {
-    use_theme_store.getState().set_theme("dark");
-    const state = use_theme_store.getState();
+    useThemeStore.getState().setTheme("dark");
+    const state = useThemeStore.getState();
     expect(state.theme).toBe("dark");
-    expect(state.resolved_theme).toBe("dark");
+    expect(state.resolvedTheme).toBe("dark");
   });
 
   it("sets theme to light", () => {
-    use_theme_store.getState().set_theme("light");
-    const state = use_theme_store.getState();
+    useThemeStore.getState().setTheme("light");
+    const state = useThemeStore.getState();
     expect(state.theme).toBe("light");
-    expect(state.resolved_theme).toBe("light");
+    expect(state.resolvedTheme).toBe("light");
   });
 
   it("resolves system theme to light or dark", () => {
-    use_theme_store.getState().set_theme("system");
-    const state = use_theme_store.getState();
+    useThemeStore.getState().setTheme("system");
+    const state = useThemeStore.getState();
     expect(state.theme).toBe("system");
-    expect(["light", "dark"]).toContain(state.resolved_theme);
+    expect(["light", "dark"]).toContain(state.resolvedTheme);
   });
 });

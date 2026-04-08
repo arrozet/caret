@@ -18,7 +18,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 /**
- * Mock the use_ai_stream hook with a controllable implementation.
+ * Mock the useAiStream hook with a controllable implementation.
  * We use a getter for `messages` so that each render picks up the
  * current value of `mock_messages`, not the value at mock-creation time.
  */
@@ -37,7 +37,7 @@ let mock_messages: Array<{
 let mock_is_loading = false;
 let mock_error: string | null = null;
 
-vi.mock("../hooks/use_ai_stream", () => ({
+vi.mock("../hooks/useAiStream", () => ({
   useAiStream: () => ({
     get messages() {
       return mock_messages;
@@ -64,31 +64,31 @@ vi.mock("../hooks/use_ai_stream", () => ({
 const mock_close_panel = vi.fn();
 const mock_set_conversation = vi.fn();
 
-vi.mock("../../../stores/ai_store", () => ({
-  use_ai_store: () => ({
-    is_panel_open: true,
-    active_conversation_id: null,
-    ai_mode: "ask",
-    selected_agent_type: "general",
-    selected_model_id: undefined,
-    close_panel: mock_close_panel,
-    set_conversation: mock_set_conversation,
-    set_ai_mode: vi.fn(),
-    set_selected_model_id: vi.fn(),
+vi.mock("../../../stores/aiStore", () => ({
+  useAiStore: () => ({
+    isPanelOpen: true,
+    activeConversationId: null,
+    aiMode: "ask",
+    selectedAgentType: "general",
+    selectedModelId: undefined,
+    closePanel: mock_close_panel,
+    setConversation: mock_set_conversation,
+    setAiMode: vi.fn(),
+    setSelectedModelId: vi.fn(),
   }),
 }));
 
 /**
- * Mock ai_api to avoid real network calls.
- * get_models is included so the component's useEffect does not throw on mount.
+ * Mock aiApi to avoid real network calls.
+ * getModels is included so the component's useEffect does not throw on mount.
  */
-vi.mock("../api/ai_api", () => ({
-  delete_conversation: vi.fn().mockResolvedValue(undefined),
-  create_conversation: vi.fn(),
-  list_messages: vi.fn(),
-  list_conversations: vi.fn().mockResolvedValue({ items: [], total: 0 }),
-  stream_ai_response: vi.fn(),
-  get_models: vi.fn().mockResolvedValue({ models: [], default_model_id: "" }),
+vi.mock("../api/aiApi", () => ({
+  deleteConversation: vi.fn().mockResolvedValue(undefined),
+  createConversation: vi.fn(),
+  listMessages: vi.fn(),
+  listConversations: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  streamAiResponse: vi.fn(),
+  getModels: vi.fn().mockResolvedValue({ models: [], default_model_id: "" }),
 }));
 
 // ---------------------------------------------------------------------------

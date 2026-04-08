@@ -17,10 +17,7 @@ const API_BASE_URL =
  * @returns Parsed JSON response.
  * @throws Error if the response is not OK.
  */
-export async function api_fetch<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
+export async function api_fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const {
     data: { session },
   } = await supabase_client.auth.getSession();
@@ -41,9 +38,7 @@ export async function api_fetch<T>(
 
   if (!response.ok) {
     const error_body = await response.json().catch(() => ({}));
-    const message =
-      (error_body as { error?: string }).error ||
-      `API error: ${response.status}`;
+    const message = (error_body as { error?: string }).error || `API error: ${response.status}`;
     throw new Error(message);
   }
 

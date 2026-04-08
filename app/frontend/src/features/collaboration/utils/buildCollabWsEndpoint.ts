@@ -1,11 +1,7 @@
 /**
  * Build the collaboration websocket endpoint from base URL, doc_id and token.
  */
-export function build_collab_ws_endpoint(
-  ws_base_url: string,
-  doc_id: string,
-  token: string,
-): string {
+export function buildCollabWsEndpoint(ws_base_url: string, doc_id: string, token: string): string {
   const normalized_base_url = ws_base_url.replace(/\/+$/, "");
   const encoded_doc_id = encodeURIComponent(doc_id.trim());
   const trimmed_token = token.trim();
@@ -18,7 +14,7 @@ export function build_collab_ws_endpoint(
 /**
  * Build websocket provider configuration and endpoint from the same source data.
  */
-export function build_collab_provider_config(
+export function buildCollabProviderConfig(
   ws_base_url: string,
   doc_id: string,
   token: string,
@@ -36,6 +32,6 @@ export function build_collab_provider_config(
     server_url: `${normalized_base_url}/document`,
     room_name: encodeURIComponent(normalized_doc_id),
     params: trimmed_token.length > 0 ? { token: trimmed_token } : undefined,
-    endpoint: build_collab_ws_endpoint(normalized_base_url, normalized_doc_id, trimmed_token),
+    endpoint: buildCollabWsEndpoint(normalized_base_url, normalized_doc_id, trimmed_token),
   };
 }

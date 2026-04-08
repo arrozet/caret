@@ -3,7 +3,7 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
-import { build_collab_provider_config } from "../utils/build_collab_ws_endpoint";
+import { buildCollabProviderConfig } from "../utils/buildCollabWsEndpoint";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
 
@@ -32,7 +32,7 @@ export function CollabHarnessPage() {
   const y_text_ref = useRef<Y.Text | null>(null);
 
   const ws_endpoint = useMemo(() => {
-    return build_collab_provider_config(ws_base_url, doc_id, token).endpoint;
+    return buildCollabProviderConfig(ws_base_url, doc_id, token).endpoint;
   }, [ws_base_url, doc_id, token]);
 
   const update_awareness_peers = useCallback(() => {
@@ -83,7 +83,7 @@ export function CollabHarnessPage() {
 
     const next_doc = new Y.Doc();
     const next_text = next_doc.getText("content");
-    const provider_config = build_collab_provider_config(ws_base_url, doc_id, token);
+    const provider_config = buildCollabProviderConfig(ws_base_url, doc_id, token);
 
     const next_provider = new WebsocketProvider(
       provider_config.server_url,

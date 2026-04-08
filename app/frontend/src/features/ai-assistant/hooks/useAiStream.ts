@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef } from "react";
 import {
-  stream_ai_response,
-  create_conversation,
-  list_messages,
+  streamAiResponse,
+  createConversation,
+  listMessages,
   type MessageResponse,
   type DocumentChangePayload,
-} from "../api/ai_api";
-import { use_ai_store } from "../../../stores/ai_store";
+} from "../api/aiApi";
+import { useAiStore } from "../../../stores/aiStore";
 
 /** A chat message as stored in the hook's local state. */
 export interface ChatMessage {
@@ -20,7 +20,7 @@ export interface ChatMessage {
   is_streaming?: boolean;
 }
 
-/** Return value of the use_ai_stream hook. */
+/** Return value of the useAiStream hook. */
 export interface UseAiStreamReturn {
   /** Ordered list of messages in the current conversation. */
   messages: ChatMessage[];
@@ -78,33 +78,28 @@ export interface UseAiStreamReturn {
  * general agent in agentic mode.
  */
 export function useAiStream(): UseAiStreamReturn {
-  const [messages, set_messages] = useState<ChatMessage[]>([]);
-  const [is_loading, set_is_loading] = useState(false);
-  const [error, set_error] = useState<string | null>(null);
-  const [tool_calls, set_tool_calls] = useState<string[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [toolCalls, setToolCalls] = useState<string[]>([]);
 
   /** Ref to the AbortController so stop_generating can cancel inflight requests. */
-  const abort_controller_ref = useRef<AbortController | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   /** Stable reference to the streaming assistant message ID being built. */
-  const streaming_id_ref = useRef<string | null>(null);
+  const streamingIdRef = useRef<string | null>(null);
 
-  const {
-    active_conversation_id,
-    set_conversation,
-    pending_document_change,
-    set_pending_document_change,
-  } = use_ai_store();
-  const pending_change = pending_document_change;
+  const { activeConversationId, setConversation, pendingDocumentChange, setPendingDocumentChange } =
+    useAiStore();
 
   /**
    * Load messages from an existing conversation into local state.
    */
   const load_messages = useCallback(async (conversation_id: string): Promise<void> => {
-    set_error(null);
+    setError(null);
     try {
-      const server_messages: MessageResponse[] = await list_messages(conversation_id);
-      set_messages(
+      const server_messages: MessageResponse[] = await listMessages(conversation_id);
+      setMessages(
         server_messages.map((m) => ({
           id: m.id,
           role: m.role,
@@ -112,7 +107,7 @@ export function useAiStream(): UseAiStreamReturn {
         })),
       );
     } catch (err) {
-      set_error(err instanceof Error ? err.message : "Failed to load messages");
+      setError(err instanceof Error ? err.message : "Failed to load messages");
     }
   }, []);
 
@@ -136,47 +131,47 @@ export function useAiStream(): UseAiStreamReturn {
       model_id?: string,
       agent_type?: string,
     ): Promise<void> => {
-      if (is_loading) return;
+      if (isLoading) return;
 
-      set_error(null);
-      set_is_loading(true);
-      set_tool_calls([]);
+      setError(null);
+      setIsLoading(true);
+      setToolCalls([]);
 
       // Ensure we have an active conversation.
-      let conversation_id = active_conversation_id;
-      if (!conversation_id) {
+      let conversationId = activeConversationId;
+      if (!conversationId) {
         try {
           const generated_title =
             user_message.length > 40 ? user_message.substring(0, 40) + "..." : user_message;
-          const conversation = await create_conversation(document_id, generated_title);
-          conversation_id = conversation.id;
-          set_conversation(conversation_id);
+          const conversation = await createConversation(document_id, generated_title);
+          conversationId = conversation.id;
+          setConversation(conversationId);
         } catch (err) {
-          set_error(err instanceof Error ? err.message : "Failed to create conversation");
-          set_is_loading(false);
+          setError(err instanceof Error ? err.message : "Failed to create conversation");
+          setIsLoading(false);
           return;
         }
       }
 
       // Append the user's message to the local chat history.
-      const user_msg_id = `user-${Date.now()}`;
-      set_messages((prev) => [...prev, { id: user_msg_id, role: "user", content: user_message }]);
+      const userMsgId = `user-${Date.now()}`;
+      setMessages((prev) => [...prev, { id: userMsgId, role: "user", content: user_message }]);
 
       // Append a streaming placeholder for the assistant reply.
-      const assistant_placeholder_id = `assistant-streaming-${Date.now()}`;
-      streaming_id_ref.current = assistant_placeholder_id;
-      set_messages((prev) => [
+      const assistantPlaceholderId = `assistant-streaming-${Date.now()}`;
+      streamingIdRef.current = assistantPlaceholderId;
+      setMessages((prev) => [
         ...prev,
-        { id: assistant_placeholder_id, role: "assistant", content: "", is_streaming: true },
+        { id: assistantPlaceholderId, role: "assistant", content: "", is_streaming: true },
       ]);
 
       // Set up cancellation.
       const controller = new AbortController();
-      abort_controller_ref.current = controller;
+      abortControllerRef.current = controller;
 
       try {
-        const stream = stream_ai_response({
-          conversation_id,
+        const stream = streamAiResponse({
+          conversation_id: conversationId,
           message: user_message,
           document_context,
           model_id,
@@ -186,108 +181,105 @@ export function useAiStream(): UseAiStreamReturn {
 
         for await (const chunk of stream) {
           if (chunk.type === "delta" && chunk.content) {
-            const current_streaming_id = streaming_id_ref.current;
-            set_messages((prev) =>
+            const currentStreamingId = streamingIdRef.current;
+            setMessages((prev) =>
               prev.map((msg) =>
-                msg.id === current_streaming_id
+                msg.id === currentStreamingId
                   ? { ...msg, content: msg.content + chunk.content }
                   : msg,
               ),
             );
           } else if (chunk.type === "tool_call" && chunk.tool_name) {
             // Accumulate tool names invoked during the agent run.
-            set_tool_calls((prev) => [...prev, chunk.tool_name!]);
+            setToolCalls((prev) => [...prev, chunk.tool_name!]);
           } else if (chunk.type === "document_change" && chunk.document_change) {
             // Store the proposed document edit for the accept/reject diff viewer.
-            set_pending_document_change(chunk.document_change);
+            setPendingDocumentChange(chunk.document_change);
           } else if (chunk.type === "done") {
-            const current_streaming_id = streaming_id_ref.current;
-            const final_id: string =
-              chunk.message_id ?? current_streaming_id ?? crypto.randomUUID();
-            set_messages((prev) =>
+            const currentStreamingId = streamingIdRef.current;
+            const finalId: string = chunk.message_id ?? currentStreamingId ?? crypto.randomUUID();
+            setMessages((prev) =>
               prev.map((msg) =>
-                msg.id === current_streaming_id
-                  ? { ...msg, id: final_id, is_streaming: false }
-                  : msg,
+                msg.id === currentStreamingId ? { ...msg, id: finalId, is_streaming: false } : msg,
               ),
             );
-            streaming_id_ref.current = null;
+            streamingIdRef.current = null;
           } else if (chunk.type === "error") {
-            set_error(chunk.error ?? "AI service error");
-            const current_streaming_id = streaming_id_ref.current;
-            set_messages((prev) => prev.filter((msg) => msg.id !== current_streaming_id));
-            streaming_id_ref.current = null;
+            setError(chunk.error ?? "AI service error");
+            const currentStreamingId = streamingIdRef.current;
+            setMessages((prev) => prev.filter((msg) => msg.id !== currentStreamingId));
+            streamingIdRef.current = null;
           }
         }
 
         // If the stream ends without a 'done' chunk, finalise anyway.
-        if (streaming_id_ref.current) {
-          const current_streaming_id = streaming_id_ref.current;
-          set_messages((prev) =>
+        if (streamingIdRef.current) {
+          const currentStreamingId = streamingIdRef.current;
+          setMessages((prev) =>
             prev.map((msg) =>
-              msg.id === current_streaming_id ? { ...msg, is_streaming: false } : msg,
+              msg.id === currentStreamingId ? { ...msg, is_streaming: false } : msg,
             ),
           );
-          streaming_id_ref.current = null;
+          streamingIdRef.current = null;
         }
       } catch (err) {
-        const current_streaming_id = streaming_id_ref.current;
+        const currentStreamingId = streamingIdRef.current;
         if ((err as Error).name === "AbortError") {
-          set_messages((prev) =>
+          setMessages((prev) =>
             prev.map((msg) =>
-              msg.id === current_streaming_id ? { ...msg, is_streaming: false } : msg,
+              msg.id === currentStreamingId ? { ...msg, is_streaming: false } : msg,
             ),
           );
         } else {
-          set_error(err instanceof Error ? err.message : "Streaming failed");
-          set_messages((prev) => prev.filter((msg) => msg.id !== current_streaming_id));
+          setError(err instanceof Error ? err.message : "Streaming failed");
+          setMessages((prev) => prev.filter((msg) => msg.id !== currentStreamingId));
         }
-        streaming_id_ref.current = null;
+        streamingIdRef.current = null;
       } finally {
-        abort_controller_ref.current = null;
-        set_is_loading(false);
+        abortControllerRef.current = null;
+        setIsLoading(false);
       }
     },
-    [is_loading, active_conversation_id, set_conversation, set_pending_document_change],
+    [isLoading, activeConversationId, setConversation, setPendingDocumentChange],
   );
 
   /**
    * Cancel the in-flight streaming request.
    */
   const stop_generating = useCallback(() => {
-    abort_controller_ref.current?.abort();
+    abortControllerRef.current?.abort();
   }, []);
 
   /**
    * Reset all state for a fresh conversation session.
    */
   const clear = useCallback(() => {
-    abort_controller_ref.current?.abort();
-    set_messages([]);
-    set_error(null);
-    set_is_loading(false);
-    set_pending_document_change(null);
-    set_tool_calls([]);
-    streaming_id_ref.current = null;
-  }, [set_pending_document_change]);
+    abortControllerRef.current?.abort();
+    setMessages([]);
+    setError(null);
+    setIsLoading(false);
+    setPendingDocumentChange(null);
+    setToolCalls([]);
+    streamingIdRef.current = null;
+  }, [setPendingDocumentChange]);
 
   /**
    * Clear the pending document change (called after accept or reject).
    */
-  const clear_pending_change = useCallback(() => {
-    set_pending_document_change(null);
-  }, [set_pending_document_change]);
+  const clearPendingChange = useCallback(() => {
+    setPendingDocumentChange(null);
+  }, [setPendingDocumentChange]);
 
   return {
     messages,
-    is_loading,
+    is_loading: isLoading,
     error,
-    pending_change,
-    tool_calls,
+    pending_change: pendingDocumentChange,
+    tool_calls: toolCalls,
     send_message,
     stop_generating,
     load_messages,
     clear,
-    clear_pending_change,
+    clear_pending_change: clearPendingChange,
   };
 }

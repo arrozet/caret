@@ -17,13 +17,13 @@ interface AuthState {
   /** Initialize the store by reading the current Supabase session. */
   initialize: () => Promise<void>;
   /** Sign in with email and password. Returns an error message on failure. */
-  sign_in: (email: string, password: string) => Promise<string | null>;
+  signIn: (email: string, password: string) => Promise<string | null>;
   /** Create a new account with email and password. Returns an error message on failure. */
-  sign_up: (email: string, password: string) => Promise<string | null>;
+  signUp: (email: string, password: string) => Promise<string | null>;
   /** Sign in with a third-party OAuth provider (e.g. Google). Returns an error message on failure. */
-  sign_in_with_oauth: (provider: "google" | "github") => Promise<string | null>;
+  signInWithOauth: (provider: "google" | "github") => Promise<string | null>;
   /** Sign out the current user. */
-  sign_out: () => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 /**
@@ -36,7 +36,7 @@ interface AuthState {
  * State management strategy (FRONTEND.md §21):
  *   Global UI state -> Zustand
  */
-export const use_auth_store = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   user: null,
   status: "loading",
@@ -67,7 +67,7 @@ export const use_auth_store = create<AuthState>((set) => ({
     });
   },
 
-  async sign_in(email: string, password: string): Promise<string | null> {
+  async signIn(email: string, password: string): Promise<string | null> {
     const { error } = await supabase_client.auth.signInWithPassword({
       email,
       password,
@@ -75,12 +75,12 @@ export const use_auth_store = create<AuthState>((set) => ({
     return error?.message ?? null;
   },
 
-  async sign_up(email: string, password: string): Promise<string | null> {
+  async signUp(email: string, password: string): Promise<string | null> {
     const { error } = await supabase_client.auth.signUp({ email, password });
     return error?.message ?? null;
   },
 
-  async sign_in_with_oauth(provider: "google" | "github"): Promise<string | null> {
+  async signInWithOauth(provider: "google" | "github"): Promise<string | null> {
     const { error } = await supabase_client.auth.signInWithOAuth({
       provider,
       options: {
@@ -90,7 +90,7 @@ export const use_auth_store = create<AuthState>((set) => ({
     return error?.message ?? null;
   },
 
-  async sign_out() {
+  async signOut() {
     await supabase_client.auth.signOut();
     set({ session: null, user: null, status: "unauthenticated" });
   },

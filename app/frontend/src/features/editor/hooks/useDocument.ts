@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { get_document } from "../api/document_api";
-import type { DocumentResponse } from "../api/document_api";
+import { getDocument } from "../api/documentApi";
+import type { DocumentResponse } from "../api/documentApi";
 
 /**
  * TanStack Query hook to fetch a single document by ID.
@@ -9,10 +9,10 @@ import type { DocumentResponse } from "../api/document_api";
  * @param document_id - Document UUID. The query is disabled if falsy.
  * @returns Standard useQuery result with typed document data.
  */
-export function useDocument(document_id: string | undefined) {
+export function useDocument(documentId: string | undefined) {
   return useQuery<DocumentResponse>({
-    queryKey: ["document", document_id],
-    queryFn: () => get_document(document_id!),
-    enabled: !!document_id,
+    queryKey: ["document", documentId],
+    queryFn: () => getDocument(documentId!),
+    enabled: !!documentId,
   });
 }

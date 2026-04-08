@@ -14,7 +14,7 @@ import type {
   AwarenessUserState,
   AwarenessConfig,
 } from "../types";
-import { DEFAULT_AWARENESS_CONFIG, compute_presence_status } from "../types";
+import { DEFAULT_AWARENESS_CONFIG, computePresenceStatus } from "../types";
 
 /**
  * Props for the useAwareness hook.
@@ -45,7 +45,7 @@ interface UseAwarenessReturn {
 /**
  * Creates an empty awareness state.
  */
-function create_empty_state(): AwarenessState {
+function createEmptyState(): AwarenessState {
   return {
     local_client_id: null,
     clients: new Map(),
@@ -56,7 +56,7 @@ function create_empty_state(): AwarenessState {
 }
 
 // Singleton empty state to ensure referential equality
-const EMPTY_STATE: AwarenessState = create_empty_state();
+const EMPTY_STATE: AwarenessState = createEmptyState();
 
 /**
  * Parses raw Y.js awareness states into typed AwarenessClient objects.
@@ -65,7 +65,7 @@ const EMPTY_STATE: AwarenessState = create_empty_state();
  * @param config - Awareness configuration.
  * @returns Map of client IDs to AwarenessClient objects.
  */
-function parse_awareness_states(
+function parseAwarenessStates(
   awareness: Awareness,
   config: AwarenessConfig,
 ): Map<number, AwarenessClient> {
@@ -79,7 +79,7 @@ function parse_awareness_states(
     }
 
     const user = state.user as AwarenessUserState;
-    const presence_status = compute_presence_status(user.last_active || Date.now(), config);
+    const presence_status = computePresenceStatus(user.last_active || Date.now(), config);
 
     clients.set(client_id, {
       client_id,
@@ -94,7 +94,7 @@ function parse_awareness_states(
 /**
  * Builds the full awareness state from Y.js.
  */
-function build_state_from_awareness(
+function buildStateFromAwareness(
   awareness: Awareness | null,
   config: AwarenessConfig,
 ): AwarenessState {
@@ -103,7 +103,7 @@ function build_state_from_awareness(
   }
 
   const local_client_id = awareness.clientID;
-  const clients = parse_awareness_states(awareness, config);
+  const clients = parseAwarenessStates(awareness, config);
   const remote_clients = Array.from(clients.values()).filter(
     (client) => client.client_id !== local_client_id,
   );
@@ -170,12 +170,12 @@ export function useAwareness({
 
       // Handler that updates the cached snapshot and notifies React
       const handle_change = () => {
-        snapshot_cache.current = build_state_from_awareness(awareness, config_ref.current);
+        snapshot_cache.current = buildStateFromAwareness(awareness, config_ref.current);
         on_store_change();
       };
 
       // Initialize snapshot on subscribe
-      snapshot_cache.current = build_state_from_awareness(awareness, config_ref.current);
+      snapshot_cache.current = buildStateFromAwareness(awareness, config_ref.current);
 
       // Subscribe to awareness changes
       awareness.on("change", handle_change);

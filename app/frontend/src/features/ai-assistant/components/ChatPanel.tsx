@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { X, Send, Square, RefreshCw, Sparkles, Check } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
-import { use_ai_store } from "../../../stores/ai_store";
-import { useAiStream } from "../hooks/use_ai_stream";
-import type { ChatMessage } from "../hooks/use_ai_stream";
-import { delete_conversation, get_models, list_conversations } from "../api/ai_api";
-import type { ModelInfo } from "../api/ai_api";
+import { useAiStore } from "../../../stores/aiStore";
+import { useAiStream } from "../hooks/useAiStream";
+import type { ChatMessage } from "../hooks/useAiStream";
+import { deleteConversation, getModels, listConversations } from "../api/aiApi";
+import type { ModelInfo } from "../api/aiApi";
 
 const FALLBACK_MODELS: ModelInfo[] = [
   {
@@ -106,9 +106,9 @@ function MessageBubble({ message }: MessageBubbleProps) {
  */
 interface ToolCallBadgeProps {
   /** The name of the tool that was called. */
-  tool_name: string;
+  toolName: string;
   /** Whether the agent run has finished and this tool call is resolved. */
-  is_completed?: boolean;
+  isCompleted?: boolean;
 }
 
 /**
@@ -116,7 +116,7 @@ interface ToolCallBadgeProps {
  * Shows a pulsing dot while the agent is still running, and a checkmark
  * once the run completes.
  */
-function ToolCallBadge({ tool_name, is_completed = false }: ToolCallBadgeProps) {
+function ToolCallBadge({ toolName, isCompleted = false }: ToolCallBadgeProps) {
   const label_map_pending: Record<string, string> = {
     get_document_content: "Reading document...",
     propose_document_replacement: "Proposing edit...",
@@ -126,13 +126,13 @@ function ToolCallBadge({ tool_name, is_completed = false }: ToolCallBadgeProps) 
     propose_document_replacement: "Proposed edit",
   };
 
-  const label = is_completed
-    ? (label_map_done[tool_name] ?? `Tool: ${tool_name}`)
-    : (label_map_pending[tool_name] ?? `Tool: ${tool_name}...`);
+  const label = isCompleted
+    ? (label_map_done[toolName] ?? `Tool: ${toolName}`)
+    : (label_map_pending[toolName] ?? `Tool: ${toolName}...`);
 
   return (
     <div className="flex items-center gap-1.5 px-2 py-1 mb-2 rounded-lg bg-accent-ai/8 border border-accent-ai/20 w-fit text-ui-xs text-accent-ai">
-      {is_completed ? (
+      {isCompleted ? (
         <Check className="h-2.5 w-2.5 shrink-0" aria-hidden="true" strokeWidth={2.5} />
       ) : (
         <span
@@ -154,14 +154,14 @@ function ToolCallBadge({ tool_name, is_completed = false }: ToolCallBadgeProps) 
  */
 interface SuggestedPromptsProps {
   /** Called when the user clicks a prompt chip. */
-  on_select: (prompt: string) => void;
+  onSelect: (prompt: string) => void;
 }
 
 /**
  * Horizontal strip of quick-action prompt chips shown when there are no
  * messages yet.
  */
-function SuggestedPrompts({ on_select }: SuggestedPromptsProps) {
+function SuggestedPrompts({ onSelect }: SuggestedPromptsProps) {
   const { t } = useTranslation("ai");
 
   const prompts: Array<{ key: string; label: string }> = [
@@ -175,7 +175,7 @@ function SuggestedPrompts({ on_select }: SuggestedPromptsProps) {
       {prompts.map(({ key, label }) => (
         <button
           key={key}
-          onClick={() => on_select(label)}
+          onClick={() => onSelect(label)}
           className="w-full text-left rounded-xl px-4 py-2.5 text-ui-sm text-text-secondary border border-border-subtle hover:border-accent-ai hover:text-accent-ai hover:bg-surface transition-all duration-200 ease-out shadow-sm hover:shadow"
         >
           {label}
@@ -233,15 +233,15 @@ export function ChatPanel({
   const { t } = useTranslation("ai");
 
   const {
-    close_panel,
-    active_conversation_id,
-    set_conversation,
-    ai_mode,
-    selected_agent_type,
-    selected_model_id,
-    set_ai_mode,
-    set_selected_model_id,
-  } = use_ai_store();
+    closePanel,
+    activeConversationId,
+    setConversation,
+    aiMode,
+    selectedAgentType,
+    selectedModelId,
+    setAiMode,
+    setSelectedModelId,
+  } = useAiStore();
 
   const {
     messages,
@@ -256,100 +256,99 @@ export function ChatPanel({
     clear_pending_change,
   } = useAiStream();
 
-  const [input_value, set_input_value] = useState("");
-  const [models, set_models] = useState<ModelInfo[]>([]);
-  const [recent_conversations, set_recent_conversations] = useState<
+  const [inputValue, setInputValue] = useState("");
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [recentConversations, setRecentConversations] = useState<
     Array<{ id: string; title: string | null }>
   >([]);
-  const messages_end_ref = useRef<HTMLDivElement>(null);
-  const messages_container_ref = useRef<HTMLDivElement>(null);
-  const is_user_scrolling = useRef(false);
-  const input_ref = useRef<HTMLTextAreaElement>(null);
-  const close_button_ref = useRef<HTMLButtonElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isUserScrolling = useRef(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!selected_model_id) {
-      set_selected_model_id("grok-4-1-fast-reasoning");
+    if (!selectedModelId) {
+      setSelectedModelId("grok-4-1-fast-reasoning");
     }
-  }, [selected_model_id, set_selected_model_id]);
+  }, [selectedModelId, setSelectedModelId]);
 
   // Fetch available models on mount and pre-select the server default.
   useEffect(() => {
-    get_models()
+    getModels()
       .then((res) => {
-        set_models(res.models);
-        const fallback_default_id =
+        setModels(res.models);
+        const fallbackDefaultId =
           res.models.find((model) => model.id === "grok-4-1-fast-reasoning")?.id ??
           res.models[0]?.id;
-        const default_id = res.default_model_id ?? fallback_default_id;
+        const defaultId = res.default_model_id ?? fallbackDefaultId;
 
-        if (!default_id) {
+        if (!defaultId) {
           return;
         }
 
         // If current selection is missing from the catalog (e.g. stale store),
         // force it back to a valid option so the selector is always usable.
-        const is_current_selection_valid =
-          selected_model_id !== undefined &&
-          res.models.some((model) => model.id === selected_model_id);
+        const isCurrentSelectionValid =
+          selectedModelId !== undefined && res.models.some((model) => model.id === selectedModelId);
 
-        if (!is_current_selection_valid) {
-          set_selected_model_id(default_id);
+        if (!isCurrentSelectionValid) {
+          setSelectedModelId(defaultId);
         }
       })
       .catch(() => {
         // Keep fallback selector options available when catalog fetch fails.
-        set_models([]);
+        setModels([]);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const selectable_models = models.length > 0 ? models : FALLBACK_MODELS;
+  const selectableModels = models.length > 0 ? models : FALLBACK_MODELS;
 
   // Load existing messages when panel opens with a pre-existing conversation.
   useEffect(() => {
-    if (active_conversation_id && messages.length === 0) {
-      load_messages(active_conversation_id);
+    if (activeConversationId && messages.length === 0) {
+      load_messages(activeConversationId);
     }
-  }, [active_conversation_id, load_messages, messages.length]);
+  }, [activeConversationId, load_messages, messages.length]);
 
-  const load_recent_conversations = useCallback(async () => {
+  const loadRecentConversations = useCallback(async () => {
     try {
-      const response = await list_conversations(document_id);
-      set_recent_conversations(response.items.map((item) => ({ id: item.id, title: item.title })));
+      const response = await listConversations(document_id);
+      setRecentConversations(response.items.map((item) => ({ id: item.id, title: item.title })));
     } catch {
-      set_recent_conversations([]);
+      setRecentConversations([]);
     }
   }, [document_id]);
 
   useEffect(() => {
-    load_recent_conversations();
-  }, [load_recent_conversations]);
+    loadRecentConversations();
+  }, [loadRecentConversations]);
 
   useEffect(() => {
     if (messages.length > 0) {
-      load_recent_conversations();
+      loadRecentConversations();
     }
-  }, [messages.length, load_recent_conversations]);
+  }, [messages.length, loadRecentConversations]);
 
   // Handle manual scroll to detect if user scrolled up.
-  const handle_scroll = useCallback(() => {
-    if (!messages_container_ref.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = messages_container_ref.current;
-    const is_at_bottom = scrollHeight - scrollTop - clientHeight < 50;
-    is_user_scrolling.current = !is_at_bottom;
+  const handleScroll = useCallback(() => {
+    if (!messagesContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+    isUserScrolling.current = !isAtBottom;
   }, []);
 
   // Auto-scroll to the bottom whenever messages update.
   useEffect(() => {
-    if (!is_user_scrolling.current) {
-      messages_end_ref.current?.scrollIntoView({ behavior: "smooth" });
+    if (!isUserScrolling.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
 
   // Focus the text input when the panel mounts.
   useEffect(() => {
-    input_ref.current?.focus();
+    inputRef.current?.focus();
   }, []);
 
   /**
@@ -357,91 +356,78 @@ export function ChatPanel({
    * Reads the document context fresh via the callback so the AI always
    * receives the current document state at the exact moment of sending.
    */
-  const handle_send = useCallback(async () => {
-    const trimmed = input_value.trim();
+  const handleSend = useCallback(async () => {
+    const trimmed = inputValue.trim();
     if (!trimmed || is_loading) return;
-    set_input_value("");
-    is_user_scrolling.current = false;
-    const agent_type_to_use = ai_mode === "agent" ? selected_agent_type : undefined;
-    const current_context = get_document_context?.();
-    await send_message(trimmed, document_id, current_context, selected_model_id, agent_type_to_use);
+    setInputValue("");
+    isUserScrolling.current = false;
+    const agentTypeToUse = aiMode === "agent" ? selectedAgentType : undefined;
+    const currentContext = get_document_context?.();
+    await send_message(trimmed, document_id, currentContext, selectedModelId, agentTypeToUse);
   }, [
-    input_value,
+    inputValue,
     is_loading,
     send_message,
     document_id,
     get_document_context,
-    selected_model_id,
-    ai_mode,
-    selected_agent_type,
+    selectedModelId,
+    aiMode,
+    selectedAgentType,
   ]);
 
   /**
    * Allow Shift+Enter for newlines; Enter alone sends the message.
    */
-  const handle_key_down = useCallback(
+  const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        handle_send();
+        handleSend();
       }
     },
-    [handle_send],
+    [handleSend],
   );
 
   /**
    * Handle a suggested prompt chip click — send immediately with fresh context.
    */
-  const handle_suggested_prompt = useCallback(
+  const handleSuggestedPrompt = useCallback(
     async (prompt: string) => {
-      set_input_value("");
-      const agent_type_to_use = ai_mode === "agent" ? selected_agent_type : undefined;
-      const current_context = get_document_context?.();
-      await send_message(
-        prompt,
-        document_id,
-        current_context,
-        selected_model_id,
-        agent_type_to_use,
-      );
+      setInputValue("");
+      const agentTypeToUse = aiMode === "agent" ? selectedAgentType : undefined;
+      const currentContext = get_document_context?.();
+      await send_message(prompt, document_id, currentContext, selectedModelId, agentTypeToUse);
     },
-    [
-      send_message,
-      document_id,
-      get_document_context,
-      selected_model_id,
-      ai_mode,
-      selected_agent_type,
-    ],
+    [send_message, document_id, get_document_context, selectedModelId, aiMode, selectedAgentType],
   );
 
   /**
    * Close the panel and return focus to the editor.
    */
-  const handle_close = useCallback(() => {
-    close_panel();
-  }, [close_panel]);
+  const handleClose = useCallback(() => {
+    closePanel();
+  }, [closePanel]);
 
   /**
    * Start a new conversation: clear local state and reset active conversation.
    */
-  const handle_new_conversation = useCallback(async () => {
-    if (active_conversation_id) {
-      delete_conversation(active_conversation_id).catch(() => undefined);
+  const handleNewConversation = useCallback(async () => {
+    if (activeConversationId) {
+      deleteConversation(activeConversationId).catch(() => undefined);
     }
-    set_conversation(null);
+    setConversation(null);
     clear();
-    set_recent_conversations((prev) => prev.filter((item) => item.id !== active_conversation_id));
-  }, [active_conversation_id, set_conversation, clear]);
+    setRecentConversations((prev) => prev.filter((item) => item.id !== activeConversationId));
+  }, [activeConversationId, setConversation, clear]);
 
-  const handle_select_conversation = useCallback(
-    async (conversation_id: string) => {
-      if (conversation_id === active_conversation_id) return;
-      set_conversation(conversation_id);
+  const handleSelectConversation = useCallback(
+    async (conversationId: string) => {
+      if (conversationId === activeConversationId) return;
+      setConversation(conversationId);
       clear();
-      await load_messages(conversation_id);
+      await load_messages(conversationId);
     },
-    [active_conversation_id, set_conversation, clear, load_messages],
+    [activeConversationId, setConversation, clear, load_messages],
   );
 
   /**
@@ -482,7 +468,7 @@ export function ChatPanel({
             <Button
               variant="ghost"
               size="sm"
-              onClick={handle_new_conversation}
+              onClick={handleNewConversation}
               disabled={is_loading}
               aria-label={t("new_conversation")}
               title={t("new_conversation")}
@@ -494,10 +480,10 @@ export function ChatPanel({
 
           {/* Close panel */}
           <Button
-            ref={close_button_ref}
+            ref={closeButtonRef}
             variant="ghost"
             size="sm"
-            onClick={handle_close}
+            onClick={handleClose}
             aria-label={t("close_panel")}
             className="p-1.5"
           >
@@ -508,8 +494,8 @@ export function ChatPanel({
 
       {/* Message list — scrollable, aria-live for screen readers */}
       <div
-        ref={messages_container_ref}
-        onScroll={handle_scroll}
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-2 py-3 min-h-0"
         role="log"
         aria-live="polite"
@@ -520,21 +506,21 @@ export function ChatPanel({
             <p className="text-ui-sm text-text-secondary mb-4 px-4 text-center">
               {t("empty_state")}
             </p>
-            <SuggestedPrompts on_select={handle_suggested_prompt} />
-            {recent_conversations.length > 0 && (
+            <SuggestedPrompts onSelect={handleSuggestedPrompt} />
+            {recentConversations.length > 0 && (
               <div className="mt-4 w-full px-4">
                 <p className="mb-2 text-ui-xs font-medium text-text-secondary/80">
                   Recent conversations
                 </p>
                 <div className="flex gap-2 overflow-x-auto pb-2">
-                  {recent_conversations.slice(0, 5).map((conversation, index) => (
+                  {recentConversations.slice(0, 5).map((conversation, index) => (
                     <button
                       key={conversation.id}
                       type="button"
-                      onClick={() => handle_select_conversation(conversation.id)}
+                      onClick={() => handleSelectConversation(conversation.id)}
                       className={[
                         "shrink-0 min-w-[120px] max-w-[150px] rounded-lg border px-3 py-2 text-left text-ui-sm transition-colors truncate",
-                        conversation.id === active_conversation_id
+                        conversation.id === activeConversationId
                           ? "border-accent-ai/50 bg-accent-ai/5 text-text-primary"
                           : "border-border-subtle text-text-secondary hover:border-accent-ai/40 hover:text-text-primary",
                       ].join(" ")}
@@ -561,19 +547,19 @@ export function ChatPanel({
               <MessageBubble key={msg.id} message={msg} />
             ))}
             {/* Tool call trace — shown in agent mode during/after an agentic run */}
-            {ai_mode === "agent" && tool_calls.length > 0 && (
+            {aiMode === "agent" && tool_calls.length > 0 && (
               <div className="px-2 py-1 mb-1">
-                {tool_calls.map((tool_name, idx) => (
+                {tool_calls.map((toolName: string, idx: number) => (
                   <ToolCallBadge
-                    key={`${tool_name}-${idx}`}
-                    tool_name={tool_name}
-                    is_completed={!is_loading}
+                    key={`${toolName}-${idx}`}
+                    toolName={toolName}
+                    isCompleted={!is_loading}
                   />
                 ))}
               </div>
             )}
             {/* Anchor element for auto-scroll */}
-            <div ref={messages_end_ref} />
+            <div ref={messagesEndRef} />
           </div>
         )}
       </div>
@@ -600,10 +586,10 @@ export function ChatPanel({
         {/* Ask / Agent mode toggle */}
         <div className="flex items-center gap-0.5 bg-app rounded-lg p-0.5 shrink-0">
           <button
-            onClick={() => set_ai_mode("ask")}
+            onClick={() => setAiMode("ask")}
             className={[
               "px-2.5 py-1 rounded-md text-ui-xs font-medium transition-all duration-150",
-              ai_mode === "ask"
+              aiMode === "ask"
                 ? "bg-surface text-text-primary shadow-sm"
                 : "text-text-secondary hover:text-text-primary",
             ].join(" ")}
@@ -611,10 +597,10 @@ export function ChatPanel({
             Ask
           </button>
           <button
-            onClick={() => set_ai_mode("agent")}
+            onClick={() => setAiMode("agent")}
             className={[
               "px-2.5 py-1 rounded-md text-ui-xs font-medium transition-all duration-150",
-              ai_mode === "agent"
+              aiMode === "agent"
                 ? "bg-surface text-text-primary shadow-sm"
                 : "text-text-secondary hover:text-text-primary",
             ].join(" ")}
@@ -625,14 +611,14 @@ export function ChatPanel({
 
         <select
           id="model-selector"
-          value={selected_model_id ?? ""}
-          onChange={(e) => set_selected_model_id(e.target.value || undefined)}
+          value={selectedModelId ?? ""}
+          onChange={(e) => setSelectedModelId(e.target.value || undefined)}
           aria-label={t("model_selector")}
           className="flex-1 min-w-0 rounded-[4px] border border-border-subtle bg-app px-2 py-1 text-ui-xs text-text-primary outline-none focus:border-accent-ai transition-colors duration-100"
         >
-          {selectable_models.some((m) => m.is_free) && (
+          {selectableModels.some((m) => m.is_free) && (
             <optgroup label={t("model_group_free")}>
-              {selectable_models
+              {selectableModels
                 .filter((m) => m.is_free)
                 .map((m) => (
                   <option key={m.id} value={m.id}>
@@ -641,9 +627,9 @@ export function ChatPanel({
                 ))}
             </optgroup>
           )}
-          {selectable_models.some((m) => !m.is_free) && (
+          {selectableModels.some((m) => !m.is_free) && (
             <optgroup label={t("model_group_paid")}>
-              {selectable_models
+              {selectableModels
                 .filter((m) => !m.is_free)
                 .map((m) => (
                   <option key={m.id} value={m.id}>
@@ -659,10 +645,10 @@ export function ChatPanel({
       <div className="shrink-0 border-t border-border-subtle px-4 pb-4 pt-3 bg-surface">
         <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-app px-3 py-2.5 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20 transition-all duration-200 shadow-sm">
           <textarea
-            ref={input_ref}
-            value={input_value}
-            onChange={(e) => set_input_value(e.target.value)}
-            onKeyDown={handle_key_down}
+            ref={inputRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder={t("input_placeholder")}
             disabled={is_loading}
             rows={1}
@@ -692,8 +678,8 @@ export function ChatPanel({
             <Button
               variant="ghost"
               size="sm"
-              onClick={handle_send}
-              disabled={!input_value.trim()}
+              onClick={handleSend}
+              disabled={!inputValue.trim()}
               aria-label="Send message"
               className="shrink-0 p-1.5 text-accent-ai hover:text-accent-ai/80 disabled:text-text-secondary/40"
             >

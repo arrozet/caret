@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useCollaborationSession } from "./use_collaboration_session";
+import { useCollaborationSession } from "./useCollaborationSession";
 
 const connect_mock = vi.fn();
 const disconnect_mock = vi.fn();
@@ -15,7 +15,7 @@ const extract_presence_users_mock = vi.fn(() => []);
 
 vi.mock("../utils", () => ({
   LOCAL_COLLAB_WS_BASE_URL: "ws://localhost:3003/document",
-  create_collaboration_session: vi.fn(() => ({
+  createCollaborationSession: vi.fn(() => ({
     ydoc: { id: "y-doc" },
     provider: {
       connect: connect_mock,
@@ -30,9 +30,9 @@ vi.mock("../utils", () => ({
       },
     },
   })),
-  destroy_collaboration_session: vi.fn(),
-  derive_user_color: vi.fn(() => "#123456"),
-  extract_presence_users: vi.fn(() => extract_presence_users_mock()),
+  destroyCollaborationSession: vi.fn(),
+  deriveUserColor: vi.fn(() => "#123456"),
+  extractPresenceUsers: vi.fn(() => extract_presence_users_mock()),
 }));
 
 /** Unit tests for collaboration session lifecycle hook. */

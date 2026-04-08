@@ -1,5 +1,5 @@
 import { supabase_client } from "../../../lib/supabase";
-import { api_fetch } from "../../../lib/api_client";
+import { api_fetch } from "../../../lib/apiClient";
 
 /**
  * Base URL for AI service endpoints.
@@ -140,7 +140,7 @@ export interface ModelsResponse {
  * Fetch the curated list of available LLM models.
  * @returns ModelsResponse with the model list and the server default model id.
  */
-export function get_models(): Promise<ModelsResponse> {
+export function getModels(): Promise<ModelsResponse> {
   return api_fetch<ModelsResponse>(`${AI_BASE}/models`);
 }
 
@@ -149,7 +149,7 @@ export function get_models(): Promise<ModelsResponse> {
  * @param document_id - UUID of the document to associate the conversation with.
  * @returns The newly created conversation.
  */
-export function create_conversation(
+export function createConversation(
   document_id: string,
   title?: string,
 ): Promise<ConversationResponse> {
@@ -164,7 +164,7 @@ export function create_conversation(
  * @param document_id - Document UUID.
  * @returns Conversation list ordered by most recent activity.
  */
-export function list_conversations(document_id: string): Promise<ConversationListResponse> {
+export function listConversations(document_id: string): Promise<ConversationListResponse> {
   const query = new URLSearchParams({ document_id }).toString();
   return api_fetch<ConversationListResponse>(`${AI_BASE}/conversations?${query}`);
 }
@@ -174,7 +174,7 @@ export function list_conversations(document_id: string): Promise<ConversationLis
  * @param conversation_id - Conversation UUID.
  * @returns Ordered array of messages (oldest first).
  */
-export function list_messages(conversation_id: string): Promise<MessageResponse[]> {
+export function listMessages(conversation_id: string): Promise<MessageResponse[]> {
   return api_fetch<MessageListResponse>(
     `${AI_BASE}/conversations/${conversation_id}/messages`,
   ).then((response) => response.items);
@@ -184,7 +184,7 @@ export function list_messages(conversation_id: string): Promise<MessageResponse[
  * Delete an AI conversation and all its messages.
  * @param conversation_id - Conversation UUID.
  */
-export function delete_conversation(conversation_id: string): Promise<void> {
+export function deleteConversation(conversation_id: string): Promise<void> {
   return api_fetch<void>(`${AI_BASE}/conversations/${conversation_id}`, {
     method: "DELETE",
   });
@@ -228,7 +228,7 @@ export interface StreamRequestOptions {
  * @yields Parsed StreamChunk objects.
  * @throws Error if the initial HTTP response is not OK.
  */
-export async function* stream_ai_response(
+export async function* streamAiResponse(
   options: StreamRequestOptions,
 ): AsyncGenerator<StreamChunk> {
   const { conversation_id, message, document_context, model_id, agent_type, signal } = options;
@@ -332,7 +332,7 @@ export interface IndexEmbeddingsResponse {
  * @param content - Plain-text content of the document.
  * @returns Summary of the indexing operation.
  */
-export function index_document_embeddings(
+export function indexDocumentEmbeddings(
   document_id: string,
   content: string,
 ): Promise<IndexEmbeddingsResponse> {

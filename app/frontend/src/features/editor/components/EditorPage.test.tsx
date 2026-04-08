@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import type { JSONContent, Editor } from "@tiptap/react";
-import type { DocumentChangePayload } from "../../ai-assistant/api/ai_api";
+import type { DocumentChangePayload } from "../../ai-assistant/api/aiApi";
 import { EditorPage } from "./EditorPage";
 
 const mock_navigate = vi.fn();
@@ -63,7 +63,7 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => mock_navigate,
 }));
 
-vi.mock("../hooks/use_document", () => ({
+vi.mock("../hooks/useDocument", () => ({
   useDocument: () => ({
     data: {
       id: "doc-1",
@@ -83,40 +83,40 @@ vi.mock("../hooks/use_document", () => ({
   }),
 }));
 
-vi.mock("../hooks/use_save_document", () => ({
+vi.mock("../hooks/useSaveDocument", () => ({
   useSaveDocument: () => ({
     mutateAsync: mock_mutate_async,
   }),
 }));
 
-vi.mock("../hooks/use_invite_document_collaborator", () => ({
+vi.mock("../hooks/useInviteDocumentCollaborator", () => ({
   useInviteDocumentCollaborator: () => ({
     mutateAsync: mock_invite_mutate_async,
     isPending: false,
   }),
 }));
 
-vi.mock("../../../hooks/use_focus_mode", () => ({
+vi.mock("../../../hooks/useFocusMode", () => ({
   useFocusMode: vi.fn(),
 }));
 
-vi.mock("../../../stores/tabs_store", () => ({
-  use_tabs_store: () => ({
-    add_tab: mock_add_tab,
-    update_tab_title: mock_update_tab_title,
+vi.mock("../../../stores/tabsStore", () => ({
+  useTabsStore: () => ({
+    addTab: mock_add_tab,
+    updateTabTitle: mock_update_tab_title,
   }),
 }));
 
 vi.mock("../../../stores", () => {
   const store = () => ({
-    is_panel_open: false,
-    toggle_panel: mock_toggle_panel,
-    active_conversation_id: null,
-    pending_document_change: current_pending_change,
-    set_pending_document_change: mock_set_pending_document_change,
+    isPanelOpen: false,
+    togglePanel: mock_toggle_panel,
+    activeConversationId: null,
+    pendingDocumentChange: current_pending_change,
+    setPendingDocumentChange: mock_set_pending_document_change,
   });
   store.getState = () => ({
-    pending_document_change: current_pending_change,
+    pendingDocumentChange: current_pending_change,
   });
 
   const auth_store = (
@@ -138,8 +138,12 @@ vi.mock("../../../stores", () => {
   };
 
   return {
-    use_ai_store: store,
-    use_auth_store: auth_store,
+    useTabsStore: () => ({
+      addTab: mock_add_tab,
+      updateTabTitle: mock_update_tab_title,
+    }),
+    useAiStore: store,
+    useAuthStore: auth_store,
   };
 });
 
@@ -161,21 +165,21 @@ vi.mock("../../collaboration", () => ({
   CollaborationPresenceBar: () => <div data-testid="collab-presence" />,
 }));
 
-vi.mock("../hooks/use_ghost_text", () => ({
+vi.mock("../hooks/useGhostText", () => ({
   useGhostText: vi.fn(),
 }));
 
-vi.mock("../../ai-assistant/api/ai_api", () => ({
-  index_document_embeddings: (...args: unknown[]) => mock_index_document_embeddings(...args),
+vi.mock("../../ai-assistant/api/aiApi", () => ({
+  indexDocumentEmbeddings: (...args: unknown[]) => mock_index_document_embeddings(...args),
 }));
 
 vi.mock("./CaretEditor", () => ({
-  CaretEditor: ({ on_editor_ready, ...props }: { on_editor_ready?: (editor: Editor) => void }) => {
+  CaretEditor: ({ onEditorReady, ...props }: { onEditorReady?: (editor: Editor) => void }) => {
     latest_caret_editor_props = props;
 
     useEffect(() => {
-      on_editor_ready?.(fake_editor);
-    }, [on_editor_ready]);
+      onEditorReady?.(fake_editor);
+    }, [onEditorReady]);
 
     return <div data-testid="mock-caret-editor" />;
   },
@@ -250,7 +254,7 @@ describe("EditorPage", () => {
     render(<EditorPage />);
 
     // Act
-    const collaboration_document = latest_caret_editor_props?.collaboration_document;
+    const collaboration_document = latest_caret_editor_props?.collaborationDocument;
 
     // Assert
     expect(collaboration_document).toEqual({ id: "collab-doc" });
