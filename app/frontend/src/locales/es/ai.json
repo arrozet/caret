@@ -1,0 +1,29 @@
+{
+  "panel_title": "Caret AI",
+  "input_placeholder": "Escribe un mensaje...",
+  "stop_generating": "Detener generación",
+  "apply": "Aplicar",
+  "regenerate": "Regenerar",
+  "new_conversation": "Nueva conversación",
+  "close_panel": "Cerrar panel de IA",
+  "messages_region": "Mensajes de la conversación de IA",
+  "empty_state": "Pregunta lo que quieras sobre tu documento.",
+  "keyboard_hint": "Enter para enviar · Shift+Enter para nueva línea",
+  "model_selector": "Modelo",
+  "history_selector": "Recientes",
+  "history_search_placeholder": "Buscar conversaciones",
+  "model_search_placeholder": "Buscar modelos",
+  "mode_ask": "Preguntar",
+  "mode_agent": "Agente",
+  "recent_conversations_title": "Conversaciones recientes",
+  "recent_conversations_empty": "No hay conversaciones recientes.",
+  "models_empty": "No se encontraron modelos.",
+  "model_group_free": "Gratis",
+  "model_group_paid": "De pago",
+  "model_stealth_label": "Oculto",
+  "model_stealth_tooltip": "Modelo anónimo: el laboratorio detrás de él no se ha hecho público.",
+  "model_stealth_notice": "El creador de este modelo no se ha hecho público.",
+  "error": {
+    "unavailable": "El servicio de IA no está disponible temporalmente. Inténtalo de nuevo."
+  }
+}

@@ -1,6 +1,16 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Send, Square, RefreshCw, Sparkles, Check } from "lucide-react";
+import {
+  X,
+  Send,
+  Square,
+  RefreshCw,
+  Sparkles,
+  Check,
+  Clock3,
+  Search,
+  ChevronsUpDown,
+} from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { useAiStore } from "../../../stores/aiStore";
 import { useAiStream } from "../hooks/useAiStream";
@@ -146,45 +156,6 @@ function ToolCallBadge({ toolName, isCompleted = false }: ToolCallBadgeProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Suggested prompts strip
-// ---------------------------------------------------------------------------
-
-/**
- * Props for the suggested prompts strip shown in the empty state.
- */
-interface SuggestedPromptsProps {
-  /** Called when the user clicks a prompt chip. */
-  onSelect: (prompt: string) => void;
-}
-
-/**
- * Horizontal strip of quick-action prompt chips shown when there are no
- * messages yet.
- */
-function SuggestedPrompts({ onSelect }: SuggestedPromptsProps) {
-  const { t } = useTranslation("ai");
-
-  const prompts: Array<{ key: string; label: string }> = [
-    { key: "summarize", label: t("suggested_prompts.summarize") },
-    { key: "improve_intro", label: t("suggested_prompts.improve_intro") },
-    { key: "check_clarity", label: t("suggested_prompts.check_clarity") },
-  ];
-
-  return (
-    <div className="flex flex-col gap-2 px-4 py-3">
-      {prompts.map(({ key, label }) => (
-        <button
-          key={key}
-          onClick={() => onSelect(label)}
-          className="w-full text-left rounded-xl px-4 py-2.5 text-ui-sm text-text-secondary border border-border-subtle hover:border-accent-ai hover:text-accent-ai hover:bg-surface transition-all duration-200 ease-out shadow-sm hover:shadow"
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Main ChatPanel
 // ---------------------------------------------------------------------------
@@ -261,11 +232,17 @@ export function ChatPanel({
   const [recentConversations, setRecentConversations] = useState<
     Array<{ id: string; title: string | null }>
   >([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isModelOpen, setIsModelOpen] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [modelQuery, setModelQuery] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isUserScrolling = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const historyPanelRef = useRef<HTMLDivElement>(null);
+  const modelPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!selectedModelId) {
@@ -304,6 +281,49 @@ export function ChatPanel({
   }, []);
 
   const selectableModels = models.length > 0 ? models : FALLBACK_MODELS;
+  const selectedModel = selectableModels.find((model) => model.id === selectedModelId);
+
+  const filteredRecentConversations = useMemo(() => {
+    const needle = historyQuery.trim().toLowerCase();
+    if (!needle) {
+      return recentConversations;
+    }
+
+    return recentConversations.filter((conversation) => {
+      const title = conversation.title ?? "";
+      return title.toLowerCase().includes(needle) || conversation.id.toLowerCase().includes(needle);
+    });
+  }, [recentConversations, historyQuery]);
+
+  const filteredModels = useMemo(() => {
+    const needle = modelQuery.trim().toLowerCase();
+    if (!needle) {
+      return selectableModels;
+    }
+
+    return selectableModels.filter((model) => {
+      return (
+        model.name.toLowerCase().includes(needle) ||
+        model.provider.toLowerCase().includes(needle) ||
+        model.id.toLowerCase().includes(needle)
+      );
+    });
+  }, [selectableModels, modelQuery]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (historyPanelRef.current && !historyPanelRef.current.contains(target)) {
+        setIsHistoryOpen(false);
+      }
+      if (modelPanelRef.current && !modelPanelRef.current.contains(target)) {
+        setIsModelOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   // Load existing messages when panel opens with a pre-existing conversation.
   useEffect(() => {
@@ -389,19 +409,6 @@ export function ChatPanel({
   );
 
   /**
-   * Handle a suggested prompt chip click — send immediately with fresh context.
-   */
-  const handleSuggestedPrompt = useCallback(
-    async (prompt: string) => {
-      setInputValue("");
-      const agentTypeToUse = aiMode === "agent" ? selectedAgentType : undefined;
-      const currentContext = get_document_context?.();
-      await send_message(prompt, document_id, currentContext, selectedModelId, agentTypeToUse);
-    },
-    [send_message, document_id, get_document_context, selectedModelId, aiMode, selectedAgentType],
-  );
-
-  /**
    * Close the panel and return focus to the editor.
    */
   const handleClose = useCallback(() => {
@@ -426,8 +433,17 @@ export function ChatPanel({
       setConversation(conversationId);
       clear();
       await load_messages(conversationId);
+      setIsHistoryOpen(false);
     },
     [activeConversationId, setConversation, clear, load_messages],
+  );
+
+  const handleSelectModel = useCallback(
+    (modelId: string) => {
+      setSelectedModelId(modelId || undefined);
+      setIsModelOpen(false);
+    },
+    [setSelectedModelId],
   );
 
   /**
@@ -456,14 +472,86 @@ export function ChatPanel({
       role="complementary"
     >
       {/* Panel header */}
-      <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border-subtle">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-accent-ai" aria-hidden="true" strokeWidth={2} />
-          <span className="text-ui-base font-semibold text-text-primary">{t("panel_title")}</span>
+      <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Sparkles
+            className="h-4 w-4 shrink-0 text-accent-ai"
+            aria-hidden="true"
+            strokeWidth={2}
+          />
+          <span className="truncate text-ui-base font-semibold text-text-primary">
+            {t("panel_title")}
+          </span>
         </div>
 
-        <div className="flex items-center gap-1">
-          {/* New conversation button — only shown when messages exist */}
+        <div className="flex items-center gap-1.5">
+          <div ref={historyPanelRef} className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsHistoryOpen((value) => !value);
+                setIsModelOpen(false);
+                setHistoryQuery("");
+              }}
+              className="inline-flex items-center gap-2 rounded-md border border-border-subtle px-3 py-1.5 text-ui-xs text-text-secondary transition-colors hover:border-accent-ai hover:text-text-primary"
+              aria-expanded={isHistoryOpen}
+              aria-label={t("history_selector")}
+            >
+              <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("history_selector")}
+            </button>
+
+            {isHistoryOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsHistoryOpen(false)} />
+                <div className="absolute right-0 top-full z-40 mt-2 w-[320px] rounded-xl border border-border-subtle bg-surface p-3 shadow-elevated">
+                  <label className="flex items-center gap-2 rounded-lg border border-border-subtle px-3 py-2 text-ui-xs text-text-secondary">
+                    <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <input
+                      value={historyQuery}
+                      onChange={(e) => setHistoryQuery(e.target.value)}
+                      placeholder={t("history_search_placeholder")}
+                      className="w-full bg-transparent outline-none placeholder:text-text-secondary/60"
+                    />
+                  </label>
+
+                  <div className="mt-3 max-h-[240px] overflow-y-auto pr-1">
+                    <p className="px-1 pb-2 text-[10px] uppercase tracking-[0.12em] text-text-secondary">
+                      {t("recent_conversations_title")}
+                    </p>
+                    {filteredRecentConversations.length > 0 ? (
+                      <div className="space-y-1">
+                        {filteredRecentConversations.map((conversation, index) => (
+                          <button
+                            key={conversation.id}
+                            type="button"
+                            onClick={() => handleSelectConversation(conversation.id)}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-ui-sm text-text-primary transition-colors hover:bg-app"
+                            title={
+                              conversation.title?.trim().length
+                                ? conversation.title
+                                : `Conversation ${index + 1}`
+                            }
+                          >
+                            <span className="truncate">
+                              {conversation.title?.trim().length
+                                ? conversation.title
+                                : `Conversation ${index + 1}`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="px-1 py-2 text-ui-sm text-text-secondary">
+                        {t("recent_conversations_empty")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
           {has_messages && (
             <Button
               variant="ghost"
@@ -478,7 +566,6 @@ export function ChatPanel({
             </Button>
           )}
 
-          {/* Close panel */}
           <Button
             ref={closeButtonRef}
             variant="ghost"
@@ -502,42 +589,8 @@ export function ChatPanel({
         aria-label={t("messages_region")}
       >
         {!has_messages && (
-          <div className="flex flex-col items-center justify-center h-full min-h-[120px]">
-            <p className="text-ui-sm text-text-secondary mb-4 px-4 text-center">
-              {t("empty_state")}
-            </p>
-            <SuggestedPrompts onSelect={handleSuggestedPrompt} />
-            {recentConversations.length > 0 && (
-              <div className="mt-4 w-full px-4">
-                <p className="mb-2 text-ui-xs font-medium text-text-secondary/80">
-                  Recent conversations
-                </p>
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {recentConversations.slice(0, 5).map((conversation, index) => (
-                    <button
-                      key={conversation.id}
-                      type="button"
-                      onClick={() => handleSelectConversation(conversation.id)}
-                      className={[
-                        "shrink-0 min-w-[120px] max-w-[150px] rounded-lg border px-3 py-2 text-left text-ui-sm transition-colors truncate",
-                        conversation.id === activeConversationId
-                          ? "border-accent-ai/50 bg-accent-ai/5 text-text-primary"
-                          : "border-border-subtle text-text-secondary hover:border-accent-ai/40 hover:text-text-primary",
-                      ].join(" ")}
-                      title={
-                        conversation.title && conversation.title.trim().length > 0
-                          ? conversation.title
-                          : `Conversation ${index + 1}`
-                      }
-                    >
-                      {conversation.title && conversation.title.trim().length > 0
-                        ? conversation.title
-                        : `Conversation ${index + 1}`}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="flex min-h-[220px] flex-col items-center justify-center px-6 text-center">
+            <p className="text-ui-sm text-text-secondary">{t("empty_state")}</p>
           </div>
         )}
 
@@ -581,69 +634,110 @@ export function ChatPanel({
         </div>
       )}
 
-      {/* Bottom controls: Ask/Agent toggle + model selector — same row */}
-      <div className="shrink-0 px-3 py-2 border-t border-border-subtle bg-surface flex items-center gap-2">
-        {/* Ask / Agent mode toggle */}
-        <div className="flex items-center gap-0.5 bg-app rounded-lg p-0.5 shrink-0">
-          <button
-            onClick={() => setAiMode("ask")}
-            className={[
-              "px-2.5 py-1 rounded-md text-ui-xs font-medium transition-all duration-150",
-              aiMode === "ask"
-                ? "bg-surface text-text-primary shadow-sm"
-                : "text-text-secondary hover:text-text-primary",
-            ].join(" ")}
-          >
-            Ask
-          </button>
-          <button
-            onClick={() => setAiMode("agent")}
-            className={[
-              "px-2.5 py-1 rounded-md text-ui-xs font-medium transition-all duration-150",
-              aiMode === "agent"
-                ? "bg-surface text-text-primary shadow-sm"
-                : "text-text-secondary hover:text-text-primary",
-            ].join(" ")}
-          >
-            Agent
-          </button>
+      {/* Bottom controls and message bar */}
+      <div className="shrink-0 border-t border-border-subtle bg-surface px-3 pb-3 pt-2">
+        <div className="mb-2 flex items-center gap-2">
+          <div className="relative" ref={modelPanelRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsModelOpen((value) => !value);
+                setIsHistoryOpen(false);
+                setModelQuery("");
+              }}
+              className="inline-flex min-w-[190px] items-center justify-between gap-2 rounded-md border border-border-subtle bg-app px-3 py-2 text-ui-xs text-text-primary transition-colors hover:border-accent-ai"
+              aria-expanded={isModelOpen}
+              aria-label={t("model_selector")}
+            >
+              <span className="truncate">{selectedModel?.name ?? t("model_selector")}</span>
+              <ChevronsUpDown
+                className="h-3.5 w-3.5 shrink-0 text-text-secondary"
+                aria-hidden="true"
+              />
+            </button>
+
+            {isModelOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsModelOpen(false)} />
+                <div className="absolute left-0 bottom-full z-40 mb-2 w-[320px] rounded-xl border border-border-subtle bg-surface p-3 shadow-elevated">
+                  <label className="flex items-center gap-2 rounded-lg border border-border-subtle px-3 py-2 text-ui-xs text-text-secondary">
+                    <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <input
+                      value={modelQuery}
+                      onChange={(e) => setModelQuery(e.target.value)}
+                      placeholder={t("model_search_placeholder")}
+                      className="w-full bg-transparent outline-none placeholder:text-text-secondary/60"
+                    />
+                  </label>
+
+                  <div className="mt-3 max-h-[260px] overflow-y-auto pr-1">
+                    {filteredModels.length > 0 ? (
+                      <div className="space-y-1">
+                        {filteredModels.map((model) => (
+                          <button
+                            key={model.id}
+                            type="button"
+                            onClick={() => handleSelectModel(model.id)}
+                            className={[
+                              "flex w-full items-start justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-app",
+                              model.id === selectedModelId ? "bg-app" : "",
+                            ].join(" ")}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate text-ui-sm text-text-primary">
+                                {model.name}
+                              </span>
+                              <span className="block truncate text-[11px] text-text-secondary">
+                                {model.provider}
+                              </span>
+                            </span>
+                            {model.id === selectedModelId && (
+                              <Check
+                                className="h-3.5 w-3.5 shrink-0 text-accent-ai"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="px-1 py-2 text-ui-sm text-text-secondary">
+                        {t("models_empty")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="inline-flex rounded-md border border-border-subtle bg-app p-0.5">
+            <button
+              onClick={() => setAiMode("ask")}
+              className={[
+                "rounded-[4px] px-3 py-1.5 text-ui-xs font-medium transition-colors",
+                aiMode === "ask"
+                  ? "bg-surface text-text-primary shadow-sm"
+                  : "text-text-secondary hover:text-text-primary",
+              ].join(" ")}
+            >
+              {t("mode_ask")}
+            </button>
+            <button
+              onClick={() => setAiMode("agent")}
+              className={[
+                "rounded-[4px] px-3 py-1.5 text-ui-xs font-medium transition-colors",
+                aiMode === "agent"
+                  ? "bg-surface text-text-primary shadow-sm"
+                  : "text-text-secondary hover:text-text-primary",
+              ].join(" ")}
+            >
+              {t("mode_agent")}
+            </button>
+          </div>
         </div>
 
-        <select
-          id="model-selector"
-          value={selectedModelId ?? ""}
-          onChange={(e) => setSelectedModelId(e.target.value || undefined)}
-          aria-label={t("model_selector")}
-          className="flex-1 min-w-0 rounded-[4px] border border-border-subtle bg-app px-2 py-1 text-ui-xs text-text-primary outline-none focus:border-accent-ai transition-colors duration-100"
-        >
-          {selectableModels.some((m) => m.is_free) && (
-            <optgroup label={t("model_group_free")}>
-              {selectableModels
-                .filter((m) => m.is_free)
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-            </optgroup>
-          )}
-          {selectableModels.some((m) => !m.is_free) && (
-            <optgroup label={t("model_group_paid")}>
-              {selectableModels
-                .filter((m) => !m.is_free)
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-            </optgroup>
-          )}
-        </select>
-      </div>
-
-      {/* Input area */}
-      <div className="shrink-0 border-t border-border-subtle px-4 pb-4 pt-3 bg-surface">
-        <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-app px-3 py-2.5 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20 transition-all duration-200 shadow-sm">
+        <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-app px-3 py-2.5 transition-all duration-200 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20 shadow-sm">
           <textarea
             ref={inputRef}
             value={inputValue}
@@ -688,7 +782,6 @@ export function ChatPanel({
           )}
         </div>
 
-        {/* Keyboard shortcut hint */}
         <p className="mt-1.5 text-center text-ui-xs text-text-secondary/50">{t("keyboard_hint")}</p>
       </div>
     </aside>
