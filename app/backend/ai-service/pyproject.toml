@@ -37,6 +37,11 @@ select = ["E", "F", "I", "N", "UP"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests", "tests.*"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

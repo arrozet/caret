@@ -444,4 +444,5 @@ class DocumentEmbeddingRepository:
         result = await self._session.execute(
             sql_delete(DocumentEmbedding).where(DocumentEmbedding.document_id == document_id)
         )
-        return result.rowcount
+        rowcount = getattr(result, "rowcount", 0)
+        return int(rowcount or 0)

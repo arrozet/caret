@@ -19,6 +19,7 @@ Usage:
 
 import time
 from dataclasses import dataclass
+from typing import Any, cast
 
 import httpx
 from fastapi import Depends, HTTPException, status
@@ -43,14 +44,14 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 class _JwksCache:
     """In-process JWKS cache entry."""
 
-    keys: list[dict]  # type: ignore[type-arg]
+    keys: list[dict[str, Any]]
     fetched_at: float  # Unix timestamp
 
 
 _jwks_cache: _JwksCache | None = None
 
 
-async def _fetch_jwks() -> list[dict]:  # type: ignore[type-arg]
+async def _fetch_jwks() -> list[dict[str, Any]]:
     """
     Download the public JWKS from the Supabase GoTrue endpoint.
 
@@ -63,17 +64,17 @@ async def _fetch_jwks() -> list[dict]:  # type: ignore[type-arg]
     Raises:
         HTTPException 503 if the JWKS cannot be fetched.
     """
-    if not settings.SUPABASE_URL or not settings.SUPABASE_ANON_KEY:
+    if not settings.supabase_url or not settings.supabase_anon_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication is not configured (missing SUPABASE_URL / SUPABASE_ANON_KEY).",
         )
 
-    base = settings.SUPABASE_URL.rstrip("/")
+    base = settings.supabase_url.rstrip("/")
     url = f"{base}/auth/v1/.well-known/jwks.json"
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(url, headers={"apikey": settings.SUPABASE_ANON_KEY})
+        response = await client.get(url, headers={"apikey": settings.supabase_anon_key})
 
     if response.status_code != 200:
         raise HTTPException(
@@ -81,11 +82,11 @@ async def _fetch_jwks() -> list[dict]:  # type: ignore[type-arg]
             detail=f"Failed to fetch JWKS from Supabase: HTTP {response.status_code}",
         )
 
-    data = response.json()
-    return data.get("keys", [])
+    data = cast(dict[str, Any], response.json())
+    return cast(list[dict[str, Any]], data.get("keys", []))
 
 
-async def _get_jwks() -> list[dict]:  # type: ignore[type-arg]
+async def _get_jwks() -> list[dict[str, Any]]:
     """
     Return the cached JWKS keys, refreshing if the TTL has elapsed.
 
@@ -95,7 +96,7 @@ async def _get_jwks() -> list[dict]:  # type: ignore[type-arg]
     global _jwks_cache
 
     now = time.monotonic()
-    if _jwks_cache is not None and now - _jwks_cache.fetched_at < settings.JWKS_CACHE_TTL_SECONDS:
+    if _jwks_cache is not None and now - _jwks_cache.fetched_at < settings.jwks_cache_ttl_seconds:
         return _jwks_cache.keys
 
     keys = await _fetch_jwks()

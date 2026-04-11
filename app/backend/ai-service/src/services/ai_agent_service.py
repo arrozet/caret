@@ -92,40 +92,40 @@ def _build_model(model_id: str | None = None) -> OpenAIChatModel | AnthropicMode
     # Route to the gateway declared in the catalog entry.
     if entry is not None:
         if entry.gateway == "xai":
-            if not settings.XAI_API_KEY:
+            if not settings.xai_api_key:
                 raise RuntimeError(
                     f"XAI_API_KEY is required for model '{entry.name}' but is not configured."
                 )
             provider = OpenAIProvider(
                 base_url="https://api.x.ai/v1",
-                api_key=settings.XAI_API_KEY,
+                api_key=settings.xai_api_key,
             )
             return OpenAIChatModel(entry.id, provider=provider)
 
         if entry.gateway == "openrouter":
-            if not settings.OPENROUTER_API_KEY:
+            if not settings.openrouter_api_key:
                 raise RuntimeError(
                     "OPENROUTER_API_KEY is required for model "
                     f"'{entry.name}' but is not configured."
                 )
             provider = OpenAIProvider(
                 base_url="https://openrouter.ai/api/v1",
-                api_key=settings.OPENROUTER_API_KEY,
+                api_key=settings.openrouter_api_key,
             )
             return OpenAIChatModel(entry.id, provider=provider)
 
     # Fallback: model_id not in catalog — try available keys in priority order.
-    if settings.OPENROUTER_API_KEY:
-        resolved = model_id or settings.OPENROUTER_MODEL
+    if settings.openrouter_api_key:
+        resolved = model_id or settings.openrouter_model
         provider = OpenAIProvider(
             base_url="https://openrouter.ai/api/v1",
-            api_key=settings.OPENROUTER_API_KEY,
+            api_key=settings.openrouter_api_key,
         )
         return OpenAIChatModel(resolved, provider=provider)
-    if settings.OPENAI_API_KEY:
-        provider = OpenAIProvider(api_key=settings.OPENAI_API_KEY)
+    if settings.openai_api_key:
+        provider = OpenAIProvider(api_key=settings.openai_api_key)
         return OpenAIChatModel("gpt-4o", provider=provider)
-    if settings.ANTHROPIC_API_KEY:
+    if settings.anthropic_api_key:
         return AnthropicModel("claude-3-5-sonnet-latest")
     raise RuntimeError(
         "No LLM API key configured. "

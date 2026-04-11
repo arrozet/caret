@@ -39,7 +39,7 @@ class GeneralAgentDeps:
     """
 
     document_content: str | None = None
-    proposed_changes: list[dict] = field(default_factory=list)
+    proposed_changes: list[dict[str, str]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

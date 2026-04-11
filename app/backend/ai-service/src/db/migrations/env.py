@@ -49,14 +49,14 @@ target_metadata = Base.metadata
 # ---------------------------------------------------------------------------
 
 
-def _get_url_and_connect_args() -> tuple[str, dict]:
+def _get_url_and_connect_args() -> tuple[str, dict[str, object]]:
     """
     Resolve the database URL and asyncpg connect_args from application settings.
     Returns the (clean_url, connect_args) tuple produced by _normalize_database_url,
     which strips libpq-specific parameters (e.g. sslmode) and builds the asyncpg
     ssl.SSLContext and prepared-statement settings.
     """
-    url = settings.DATABASE_URL
+    url = settings.database_url
     if not url:
         raise RuntimeError(
             "DATABASE_URL is not set. Export it as an environment variable before running Alembic."

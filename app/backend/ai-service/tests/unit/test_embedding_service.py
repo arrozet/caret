@@ -478,9 +478,9 @@ class TestEmbeddingServiceEmbedTexts:
         service = EmbeddingService(session)
 
         with patch("services.embedding_service.settings") as mock_settings:
-            mock_settings.OPENAI_API_KEY = ""
-            mock_settings.OPENROUTER_API_KEY = ""
-            mock_settings.OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+            mock_settings.openai_api_key = ""
+            mock_settings.openrouter_api_key = ""
+            mock_settings.openai_embedding_model = "text-embedding-3-small"
 
             # Act / Assert
             with pytest.raises(RuntimeError, match="No embedding API key configured"):
@@ -511,9 +511,9 @@ class TestEmbeddingServiceEmbedTexts:
                 return_value=mock_http_client,
             ),
         ):
-            mock_settings.OPENAI_API_KEY = "sk-test-key"
-            mock_settings.OPENROUTER_API_KEY = ""
-            mock_settings.OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+            mock_settings.openai_api_key = "sk-test-key"
+            mock_settings.openrouter_api_key = ""
+            mock_settings.openai_embedding_model = "text-embedding-3-small"
 
             # Act
             result = await service._embed_texts(["hello"])
@@ -550,9 +550,9 @@ class TestEmbeddingServiceEmbedTexts:
                 return_value=mock_http_client,
             ),
         ):
-            mock_settings.OPENAI_API_KEY = ""
-            mock_settings.OPENROUTER_API_KEY = "or-test-key"
-            mock_settings.OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+            mock_settings.openai_api_key = ""
+            mock_settings.openrouter_api_key = "or-test-key"
+            mock_settings.openai_embedding_model = "text-embedding-3-small"
 
             # Act
             result = await service._embed_texts(["hello"])

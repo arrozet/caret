@@ -11,17 +11,17 @@ class TestSettings:
     def test_default_app_env(self) -> None:
         """APP_ENV should default to 'development'."""
         settings = Settings()
-        assert settings.APP_ENV == "development"
+        assert settings.app_env == "development"
 
     def test_default_port(self) -> None:
         """PORT should default to 8000."""
         settings = Settings()
-        assert settings.PORT == 8000
+        assert settings.port == 8000
 
     def test_empty_database_url_by_default(self) -> None:
         """DATABASE_URL should default to empty string when not set."""
         settings = Settings()
-        assert settings.DATABASE_URL == "" or isinstance(settings.DATABASE_URL, str)
+        assert settings.database_url == "" or isinstance(settings.database_url, str)
 
 
 class TestHealthEndpoint:

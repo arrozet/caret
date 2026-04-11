@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import (
 from core.config import settings
 
 
-def _normalize_database_url(url: str) -> tuple[str, dict]:
+def _normalize_database_url(url: str) -> tuple[str, dict[str, object]]:
     """
     Rewrite DATABASE_URL for asyncpg compatibility.
 
@@ -41,7 +41,7 @@ def _normalize_database_url(url: str) -> tuple[str, dict]:
     # cause asyncpg to authenticate with a literal "***" as the password.
     clean_url = parsed.set(query=query_params).render_as_string(hide_password=False)
 
-    connect_args: dict = {}
+    connect_args: dict[str, object] = {}
     if sslmode and sslmode != "disable":
         import ssl as _ssl
 
@@ -86,10 +86,10 @@ def _build_engine() -> AsyncEngine | None:
     Create the async SQLAlchemy engine only when DATABASE_URL is configured.
     Returns None during local health-check runs where no DB is needed yet.
     """
-    if not settings.DATABASE_URL:
+    if not settings.database_url:
         return None
 
-    db_url, connect_args = _normalize_database_url(settings.DATABASE_URL)
+    db_url, connect_args = _normalize_database_url(settings.database_url)
     return create_async_engine(
         db_url,
         echo=False,

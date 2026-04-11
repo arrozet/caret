@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,25 +10,31 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    APP_ENV: str = "development"
-    PORT: int = 8000
+    app_env: str = Field(default="development", validation_alias="APP_ENV")
+    port: int = Field(default=8000, validation_alias="PORT")
 
-    DATABASE_URL: str = ""
-    SUPABASE_URL: str = ""
-    SUPABASE_ANON_KEY: str = ""
+    database_url: str = Field(default="", validation_alias="DATABASE_URL")
+    supabase_url: str = Field(default="", validation_alias="SUPABASE_URL")
+    supabase_anon_key: str = Field(default="", validation_alias="SUPABASE_ANON_KEY")
 
-    OPENAI_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
-    OPENROUTER_API_KEY: str = ""
-    XAI_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "grok-4-1-fast-reasoning"
+    openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
+    openrouter_api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
+    xai_api_key: str = Field(default="", validation_alias="XAI_API_KEY")
+    openrouter_model: str = Field(
+        default="grok-4-1-fast-reasoning",
+        validation_alias="OPENROUTER_MODEL",
+    )
 
     # Embedding model settings for RAG (Phase 4)
-    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
-    EMBEDDING_DIMENSIONS: int = 1536
+    openai_embedding_model: str = Field(
+        default="text-embedding-3-small",
+        validation_alias="OPENAI_EMBEDDING_MODEL",
+    )
+    embedding_dimensions: int = Field(default=1536, validation_alias="EMBEDDING_DIMENSIONS")
 
     # JWT cache TTL in seconds (default: 5 minutes)
-    JWKS_CACHE_TTL_SECONDS: int = 300
+    jwks_cache_ttl_seconds: int = Field(default=300, validation_alias="JWKS_CACHE_TTL_SECONDS")
 
 
 settings = Settings()

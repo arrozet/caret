@@ -57,4 +57,4 @@ app.include_router(embedding_router, prefix="/ai", tags=["embeddings"])
 @app.get("/health")
 async def health_check() -> dict[str, str]:
     """Health check endpoint used by ECS Fargate task health checks."""
-    return {"status": "ok", "env": settings.APP_ENV}
+    return {"status": "ok", "env": settings.app_env}

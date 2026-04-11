@@ -74,8 +74,8 @@ class TestFetchJwks:
         """_fetch_jwks should raise HTTPException 503 when SUPABASE_URL is not set."""
         # Arrange
         with patch("core.auth.settings") as mock_settings:
-            mock_settings.SUPABASE_URL = ""
-            mock_settings.SUPABASE_ANON_KEY = ""
+            mock_settings.supabase_url = ""
+            mock_settings.supabase_anon_key = ""
 
             # Act / Assert
             with pytest.raises(HTTPException) as exc_info:
@@ -94,8 +94,8 @@ class TestFetchJwks:
             patch("core.auth.settings") as mock_settings,
             patch("httpx.AsyncClient") as mock_client_cls,
         ):
-            mock_settings.SUPABASE_URL = "https://project.supabase.co"
-            mock_settings.SUPABASE_ANON_KEY = "anon-key"
+            mock_settings.supabase_url = "https://project.supabase.co"
+            mock_settings.supabase_anon_key = "anon-key"
             mock_client_instance = AsyncMock()
             mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
             mock_client_instance.__aexit__ = AsyncMock(return_value=False)
@@ -121,8 +121,8 @@ class TestFetchJwks:
             patch("core.auth.settings") as mock_settings,
             patch("httpx.AsyncClient") as mock_client_cls,
         ):
-            mock_settings.SUPABASE_URL = "https://project.supabase.co"
-            mock_settings.SUPABASE_ANON_KEY = "anon-key"
+            mock_settings.supabase_url = "https://project.supabase.co"
+            mock_settings.supabase_anon_key = "anon-key"
             mock_client_instance = AsyncMock()
             mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
             mock_client_instance.__aexit__ = AsyncMock(return_value=False)
@@ -162,7 +162,7 @@ class TestGetJwksCache:
             )
 
             with patch("core.auth.settings") as mock_settings:
-                mock_settings.JWKS_CACHE_TTL_SECONDS = 300
+                mock_settings.jwks_cache_ttl_seconds = 300
 
                 # Act
                 result = await _get_jwks()
@@ -187,7 +187,7 @@ class TestGetJwksCache:
             patch("core.auth.settings") as mock_settings,
             patch("core.auth._fetch_jwks", new_callable=AsyncMock, return_value=fresh_keys),
         ):
-            mock_settings.JWKS_CACHE_TTL_SECONDS = 300
+            mock_settings.jwks_cache_ttl_seconds = 300
 
             # Act
             result = await _get_jwks()

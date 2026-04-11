@@ -816,11 +816,11 @@ class TestBuildModel:
         """_build_model should raise RuntimeError when no API keys are set."""
         # Arrange
         with patch("services.ai_agent_service.settings") as mock_settings:
-            mock_settings.XAI_API_KEY = ""
-            mock_settings.OPENROUTER_API_KEY = ""
-            mock_settings.OPENAI_API_KEY = ""
-            mock_settings.ANTHROPIC_API_KEY = ""
-            mock_settings.OPENROUTER_MODEL = "some-model"
+            mock_settings.xai_api_key = ""
+            mock_settings.openrouter_api_key = ""
+            mock_settings.openai_api_key = ""
+            mock_settings.anthropic_api_key = ""
+            mock_settings.openrouter_model = "some-model"
 
             # Act / Assert
             with pytest.raises(RuntimeError, match="No LLM API key configured"):
@@ -830,10 +830,10 @@ class TestBuildModel:
         """_build_model should raise RuntimeError for grok- model when XAI_API_KEY is missing."""
         # Arrange
         with patch("services.ai_agent_service.settings") as mock_settings:
-            mock_settings.XAI_API_KEY = ""
-            mock_settings.OPENROUTER_API_KEY = ""
-            mock_settings.OPENAI_API_KEY = ""
-            mock_settings.ANTHROPIC_API_KEY = ""
+            mock_settings.xai_api_key = ""
+            mock_settings.openrouter_api_key = ""
+            mock_settings.openai_api_key = ""
+            mock_settings.anthropic_api_key = ""
 
             # Act / Assert
             with pytest.raises(RuntimeError, match="XAI_API_KEY"):
@@ -847,11 +847,11 @@ class TestBuildModel:
             patch("services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
             patch("services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
         ):
-            mock_settings.XAI_API_KEY = ""
-            mock_settings.OPENROUTER_API_KEY = "or-key-123"
-            mock_settings.OPENAI_API_KEY = ""
-            mock_settings.ANTHROPIC_API_KEY = ""
-            mock_settings.OPENROUTER_MODEL = "z-ai/glm-4.5-air:free"
+            mock_settings.xai_api_key = ""
+            mock_settings.openrouter_api_key = "or-key-123"
+            mock_settings.openai_api_key = ""
+            mock_settings.anthropic_api_key = ""
+            mock_settings.openrouter_model = "z-ai/glm-4.5-air:free"
             mock_provider_cls.return_value = MagicMock()
             mock_model_cls.return_value = MagicMock()
 
@@ -875,11 +875,11 @@ class TestBuildModel:
             patch("services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
             patch("services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
         ):
-            mock_settings.XAI_API_KEY = ""
-            mock_settings.OPENROUTER_API_KEY = "or-key-123"
-            mock_settings.OPENAI_API_KEY = ""
-            mock_settings.ANTHROPIC_API_KEY = ""
-            mock_settings.OPENROUTER_MODEL = "z-ai/glm-4.5-air:free"
+            mock_settings.xai_api_key = ""
+            mock_settings.openrouter_api_key = "or-key-123"
+            mock_settings.openai_api_key = ""
+            mock_settings.anthropic_api_key = ""
+            mock_settings.openrouter_model = "z-ai/glm-4.5-air:free"
             mock_provider_cls.return_value = MagicMock()
             mock_model_cls.return_value = MagicMock()
 
@@ -897,11 +897,11 @@ class TestBuildModel:
             patch("services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
             patch("services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
         ):
-            mock_settings.XAI_API_KEY = ""
-            mock_settings.OPENROUTER_API_KEY = ""
-            mock_settings.OPENAI_API_KEY = "sk-openai-key"
-            mock_settings.ANTHROPIC_API_KEY = ""
-            mock_settings.OPENROUTER_MODEL = "z-ai/glm-4.5-air:free"
+            mock_settings.xai_api_key = ""
+            mock_settings.openrouter_api_key = ""
+            mock_settings.openai_api_key = "sk-openai-key"
+            mock_settings.anthropic_api_key = ""
+            mock_settings.openrouter_model = "z-ai/glm-4.5-air:free"
             mock_provider_cls.return_value = MagicMock()
             mock_model_cls.return_value = MagicMock()
 

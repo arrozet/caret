@@ -157,13 +157,13 @@ class EmbeddingService:
             RuntimeError: If no suitable API key is configured.
             httpx.HTTPStatusError: On non-2xx responses from the API.
         """
-        if settings.OPENAI_API_KEY:
+        if settings.openai_api_key:
             base_url = "https://api.openai.com/v1"
-            api_key = settings.OPENAI_API_KEY
-            model = settings.OPENAI_EMBEDDING_MODEL
-        elif settings.OPENROUTER_API_KEY:
+            api_key = settings.openai_api_key
+            model = settings.openai_embedding_model
+        elif settings.openrouter_api_key:
             base_url = "https://openrouter.ai/api/v1"
-            api_key = settings.OPENROUTER_API_KEY
+            api_key = settings.openrouter_api_key
             model = "openai/text-embedding-3-small"
         else:
             raise RuntimeError(
