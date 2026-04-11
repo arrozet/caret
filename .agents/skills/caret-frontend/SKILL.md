@@ -1,15 +1,15 @@
 ---
 name: caret-frontend
-description: Caret frontend — design system, UI components, React/TypeScript architecture, Tiptap editor, Tailwind tokens, state management, animations, and accessibility. Use when building or modifying any frontend code, UI, components, styles, hooks, or when working with the Tiptap editor in the Caret project. Full reference at docs/guidance/FRONTEND.md.
+description: Caret frontend — design system, UI components, React/TypeScript architecture, Tiptap editor, Tailwind tokens, state management, animations, and accessibility. Use when building or modifying any frontend code, UI, components, styles, hooks, or when working with the Tiptap editor in the Caret project.
 ---
 
 # Caret Frontend
 
-Full reference: `docs/guidance/FRONTEND.md`
-
 ## Design Philosophy: "Swiss Focus"
 
 Rigorous, grid-based, minimal. Content-first. Mimics high-end digital paper.
+
+Current visual source of truth: `.impeccable.md`. Use the blue + orange palette there, not a separate purple AI identity.
 
 ## Color Tokens
 
@@ -19,9 +19,10 @@ Rigorous, grid-based, minimal. Content-first. Mimics high-end digital paper.
 | `bg-surface` | `#FFFFFF` | `#1E1E1E` | Document sheet |
 | `text-primary` | `#1A1A1A` | `#E8E8E8` | Main content |
 | `accent-main` | `#0066CC` | `#3B99FC` | Buttons, links |
-| `accent-caret` | `#FF4500` | `#FF6B35` | **Text cursor only** (brand signature) |
-| `accent-ai` | `#8B5CF6` | `#A78BFA` | **AI features only** |
+| `accent-caret` | `#FF4500` | `#FF6B35` | **User focus + AI features** (brand signature) |
 | `border-subtle` | `#E5E5E5` | `#2A2A2A` | Panel separators |
+
+Do not introduce purple AI accents. AI uses `accent-caret` so it feels integrated with the core writing experience.
 
 Theme switching: class-based dark mode (`.dark`). Persist to `localStorage` as `caret-theme`.
 
@@ -30,6 +31,7 @@ Theme switching: class-based dark mode (`.dark`). Persist to `localStorage` as `
 - **UI**: Inter · **Document canvas**: Merriweather · **Code**: Fira Code
 - Body text inside editor: 18px / 1.7 line-height
 - Swiss heading style: `font-weight: 400`, `letter-spacing: -0.02em` (no bold headings)
+- Keep hierarchy driven by size and spacing, not extra color or weight.
 
 ## Layout
 
@@ -98,6 +100,7 @@ src/
 - **Focus Mode**: after 2s inactivity → peripheral UI fades to 20% opacity
 - **AI SSE streaming**: chunks applied as Tiptap Transactions → Y.js sync auto-maintained
 - AI Service **never** writes to DB directly
+- AI surfaces should use `accent-caret`, not a separate purple brand color
 
 ## Animations (Framer Motion — landing only)
 
@@ -111,6 +114,7 @@ src/
 - `aria-live="polite"` on AI streaming regions
 - Focus trapped in modals; returned to trigger on close
 - All Lucide icons need text alternatives
+- Focus indicators should use `accent-main` at 40% opacity with a 3px ring
 
 ## Z-Index Layers
 

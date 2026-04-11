@@ -36,9 +36,9 @@ These guidelines exist to **finish sooner**, **preserve useful context**, and **
 
 - **Do not perform full-repo scans** unless strictly necessary.
 - **Prefer fast sources of truth first**:
-  - `docs/guidance/*.md` for architecture, contracts, and conventions.
-  - `.agents/skills/*` for recommended procedures and patterns.
-  - Files directly referenced by the user (paths like `@...`) or pointed to by the docs.
+  - `.agents/skills/*` for recommended procedures and patterns. Load the relevant skill first when one applies.
+  - Files directly referenced by the user (paths like `@...`) or pointed to by the loaded skill.
+- **Avoid large docs by default**: do not open `docs/guidance/*.md` unless the skill explicitly points to one or there is a real gap that cannot be answered from the skill itself.
 - **Explore the minimum necessary**: start with the most likely directory and narrow quickly; avoid opening large files “just in case”.
 
 ### Design Principles
@@ -70,7 +70,7 @@ Naming conventions vary by technology to follow each ecosystem's best practices:
 
 #### Frontend (React/TypeScript)
 
-La convención de nombres en React se basa en la legibilidad y estructura:
+ Naming conventions in React are based on readability and structure:
 
 - **Components**: Use `PascalCase` for all React components (e.g., `MyComponent.tsx`, `EditorPage.tsx`)
 - **Functions, Variables, and Properties**: Use `camelCase` for functions, variables, and properties (e.g., `userData`, `onClick`, `isVisible`)
@@ -186,13 +186,13 @@ Future (v2.0):
 
 ## System Documentation
 
-Full specifications live in `docs/guidance/`. Read the relevant file when you need deep context on a topic. AI agents can also load each topic on demand as a skill from `.agents/skills/`.
+AI agents should load the relevant `.agents/skills/*` entry first when one exists for the task. Use `docs/guidance/*.md` only when the loaded skill points there or deeper reference is genuinely required.
 
-| Topic | Full reference | Skill |
+| Topic | Skill |
 |:---|:---|:---|
-| Frontend design system, UI components, React architecture | `docs/guidance/FRONTEND.md` | `caret-frontend` |
-| Backend microservices, API specs, Node.js/Python services | `docs/guidance/BACKEND.md` | `caret-backend` |
-| PostgreSQL schema, Supabase, RLS, pgvector | `docs/guidance/DATABASE.md` | `caret-database` |
-| Infrastructure, Docker, AWS (Lambda/ECS), CI/CD | `docs/guidance/DEPLOYMENT.md` | `caret-deployment` |
-| QA strategy, Vitest, Pytest, Playwright | `docs/guidance/TESTING.md` | `caret-testing` |
+| Frontend design system, UI components, React architecture |  `caret-frontend` |
+| Backend microservices, API specs, Node.js/Python services | `caret-backend` |
+| PostgreSQL schema, Supabase, RLS, pgvector |  `caret-database` |
+| Infrastructure, Docker, AWS (Lambda/ECS), CI/CD | `caret-deployment` |
+| QA strategy, Vitest, Pytest, Playwright |  `caret-testing` |
 | Engineering roadmap and step-by-step checklist | `docs/guidance/ROADMAP.md` | `caret-roadmap` |

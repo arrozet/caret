@@ -1,11 +1,9 @@
 ---
 name: caret-deployment
-description: Caret infrastructure and deployment — Docker Compose local dev, AWS Lambda/ECS/Vercel targets, SST IaC, CI/CD pipeline, environment variables, and monitoring. Use when working on Docker, deployment configuration, CI/CD, infrastructure, environment setup, or any DevOps task in the Caret project. Full reference at docs/guidance/DEPLOYMENT.md.
+description: Caret infrastructure and deployment — Docker Compose local dev, AWS Lambda/ECS/Vercel targets, SST IaC, CI/CD pipeline, environment variables, and monitoring. Use when working on Docker, deployment configuration, CI/CD, infrastructure, environment setup, or any DevOps task in the Caret project.
 ---
 
 # Caret Deployment
-
-Full reference: `docs/guidance/DEPLOYMENT.md`
 
 ## Package Managers (Strict)
 

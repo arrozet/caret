@@ -1,11 +1,9 @@
 ---
 name: caret-database
-description: Caret database — PostgreSQL/Supabase schema conventions, core tables, RLS policies, pgvector setup, Y.js CRDT tables, and AI tables. Use when creating or modifying database tables, migrations, RLS policies, indexes, or when working with Supabase, pgvector, or any data model in the Caret project. Full reference at docs/guidance/DATABASE.md.
+description: Caret database — PostgreSQL/Supabase schema conventions, core tables, RLS policies, pgvector setup, Y.js CRDT tables, and AI tables. Use when creating or modifying database tables, migrations, RLS policies, indexes, or when working with Supabase, pgvector, or any data model in the Caret project.
 ---
 
 # Caret Database
-
-Full reference: `docs/guidance/DATABASE.md`
 
 ## Stack
 

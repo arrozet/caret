@@ -1,11 +1,9 @@
 ---
 name: caret-testing
-description: Caret testing strategy — testing pyramid, unit/integration/E2E test guidelines, Vitest, Pytest, Playwright, CI pipeline order, and production smoke tests. Use when writing tests, setting up test infrastructure, reviewing test coverage, or when any testing question arises in the Caret project. Full reference at docs/guidance/TESTING.md.
+description: Caret testing strategy — testing pyramid, unit/integration/E2E test guidelines, Vitest, Pytest, Playwright, CI pipeline order, and production smoke tests. Use when writing tests, setting up test infrastructure, reviewing test coverage, or when any testing question arises in the Caret project.
 ---
 
 # Caret Testing
-
-Full reference: `docs/guidance/TESTING.md`
 
 ## Principles
 

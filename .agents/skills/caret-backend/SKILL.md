@@ -1,11 +1,9 @@
 ---
 name: caret-backend
-description: Caret backend — microservices architecture, REST API design, 4-layer internal structure, WebSocket/SSE protocols, and Node.js/Python service conventions. Use when building or modifying any backend service, API endpoint, controller, service layer, repository, DTO, or when working with the AI streaming or collaboration protocol. Full reference at docs/guidance/BACKEND.md.
+description: Caret backend — microservices architecture, REST API design, 4-layer internal structure, WebSocket/SSE protocols, and Node.js/Python service conventions. Use when building or modifying any backend service, API endpoint, controller, service layer, repository, DTO, or when working with the AI streaming or collaboration protocol.
 ---
 
 # Caret Backend
-
-Full reference: `docs/guidance/BACKEND.md`
 
 ## Services Overview
 

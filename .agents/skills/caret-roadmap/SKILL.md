@@ -1,11 +1,9 @@
 ---
 name: caret-roadmap
-description: Caret engineering roadmap — execution phases, completed tasks, and pending work. Use when checking what has been built, what is next, what phase the project is in, or when planning new work in the Caret project. Full reference at docs/guidance/ROADMAP.md.
+description: Caret engineering roadmap — execution phases, completed tasks, and pending work. Use when checking what has been built, what is next, what phase the project is in, or when planning new work in the Caret project.
 ---
 
 # Caret Roadmap
-
-Full reference: `docs/guidance/ROADMAP.md`
 
 **Status**: `[x]` Done · `[ ]` Pending · `[~]` Partial
 
