@@ -105,7 +105,7 @@ export const COLLABORATOR_COLORS = [
   "#34D399", // emerald-400
   "#22D3EE", // cyan-400
   "#60A5FA", // blue-400
-  "#A78BFA", // violet-400
+  "#FB7185", // rose-400
   "#F472B6", // pink-400
   "#4ADE80", // green-400
   "#2DD4BF", // teal-400
