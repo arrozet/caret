@@ -10,7 +10,7 @@ import { UnauthorizedError } from "../../src/lib/errors.js";
  */
 
 vi.mock("../../src/middleware/auth_middleware.js", () => ({
-  validate_ws_token: vi.fn(),
+  validateWsToken: vi.fn(),
 }));
 
 vi.mock("../../src/lib/logger.js", () => ({
@@ -24,19 +24,19 @@ vi.mock("../../src/lib/logger.js", () => ({
 
 vi.mock("../../src/services/room_manager.js", () => ({
   RoomManager: vi.fn().mockImplementation(() => ({
-    get_or_create_room: vi.fn(),
-    remove_participant: vi.fn(),
-    get_room: vi.fn(),
+    joinRoom: vi.fn(),
+    leaveRoom: vi.fn(),
+    getDoc: vi.fn(),
   })),
 }));
 
 vi.mock("../../src/handlers/index.js", () => ({
   ConnectionHandler: vi.fn().mockImplementation(() => ({
-    handle_connection: vi.fn(),
+    handleConnection: vi.fn(),
   })),
 }));
 
-import { validate_ws_token } from "../../src/middleware/auth_middleware.js";
+import { validateWsToken } from "../../src/middleware/auth_middleware.js";
 import { logger } from "../../src/lib/logger.js";
 import { extract_doc_id_from_request_path, handle_ws_connection } from "../../src/app.js";
 
@@ -137,7 +137,7 @@ describe("handle_ws_connection", () => {
       doc_id: "doc-123",
       token: "valid.jwt.token",
     };
-    vi.mocked(validate_ws_token).mockResolvedValue(auth_result);
+    vi.mocked(validateWsToken).mockResolvedValue(auth_result);
 
     // Act
     await handle_ws_connection(mock_ws, req);
@@ -155,7 +155,7 @@ describe("handle_ws_connection", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123");
-    vi.mocked(validate_ws_token).mockRejectedValue(
+    vi.mocked(validateWsToken).mockRejectedValue(
       new UnauthorizedError("Missing token query parameter"),
     );
 
@@ -171,7 +171,7 @@ describe("handle_ws_connection", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=bad.token");
-    vi.mocked(validate_ws_token).mockRejectedValue(new UnauthorizedError("Invalid token"));
+    vi.mocked(validateWsToken).mockRejectedValue(new UnauthorizedError("Invalid token"));
 
     // Act
     await handle_ws_connection(mock_ws, req);
@@ -190,14 +190,14 @@ describe("handle_ws_connection", () => {
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-456?token=my.token");
     const auth_result: AuthResult = { user_id: "user-1", doc_id: "doc-456", token: "my.token" };
-    vi.mocked(validate_ws_token).mockResolvedValue(auth_result);
+    vi.mocked(validateWsToken).mockResolvedValue(auth_result);
 
     // Act
     await handle_ws_connection(mock_ws, req);
 
     // Assert
-    expect(validate_ws_token).toHaveBeenCalledOnce();
-    expect(validate_ws_token).toHaveBeenCalledWith(req);
+    expect(validateWsToken).toHaveBeenCalledOnce();
+    expect(validateWsToken).toHaveBeenCalledWith(req);
   });
 
   /** Closes with 1011 and logs error on unexpected auth errors. */
@@ -206,7 +206,7 @@ describe("handle_ws_connection", () => {
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=token");
     const unexpected_error = new Error("DB connection failed");
-    vi.mocked(validate_ws_token).mockRejectedValue(unexpected_error);
+    vi.mocked(validateWsToken).mockRejectedValue(unexpected_error);
 
     // Act
     await handle_ws_connection(mock_ws, req);
@@ -216,7 +216,7 @@ describe("handle_ws_connection", () => {
     expect(logger.error).toHaveBeenCalledWith(
       "Unexpected WebSocket handshake error",
       expect.objectContaining({
-        doc_id: "doc-123",
+        docId: "doc-123",
         error: unexpected_error,
       }),
     );
@@ -228,7 +228,7 @@ describe("handle_ws_connection", () => {
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123?token=ok.token");
     const auth_result: AuthResult = { user_id: "user-1", doc_id: "doc-123", token: "ok.token" };
-    vi.mocked(validate_ws_token).mockResolvedValue(auth_result);
+    vi.mocked(validateWsToken).mockResolvedValue(auth_result);
 
     // Act
     await handle_ws_connection(mock_ws, req);
@@ -242,7 +242,7 @@ describe("handle_ws_connection", () => {
     // Arrange
     const mock_ws = make_mock_ws();
     const req = make_mock_request("/document/doc-123");
-    vi.mocked(validate_ws_token).mockRejectedValue(new UnauthorizedError());
+    vi.mocked(validateWsToken).mockRejectedValue(new UnauthorizedError());
 
     // Act
     await handle_ws_connection(mock_ws, req);
@@ -261,7 +261,7 @@ describe("handle_ws_connection", () => {
     await handle_ws_connection(mock_ws, req);
 
     // Assert
-    expect(validate_ws_token).not.toHaveBeenCalled();
+    expect(validateWsToken).not.toHaveBeenCalled();
     expect(mock_ws.close).toHaveBeenCalledWith(1008, "Invalid route or missing doc_id");
     expect(logger.warn).toHaveBeenCalledWith(
       "WebSocket connection rejected due to invalid route",
@@ -279,7 +279,7 @@ describe("handle_ws_connection", () => {
     await handle_ws_connection(mock_ws, req);
 
     // Assert
-    expect(validate_ws_token).not.toHaveBeenCalled();
+    expect(validateWsToken).not.toHaveBeenCalled();
     expect(mock_ws.close).toHaveBeenCalledWith(1008, "Invalid route or missing doc_id");
   });
 });

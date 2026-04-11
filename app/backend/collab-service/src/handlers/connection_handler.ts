@@ -34,7 +34,7 @@ export interface ConnectionContext {
   /** Authenticated user and document information */
   auth: AuthResult;
   /** Room manager for document and participant management */
-  room_manager: RoomManager;
+  roomManager: RoomManager;
 }
 
 /**
@@ -51,13 +51,13 @@ export class ConnectionHandler {
    * Outer map: document_id -> inner map
    * Inner map: user_id -> WebSocket
    */
-  private room_sockets: Map<string, Map<string, WebSocket>> = new Map();
+  private roomSockets: Map<string, Map<string, WebSocket>> = new Map();
 
   /**
    * Tracks Awareness instances per document for presence/cursor sync.
    * Key: document_id, Value: Awareness instance
    */
-  private awareness_map: Map<string, awarenessProtocol.Awareness> = new Map();
+  private awarenessMap: Map<string, awarenessProtocol.Awareness> = new Map();
 
   /**
    * Handles a new WebSocket connection after authentication.
@@ -65,28 +65,35 @@ export class ConnectionHandler {
    *
    * @param ctx - Connection context with WebSocket, auth, and room_manager
    */
-  handle_connection(ctx: ConnectionContext): void {
-    const { ws, auth, room_manager } = ctx;
+  handleConnection(ctx: ConnectionContext): void {
+    const { ws, auth } = ctx;
+    const roomManager =
+      ctx.roomManager ?? (ctx as ConnectionContext & { room_manager?: RoomManager }).room_manager;
+    if (!roomManager) {
+      logger.error("Missing room manager in connection context");
+      ws.close(1011, "Internal server error");
+      return;
+    }
     const { user_id, doc_id } = auth;
 
     // Generate unique socket_id for this connection
-    const socket_id = `${user_id}_${Date.now()}`;
+    const socketId = `${user_id}_${Date.now()}`;
 
     // Join the room (creates room and Y.Doc if needed)
-    room_manager.join_room(doc_id, user_id, socket_id);
+    roomManager.joinRoom(doc_id, user_id, socketId);
 
     // Track socket for broadcasting
-    this.track_socket(doc_id, user_id, ws);
+    this.trackSocket(doc_id, user_id, ws);
 
     // Get or create awareness for this document
-    const doc = room_manager.get_doc(doc_id);
+    const doc = roomManager.getDoc(doc_id);
     if (!doc) {
       logger.error("Failed to get Y.Doc after joining room", { doc_id, user_id });
       ws.close(4500, "Internal server error");
       return;
     }
 
-    const awareness = this.get_or_create_awareness(doc_id, doc);
+    const awareness = this.getOrCreateAwareness(doc_id, doc);
 
     // Set initial awareness state for this user
     awareness.setLocalStateField("user", {
@@ -97,22 +104,22 @@ export class ConnectionHandler {
     logger.info("Client joined room", {
       doc_id,
       user_id,
-      socket_id,
-      participant_count: room_manager.get_participant_count(doc_id),
+      socket_id: socketId,
+      participant_count: roomManager.getParticipantCount(doc_id),
     });
 
     // Send initial sync step 1 to the client
-    this.send_sync_step1(ws, doc);
+    this.sendSyncStep1(ws, doc);
 
     // Send current awareness states to the new client
-    this.send_awareness_states(ws, awareness);
+    this.sendAwarenessStates(ws, awareness);
 
     // Set up message handler
     ws.on("message", (data: RawData) => {
       try {
-        const close_code = this.handle_message(ctx, data, awareness);
-        if (close_code !== null) {
-          ws.close(close_code, "Protocol error");
+        const closeCode = this.handleMessage(ctx, data, awareness);
+        if (closeCode !== null) {
+          ws.close(closeCode, "Protocol error");
         }
       } catch (error) {
         logger.error("Error handling message", {
@@ -126,7 +133,7 @@ export class ConnectionHandler {
 
     // Set up close handler
     ws.on("close", (code, reason) => {
-      this.handle_close(ctx, awareness);
+      this.handleClose(ctx, awareness);
       logger.info("Client disconnected", {
         doc_id,
         user_id,
@@ -142,8 +149,12 @@ export class ConnectionHandler {
         user_id,
         error: error.message,
       });
-      this.handle_close(ctx, awareness);
+      this.handleClose(ctx, awareness);
     });
+  }
+
+  handle_connection(ctx: ConnectionContext): void {
+    this.handleConnection(ctx);
   }
 
   /**
@@ -155,16 +166,21 @@ export class ConnectionHandler {
    * @param awareness - Awareness instance for the document
    * @returns Close code if connection should be closed due to protocol error, null otherwise
    */
-  private handle_message(
+  private handleMessage(
     ctx: ConnectionContext,
     data: RawData,
     awareness: awarenessProtocol.Awareness,
   ): number | null {
-    const { auth, room_manager } = ctx;
+    const { auth } = ctx;
+    const roomManager =
+      ctx.roomManager ?? (ctx as ConnectionContext & { room_manager?: RoomManager }).room_manager;
+    if (!roomManager) {
+      return 1002;
+    }
     const { user_id, doc_id } = auth;
 
     // Convert RawData to Uint8Array
-    const message = this.to_uint8_array(data);
+    const message = this.toUint8Array(data);
     if (message.length === 0) {
       // Empty message is a protocol violation
       return 1002;
@@ -173,7 +189,7 @@ export class ConnectionHandler {
     const decoder = decoding.createDecoder(message);
     const message_type = decoding.readVarUint(decoder);
 
-    const doc = room_manager.get_doc(doc_id);
+    const doc = roomManager.getDoc(doc_id);
     if (!doc) {
       logger.warn("Received message for non-existent room", { doc_id, user_id });
       return null;
@@ -181,11 +197,11 @@ export class ConnectionHandler {
 
     switch (message_type) {
       case MESSAGE_SYNC:
-        this.handle_sync_message(ctx, decoder, doc);
+        this.handleSyncMessage(ctx, decoder, doc);
         break;
 
       case MESSAGE_AWARENESS:
-        this.handle_awareness_message(ctx, decoder, awareness);
+        this.handleAwarenessMessage(ctx, decoder, awareness);
         break;
 
       default:
@@ -203,7 +219,7 @@ export class ConnectionHandler {
    * @param decoder - lib0 decoder positioned after message type
    * @param doc - Y.Doc instance for the room
    */
-  private handle_sync_message(ctx: ConnectionContext, decoder: decoding.Decoder, doc: Y.Doc): void {
+  private handleSyncMessage(ctx: ConnectionContext, decoder: decoding.Decoder, doc: Y.Doc): void {
     const { ws, auth } = ctx;
     const { user_id, doc_id } = auth;
 
@@ -217,7 +233,7 @@ export class ConnectionHandler {
     // If sync produced a response (step2 or update), send it
     if (encoding.length(encoder) > 1) {
       const response = encoding.toUint8Array(encoder);
-      this.send_message(ws, response);
+      this.sendMessage(ws, response);
     }
 
     // If this was an update (sync message type 2), broadcast to other peers
@@ -229,7 +245,7 @@ export class ConnectionHandler {
       syncProtocol.writeUpdate(update_encoder, Y.encodeStateAsUpdate(doc));
 
       const broadcast_message = encoding.toUint8Array(update_encoder);
-      this.broadcast_to_room(doc_id, user_id, broadcast_message);
+      this.broadcastToRoom(doc_id, user_id, broadcast_message);
     }
   }
 
@@ -241,7 +257,7 @@ export class ConnectionHandler {
    * @param decoder - lib0 decoder positioned after message type
    * @param awareness - Awareness instance for the document
    */
-  private handle_awareness_message(
+  private handleAwarenessMessage(
     ctx: ConnectionContext,
     decoder: decoding.Decoder,
     awareness: awarenessProtocol.Awareness,
@@ -259,7 +275,7 @@ export class ConnectionHandler {
     encoding.writeVarUint8Array(encoder, update);
 
     const broadcast_message = encoding.toUint8Array(encoder);
-    this.broadcast_to_room(doc_id, user_id, broadcast_message);
+    this.broadcastToRoom(doc_id, user_id, broadcast_message);
   }
 
   /**
@@ -269,18 +285,23 @@ export class ConnectionHandler {
    * @param ctx - Connection context
    * @param awareness - Awareness instance for the document
    */
-  private handle_close(ctx: ConnectionContext, awareness: awarenessProtocol.Awareness): void {
-    const { auth, room_manager } = ctx;
+  private handleClose(ctx: ConnectionContext, awareness: awarenessProtocol.Awareness): void {
+    const { auth } = ctx;
+    const roomManager =
+      ctx.roomManager ?? (ctx as ConnectionContext & { room_manager?: RoomManager }).room_manager;
+    if (!roomManager) {
+      return;
+    }
     const { user_id, doc_id } = auth;
 
     // Remove awareness state for this user
     awarenessProtocol.removeAwarenessStates(awareness, [awareness.clientID], null);
 
     // Remove socket from tracking
-    this.untrack_socket(doc_id, user_id);
+    this.untrackSocket(doc_id, user_id);
 
     // Leave the room
-    room_manager.leave_room(doc_id, user_id);
+    roomManager.leaveRoom(doc_id, user_id);
 
     // Broadcast awareness removal to remaining peers
     const encoder = encoding.createEncoder();
@@ -291,12 +312,12 @@ export class ConnectionHandler {
     );
 
     const broadcast_message = encoding.toUint8Array(encoder);
-    this.broadcast_to_room(doc_id, user_id, broadcast_message);
+    this.broadcastToRoom(doc_id, user_id, broadcast_message);
 
     // Clean up awareness when room has no active participants.
     // The room itself is kept in memory to preserve Y.Doc state across brief reconnect gaps.
-    if (room_manager.is_room_empty(doc_id)) {
-      this.awareness_map.delete(doc_id);
+    if (roomManager.isRoomEmpty(doc_id)) {
+      this.awarenessMap.delete(doc_id);
       logger.debug("Room became empty, awareness cleaned up", { doc_id });
     }
   }
@@ -308,15 +329,15 @@ export class ConnectionHandler {
    * @param sender_id - User ID of the sender (excluded from broadcast)
    * @param message - Binary message to broadcast
    */
-  private broadcast_to_room(doc_id: string, sender_id: string, message: Uint8Array): void {
-    const room_map = this.room_sockets.get(doc_id);
-    if (!room_map) {
+  private broadcastToRoom(docId: string, senderId: string, message: Uint8Array): void {
+    const roomMap = this.roomSockets.get(docId);
+    if (!roomMap) {
       return;
     }
 
-    for (const [user_id, socket] of room_map) {
-      if (user_id !== sender_id) {
-        this.send_message(socket, message);
+    for (const [userId, socket] of roomMap) {
+      if (userId !== senderId) {
+        this.sendMessage(socket, message);
       }
     }
   }
@@ -329,13 +350,13 @@ export class ConnectionHandler {
    * @param ws - WebSocket to send to
    * @param doc - Y.Doc to sync
    */
-  private send_sync_step1(ws: WebSocket, doc: Y.Doc): void {
+  private sendSyncStep1(ws: WebSocket, doc: Y.Doc): void {
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MESSAGE_SYNC);
     syncProtocol.writeSyncStep1(encoder, doc);
 
     const message = encoding.toUint8Array(encoder);
-    this.send_message(ws, message);
+    this.sendMessage(ws, message);
   }
 
   /**
@@ -344,7 +365,7 @@ export class ConnectionHandler {
    * @param ws - WebSocket to send to
    * @param awareness - Awareness instance with current states
    */
-  private send_awareness_states(ws: WebSocket, awareness: awarenessProtocol.Awareness): void {
+  private sendAwarenessStates(ws: WebSocket, awareness: awarenessProtocol.Awareness): void {
     const clients = Array.from(awareness.getStates().keys());
     if (clients.length === 0) {
       return;
@@ -358,7 +379,7 @@ export class ConnectionHandler {
     );
 
     const message = encoding.toUint8Array(encoder);
-    this.send_message(ws, message);
+    this.sendMessage(ws, message);
   }
 
   /**
@@ -368,11 +389,11 @@ export class ConnectionHandler {
    * @param doc - Y.Doc to attach awareness to
    * @returns Awareness instance
    */
-  private get_or_create_awareness(doc_id: string, doc: Y.Doc): awarenessProtocol.Awareness {
-    let awareness = this.awareness_map.get(doc_id);
+  private getOrCreateAwareness(docId: string, doc: Y.Doc): awarenessProtocol.Awareness {
+    let awareness = this.awarenessMap.get(docId);
     if (!awareness) {
       awareness = new awarenessProtocol.Awareness(doc);
-      this.awareness_map.set(doc_id, awareness);
+      this.awarenessMap.set(docId, awareness);
     }
     return awareness;
   }
@@ -384,11 +405,11 @@ export class ConnectionHandler {
    * @param user_id - User identifier
    * @param ws - WebSocket to track
    */
-  private track_socket(doc_id: string, user_id: string, ws: WebSocket): void {
-    if (!this.room_sockets.has(doc_id)) {
-      this.room_sockets.set(doc_id, new Map());
+  private trackSocket(docId: string, userId: string, ws: WebSocket): void {
+    if (!this.roomSockets.has(docId)) {
+      this.roomSockets.set(docId, new Map());
     }
-    this.room_sockets.get(doc_id)!.set(user_id, ws);
+    this.roomSockets.get(docId)!.set(userId, ws);
   }
 
   /**
@@ -397,12 +418,12 @@ export class ConnectionHandler {
    * @param doc_id - Document/room identifier
    * @param user_id - User identifier
    */
-  private untrack_socket(doc_id: string, user_id: string): void {
-    const room_map = this.room_sockets.get(doc_id);
-    if (room_map) {
-      room_map.delete(user_id);
-      if (room_map.size === 0) {
-        this.room_sockets.delete(doc_id);
+  private untrackSocket(docId: string, userId: string): void {
+    const roomMap = this.roomSockets.get(docId);
+    if (roomMap) {
+      roomMap.delete(userId);
+      if (roomMap.size === 0) {
+        this.roomSockets.delete(docId);
       }
     }
   }
@@ -414,7 +435,7 @@ export class ConnectionHandler {
    * @param ws - WebSocket to send to
    * @param message - Binary message to send
    */
-  private send_message(ws: WebSocket, message: Uint8Array): void {
+  private sendMessage(ws: WebSocket, message: Uint8Array): void {
     if (ws.readyState === ws.OPEN) {
       ws.send(message);
     }
@@ -427,7 +448,7 @@ export class ConnectionHandler {
    * @param data - Raw WebSocket data
    * @returns Uint8Array representation
    */
-  private to_uint8_array(data: RawData): Uint8Array {
+  private toUint8Array(data: RawData): Uint8Array {
     if (data instanceof Buffer) {
       return new Uint8Array(data);
     }
@@ -447,8 +468,12 @@ export class ConnectionHandler {
    *
    * @returns Count of rooms with active sockets
    */
+  getActiveRoomCount(): number {
+    return this.roomSockets.size;
+  }
+
   get_active_room_count(): number {
-    return this.room_sockets.size;
+    return this.getActiveRoomCount();
   }
 
   /**
@@ -458,7 +483,11 @@ export class ConnectionHandler {
    * @param doc_id - Document/room identifier
    * @returns Count of active sockets in the room
    */
-  get_room_socket_count(doc_id: string): number {
-    return this.room_sockets.get(doc_id)?.size ?? 0;
+  getRoomSocketCount(docId: string): number {
+    return this.roomSockets.get(docId)?.size ?? 0;
+  }
+
+  get_room_socket_count(docId: string): number {
+    return this.getRoomSocketCount(docId);
   }
 }

@@ -1,5 +1,5 @@
 /**
- * RoomManager service for the Collaboration Service.
+ * Room manager service for the Collaboration Service.
  * Manages in-memory collaboration rooms with Y.js documents.
  * Handles room lifecycle: creation on first join, destruction on last leave.
  */
@@ -25,22 +25,26 @@ export class RoomManager {
    * @param user_id - The unique identifier of the user joining.
    * @param socket_id - The WebSocket connection identifier.
    */
-  join_room(document_id: string, user_id: string, socket_id: string): void {
-    if (!this.rooms.has(document_id)) {
-      this.rooms.set(document_id, {
-        document_id,
+  joinRoom(documentId: string, userId: string, socketId: string): void {
+    if (!this.rooms.has(documentId)) {
+      this.rooms.set(documentId, {
+        document_id: documentId,
         doc: new Y.Doc(),
         participants: new Map(),
         created_at: new Date(),
       });
     }
 
-    const room = this.rooms.get(document_id)!;
-    room.participants.set(user_id, {
-      user_id,
-      socket_id,
+    const room = this.rooms.get(documentId)!;
+    room.participants.set(userId, {
+      user_id: userId,
+      socket_id: socketId,
       joined_at: new Date(),
     });
+  }
+
+  join_room(documentId: string, userId: string, socketId: string): void {
+    this.joinRoom(documentId, userId, socketId);
   }
 
   /**
@@ -54,15 +58,19 @@ export class RoomManager {
    * @param user_id - The unique identifier of the user leaving.
    * @returns True if the user was removed, false if room or user didn't exist.
    */
-  leave_room(document_id: string, user_id: string): boolean {
-    const room = this.rooms.get(document_id);
+  leaveRoom(documentId: string, userId: string): boolean {
+    const room = this.rooms.get(documentId);
     if (!room) {
       return false;
     }
 
-    const removed = room.participants.delete(user_id);
+    const removed = room.participants.delete(userId);
 
     return removed;
+  }
+
+  leave_room(documentId: string, userId: string): boolean {
+    return this.leaveRoom(documentId, userId);
   }
 
   /**
@@ -71,12 +79,16 @@ export class RoomManager {
    * @param document_id - The unique identifier of the document/room.
    * @returns Array of user_ids present in the room, or empty array if room doesn't exist.
    */
-  get_participants(document_id: string): string[] {
-    const room = this.rooms.get(document_id);
+  getParticipants(documentId: string): string[] {
+    const room = this.rooms.get(documentId);
     if (!room) {
       return [];
     }
     return Array.from(room.participants.keys());
+  }
+
+  get_participants(documentId: string): string[] {
+    return this.getParticipants(documentId);
   }
 
   /**
@@ -85,8 +97,12 @@ export class RoomManager {
    * @param document_id - The unique identifier of the document/room.
    * @returns The Y.Doc instance, or undefined if room doesn't exist.
    */
-  get_doc(document_id: string): Y.Doc | undefined {
-    return this.rooms.get(document_id)?.doc;
+  getDoc(documentId: string): Y.Doc | undefined {
+    return this.rooms.get(documentId)?.doc;
+  }
+
+  get_doc(documentId: string): Y.Doc | undefined {
+    return this.getDoc(documentId);
   }
 
   /**
@@ -95,8 +111,12 @@ export class RoomManager {
    * @param document_id - The unique identifier of the document/room.
    * @returns True if the room exists, false otherwise.
    */
-  room_exists(document_id: string): boolean {
-    return this.rooms.has(document_id);
+  roomExists(documentId: string): boolean {
+    return this.rooms.has(documentId);
+  }
+
+  room_exists(documentId: string): boolean {
+    return this.roomExists(documentId);
   }
 
   /**
@@ -104,8 +124,12 @@ export class RoomManager {
    *
    * @returns The count of active rooms.
    */
-  get_room_count(): number {
+  getRoomCount(): number {
     return this.rooms.size;
+  }
+
+  get_room_count(): number {
+    return this.getRoomCount();
   }
 
   /**
@@ -114,8 +138,12 @@ export class RoomManager {
    * @param document_id - The unique identifier of the document/room.
    * @returns The participant count, or 0 if room doesn't exist.
    */
-  get_participant_count(document_id: string): number {
-    return this.rooms.get(document_id)?.participants.size ?? 0;
+  getParticipantCount(documentId: string): number {
+    return this.rooms.get(documentId)?.participants.size ?? 0;
+  }
+
+  get_participant_count(documentId: string): number {
+    return this.getParticipantCount(documentId);
   }
 
   /**
@@ -124,8 +152,14 @@ export class RoomManager {
    * @param document_id - The unique identifier of the document/room.
    * @returns True when room exists and has no active participants.
    */
-  is_room_empty(document_id: string): boolean {
-    const room = this.rooms.get(document_id);
+  isRoomEmpty(documentId: string): boolean {
+    const room = this.rooms.get(documentId);
     return room !== undefined && room.participants.size === 0;
   }
+
+  is_room_empty(documentId: string): boolean {
+    return this.isRoomEmpty(documentId);
+  }
 }
+
+export type { RoomManager as RoomManagerService };

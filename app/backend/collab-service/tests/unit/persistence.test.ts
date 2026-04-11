@@ -60,13 +60,13 @@ describe("CollabPersistenceService", () => {
       const expected_result: CollabUpdate = {
         id: "update-1",
         document_id,
-        update_data: update,
+        update,
         created_at: new Date(),
       };
       mock_repo.save_update.mockResolvedValue(expected_result);
 
       // Act
-      const result = await service.persist_update(document_id, update);
+      const result = await service.persistUpdate(document_id, update);
 
       // Assert
       expect(mock_repo.save_update).toHaveBeenCalledOnce();
@@ -82,13 +82,13 @@ describe("CollabPersistenceService", () => {
       const saved: CollabUpdate = {
         id: "upd-xyz",
         document_id,
-        update_data: update,
+        update,
         created_at: new Date(),
       };
       mock_repo.save_update.mockResolvedValue(saved);
 
       // Act
-      const result = await service.persist_update(document_id, update);
+      const result = await service.persistUpdate(document_id, update);
 
       // Assert
       expect(result).toEqual(saved);
@@ -102,7 +102,7 @@ describe("CollabPersistenceService", () => {
       mock_repo.save_update.mockRejectedValue(new Error("DB write failed"));
 
       // Act & Assert
-      await expect(service.persist_update(document_id, update)).rejects.toThrow("DB write failed");
+      await expect(service.persistUpdate(document_id, update)).rejects.toThrow("DB write failed");
     });
   });
 
@@ -118,7 +118,7 @@ describe("CollabPersistenceService", () => {
       mock_repo.get_updates.mockResolvedValue([]);
 
       // Act
-      const doc = await service.load_document(document_id);
+      const doc = await service.loadDocument(document_id);
 
       // Assert
       expect(doc).toBeInstanceOf(Y.Doc);
@@ -143,7 +143,7 @@ describe("CollabPersistenceService", () => {
       mock_repo.get_updates.mockResolvedValue([]);
 
       // Act
-      const doc = await service.load_document(document_id);
+      const doc = await service.loadDocument(document_id);
 
       // Assert
       expect(doc.getText("content").toString()).toBe("from snapshot");
@@ -177,13 +177,13 @@ describe("CollabPersistenceService", () => {
         {
           id: "upd-1",
           document_id,
-          update_data: delta_update,
+          update: delta_update,
           created_at: new Date(),
         },
       ]);
 
       // Act
-      const doc = await service.load_document(document_id);
+      const doc = await service.loadDocument(document_id);
 
       // Assert
       expect(doc.getText("content").toString()).toBe("base + delta");
@@ -209,13 +209,13 @@ describe("CollabPersistenceService", () => {
       const update_3 = Y.encodeStateAsUpdate(doc_source, sv_after_2);
 
       mock_repo.get_updates.mockResolvedValue([
-        { id: "u1", document_id, update_data: update_1, created_at: new Date() },
-        { id: "u2", document_id, update_data: update_2, created_at: new Date() },
-        { id: "u3", document_id, update_data: update_3, created_at: new Date() },
+        { id: "u1", document_id, update: update_1, created_at: new Date() },
+        { id: "u2", document_id, update: update_2, created_at: new Date() },
+        { id: "u3", document_id, update: update_3, created_at: new Date() },
       ]);
 
       // Act
-      const doc = await service.load_document(document_id);
+      const doc = await service.loadDocument(document_id);
 
       // Assert
       expect(doc.getText("content").toString()).toBe("ABC");
@@ -229,7 +229,7 @@ describe("CollabPersistenceService", () => {
       mock_repo.get_updates.mockResolvedValue([]);
 
       // Act
-      await service.load_document(document_id);
+      await service.loadDocument(document_id);
 
       // Assert
       expect(mock_repo.get_latest_snapshot).toHaveBeenCalledWith(document_id);
@@ -258,7 +258,7 @@ describe("CollabPersistenceService", () => {
       mock_repo.save_snapshot.mockResolvedValue(expected_snap);
 
       // Act
-      const result = await service.take_snapshot(document_id, doc);
+      const result = await service.takeSnapshot(document_id, doc);
 
       // Assert
       expect(mock_repo.save_snapshot).toHaveBeenCalledOnce();
@@ -289,7 +289,7 @@ describe("CollabPersistenceService", () => {
       });
 
       // Act
-      await service.take_snapshot(document_id, doc);
+      await service.takeSnapshot(document_id, doc);
 
       // Assert — el snapshot_data restaura el contenido
       const restored = new Y.Doc();
@@ -304,7 +304,7 @@ describe("CollabPersistenceService", () => {
       mock_repo.save_snapshot.mockRejectedValue(new Error("Snapshot write failed"));
 
       // Act & Assert
-      await expect(service.take_snapshot("doc-fail", doc)).rejects.toThrow("Snapshot write failed");
+      await expect(service.takeSnapshot("doc-fail", doc)).rejects.toThrow("Snapshot write failed");
     });
   });
 });

@@ -26,8 +26,8 @@ export class CollabPersistenceService {
    * @param update - The binary Y.js update data.
    * @returns The persisted update record.
    */
-  async persist_update(document_id: string, update: Uint8Array): Promise<CollabUpdate> {
-    return this.repository.save_update(document_id, update);
+  async persistUpdate(documentId: string, update: Uint8Array): Promise<CollabUpdate> {
+    return this.repository.save_update(documentId, update);
   }
 
   /**
@@ -37,19 +37,24 @@ export class CollabPersistenceService {
    * @param document_id - The document to load.
    * @returns A Y.Doc instance with the reconstructed state.
    */
-  async load_document(document_id: string): Promise<Y.Doc> {
+  async loadDocument(documentId: string): Promise<Y.Doc> {
     const doc = new Y.Doc();
 
     // 1. Apply snapshot base if one exists
-    const snapshot = await this.repository.get_latest_snapshot(document_id);
+    const snapshot = await this.repository.get_latest_snapshot(documentId);
     if (snapshot) {
-      Y.applyUpdate(doc, snapshot.snapshot_data);
+      Y.applyUpdate(
+        doc,
+        snapshot.ydoc ??
+          (snapshot as CollabSnapshot & { snapshot_data?: Uint8Array }).snapshot_data!,
+      );
     }
 
     // 2. Apply all incremental updates on top
-    const updates = await this.repository.get_updates(document_id);
-    for (const u of updates) {
-      Y.applyUpdate(doc, u.update_data);
+    const updates = await this.repository.get_updates(documentId);
+    for (const update of updates) {
+      const update_data = update.update ?? (update as { update_data?: Uint8Array }).update_data;
+      Y.applyUpdate(doc, update_data as Uint8Array);
     }
 
     return doc;
@@ -63,9 +68,9 @@ export class CollabPersistenceService {
    * @param doc - The Y.Doc instance to capture.
    * @returns The persisted snapshot record.
    */
-  async take_snapshot(document_id: string, doc: Y.Doc): Promise<CollabSnapshot> {
+  async takeSnapshot(documentId: string, doc: Y.Doc): Promise<CollabSnapshot> {
     const snapshot_data = Y.encodeStateAsUpdate(doc);
     const state_vector = Y.encodeStateVector(doc);
-    return this.repository.save_snapshot(document_id, snapshot_data, state_vector);
+    return this.repository.save_snapshot(documentId, snapshot_data, state_vector);
   }
 }

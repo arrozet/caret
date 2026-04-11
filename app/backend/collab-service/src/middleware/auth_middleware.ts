@@ -36,13 +36,13 @@ export interface AuthResult {
 }
 
 /** Cached JWKS resolver and fetch timestamp (ms). */
-let cached_jwks: {
+let cachedJwks: {
   resolver: ReturnType<typeof createLocalJWKSet>;
-  fetched_at: number;
+  fetchedAt: number;
 } | null = null;
 
 /** JWKS cache TTL: 5 minutes. */
-const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+const jwksCacheTtlMs = 5 * 60 * 1000;
 
 /**
  * Convert jose errors into stable UnauthorizedError messages.
@@ -50,7 +50,7 @@ const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
  * @param error - Unknown error thrown by jose
  * @returns UnauthorizedError with normalized message
  */
-function normalize_jose_error(error: unknown): UnauthorizedError {
+function normalizeJoseError(error: unknown): UnauthorizedError {
   if (error instanceof jose_errors.JWTExpired) {
     return new UnauthorizedError("Token has expired");
   }
@@ -72,7 +72,7 @@ function normalize_jose_error(error: unknown): UnauthorizedError {
  * @returns JWKS payload
  * @throws UnauthorizedError when config is missing or request fails
  */
-async function fetch_jwks(): Promise<JSONWebKeySet> {
+async function fetchJwks(): Promise<JSONWebKeySet> {
   const base = config.SUPABASE_URL.replace(/\/+$/, "");
   const anon_key = config.SUPABASE_ANON_KEY;
 
@@ -97,17 +97,17 @@ async function fetch_jwks(): Promise<JSONWebKeySet> {
 /**
  * Resolve and cache Supabase JWKS for asymmetric JWT verification.
  */
-async function get_jwks_resolver(): Promise<ReturnType<typeof createLocalJWKSet>> {
+async function getJwksResolver(): Promise<ReturnType<typeof createLocalJWKSet>> {
   const now = Date.now();
-  if (cached_jwks && now - cached_jwks.fetched_at < JWKS_CACHE_TTL_MS) {
-    return cached_jwks.resolver;
+  if (cachedJwks && now - cachedJwks.fetchedAt < jwksCacheTtlMs) {
+    return cachedJwks.resolver;
   }
 
-  const jwks = await fetch_jwks();
+  const jwks = await fetchJwks();
   const resolver = createLocalJWKSet(jwks);
-  cached_jwks = {
+  cachedJwks = {
     resolver,
-    fetched_at: now,
+    fetchedAt: now,
   };
 
   return resolver;
@@ -121,14 +121,14 @@ async function get_jwks_resolver(): Promise<ReturnType<typeof createLocalJWKSet>
  * @returns Decoded and verified token payload
  * @throws UnauthorizedError if token is invalid, expired, or malformed
  */
-async function validate_jwt(token: string): Promise<TokenPayload> {
+async function validateJwt(token: string): Promise<TokenPayload> {
   let alg: string;
 
   try {
     const header = decodeProtectedHeader(token);
     alg = header.alg ?? "";
   } catch (error) {
-    throw normalize_jose_error(error);
+    throw normalizeJoseError(error);
   }
 
   try {
@@ -144,8 +144,8 @@ async function validate_jwt(token: string): Promise<TokenPayload> {
         algorithms: ["HS256"],
       }));
     } else {
-      const jwks_resolver = await get_jwks_resolver();
-      ({ payload } = await jwtVerify(token, jwks_resolver, {
+      const jwksResolver = await getJwksResolver();
+      ({ payload } = await jwtVerify(token, jwksResolver, {
         algorithms: ["ES256", "RS256"],
       }));
     }
@@ -160,7 +160,7 @@ async function validate_jwt(token: string): Promise<TokenPayload> {
       iat: typeof payload.iat === "number" ? payload.iat : undefined,
     };
   } catch (error) {
-    throw normalize_jose_error(error);
+    throw normalizeJoseError(error);
   }
 }
 
@@ -172,7 +172,7 @@ async function validate_jwt(token: string): Promise<TokenPayload> {
  * @returns Extracted document ID
  * @throws UnauthorizedError if path format is invalid
  */
-function extract_doc_id(pathname: string): string {
+function extractDocId(pathname: string): string {
   const match = pathname.match(/^\/document\/([^/?]+)/);
   if (!match || !match[1]) {
     throw new UnauthorizedError("Invalid document path");
@@ -191,7 +191,7 @@ function extract_doc_id(pathname: string): string {
  * @throws UnauthorizedError if the token is missing, invalid, or expired.
  *         The WS server must close the connection (code 4001) on error.
  */
-export async function validate_ws_token(req: IncomingMessage): Promise<AuthResult> {
+export async function validateWsToken(req: IncomingMessage): Promise<AuthResult> {
   const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
   const token = url.searchParams.get("token");
 
@@ -200,14 +200,22 @@ export async function validate_ws_token(req: IncomingMessage): Promise<AuthResul
   }
 
   // Extract doc_id from path
-  const doc_id = extract_doc_id(url.pathname);
+  const docId = extractDocId(url.pathname);
 
   // Validate JWT and extract payload
-  const payload = await validate_jwt(token);
+  const payload = await validateJwt(token);
 
   return {
     user_id: payload.sub,
-    doc_id,
+    doc_id: docId,
     token,
   };
 }
+
+export { validateWsToken as validate_ws_token };
+
+function validateWsTokenAlias(req: IncomingMessage): Promise<AuthResult> {
+  return validateWsToken(req);
+}
+
+export { validateWsTokenAlias as validate_ws_token_compat };

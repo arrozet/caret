@@ -78,12 +78,16 @@ export class InMemoryCollabRepository implements ICollabRepository {
    * @returns The persisted update record.
    */
   async save_update(document_id: string, update: Uint8Array): Promise<CollabUpdate> {
-    const record: CollabUpdate = {
+    const record = {
       id: randomUUID(),
       document_id,
-      update_data: update,
+      seq: 1,
+      update: Buffer.from(update),
+      client_id: null,
+      user_id: null,
       created_at: new Date(),
-    };
+      update_data: update,
+    } as CollabUpdate & { id: string; update_data: Uint8Array };
 
     const existing = this.updates_store.get(document_id) ?? [];
     existing.push(record);
@@ -113,13 +117,16 @@ export class InMemoryCollabRepository implements ICollabRepository {
     snapshot: Uint8Array,
     state_vector: Uint8Array,
   ): Promise<CollabSnapshot> {
-    const record: CollabSnapshot = {
+    const record = {
       id: randomUUID(),
       document_id,
-      snapshot_data: snapshot,
-      state_vector,
+      snapshot_seq: 1,
+      ydoc: Buffer.from(snapshot),
+      state_vector: Buffer.from(state_vector),
+      created_by_user_id: null,
       created_at: new Date(),
-    };
+      snapshot_data: snapshot,
+    } as CollabSnapshot & { snapshot_data: Uint8Array };
 
     const existing = this.snapshots_store.get(document_id) ?? [];
     existing.push(record);

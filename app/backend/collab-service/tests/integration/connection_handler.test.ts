@@ -155,7 +155,7 @@ describe("ConnectionHandler", () => {
       const auth = make_auth("user-1", "doc-1");
 
       // Act
-      handler.handle_connection({ ws, auth, room_manager });
+      handler.handleConnection({ ws, auth, roomManager: room_manager });
 
       // Assert
       expect(ws.send).toHaveBeenCalled();
@@ -171,11 +171,11 @@ describe("ConnectionHandler", () => {
       const auth = make_auth("user-1", "doc-1");
 
       // Act
-      handler.handle_connection({ ws, auth, room_manager });
+      handler.handleConnection({ ws, auth, roomManager: room_manager });
 
       // Assert
-      expect(room_manager.room_exists("doc-1")).toBe(true);
-      expect(room_manager.get_participants("doc-1")).toContain("user-1");
+      expect(room_manager.roomExists("doc-1")).toBe(true);
+      expect(room_manager.getParticipants("doc-1")).toContain("user-1");
     });
 
     /** Verifies that handler tracks the socket internally */
@@ -185,11 +185,11 @@ describe("ConnectionHandler", () => {
       const auth = make_auth("user-1", "doc-1");
 
       // Act
-      handler.handle_connection({ ws, auth, room_manager });
+      handler.handleConnection({ ws, auth, roomManager: room_manager });
 
       // Assert
-      expect(handler.get_active_room_count()).toBe(1);
-      expect(handler.get_room_socket_count("doc-1")).toBe(1);
+      expect(handler.getActiveRoomCount()).toBe(1);
+      expect(handler.getRoomSocketCount("doc-1")).toBe(1);
     });
 
     /** Verifies that message handlers are registered on the WebSocket */
@@ -199,7 +199,7 @@ describe("ConnectionHandler", () => {
       const auth = make_auth("user-1", "doc-1");
 
       // Act
-      handler.handle_connection({ ws, auth, room_manager });
+      handler.handleConnection({ ws, auth, roomManager: room_manager });
 
       // Assert
       expect(ws.on).toHaveBeenCalledWith("message", expect.any(Function));
@@ -217,7 +217,7 @@ describe("ConnectionHandler", () => {
       // Arrange
       const ws = make_mock_ws();
       const auth = make_auth("user-1", "doc-1");
-      handler.handle_connection({ ws, auth, room_manager });
+      handler.handleConnection({ ws, auth, roomManager: room_manager });
 
       // Clear initial messages
       (ws.send as Mock).mockClear();
