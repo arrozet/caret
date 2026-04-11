@@ -131,12 +131,12 @@ function ToolCallBadge({ toolName, isCompleted = false }: ToolCallBadgeProps) {
     : (label_map_pending[toolName] ?? `Tool: ${toolName}...`);
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1 mb-2 rounded-lg bg-accent-ai/8 border border-accent-ai/20 w-fit text-ui-xs text-accent-ai">
+    <div className="flex items-center gap-1.5 px-2 py-1 mb-2 rounded-lg bg-accent-ai/10 border border-accent-ai/25 w-fit text-ui-xs text-accent-ai">
       {isCompleted ? (
         <Check className="h-2.5 w-2.5 shrink-0" aria-hidden="true" strokeWidth={2.5} />
       ) : (
         <span
-          className="inline-block h-1.5 w-1.5 rounded-full bg-accent-ai/60 animate-pulse shrink-0"
+          className="inline-block h-1.5 w-1.5 rounded-full bg-accent-ai/70 animate-pulse shrink-0"
           aria-hidden="true"
         />
       )}
@@ -221,7 +221,7 @@ interface ChatPanelProps {
  * document edits to the editor-area review overlay.
  *
  * Design tokens:
- *   - Accent colour: accent-ai (#8B5CF6 light / #A78BFA dark)
+ *   - Accent colour: accent-ai (#FF4500 light / #FF6B35 dark)
  *   - Panel width: 400px (w-[400px])
  *   - Z-index: 40 (floating UI layer per FRONTEND.md z-index table)
  */

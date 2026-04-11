@@ -114,7 +114,7 @@
   --color-text-secondary-rgb: 110 110 115;
   --color-accent-main-rgb: 0 102 204;
   --color-accent-caret-rgb: 255 69 0;
-  --color-accent-ai-rgb: 139 92 246;
+  --color-accent-ai-rgb: 255 107 53;
   --color-ai-highlight-rgb: 245 246 248;
   --color-text-ghost-rgb: 163 163 163;
   --color-diff-add-bg-rgb: 220 252 231;
@@ -139,7 +139,7 @@
   --color-text-secondary-rgb: 156 163 175;
   --color-accent-main-rgb: 59 153 252;
   --color-accent-caret-rgb: 255 107 53;
-  --color-accent-ai-rgb: 167 139 250;
+  --color-accent-ai-rgb: 255 107 53;
   --color-ai-highlight-rgb: 32 33 36;
   --color-text-ghost-rgb: 82 82 82;
   --color-diff-add-bg-rgb: 6 78 59;
