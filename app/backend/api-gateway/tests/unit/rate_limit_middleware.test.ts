@@ -16,29 +16,29 @@ import { describe, it, expect, vi, beforeAll } from "vitest";
 // Module-level options capture — must be declared before vi.mock() hoisting.
 // --------------------------------------------------------------------------
 
-let captured_rate_limit_options: Record<string, unknown> = {};
+let capturedRateLimitOptions: Record<string, unknown> = {};
 
 vi.mock("express-rate-limit", () => {
-  const rate_limit_fn = vi.fn((options: Record<string, unknown>) => {
+  const rateLimitFn = vi.fn((options: Record<string, unknown>) => {
     // Capture options at the point rateLimit() is called (module load time).
-    captured_rate_limit_options = options;
+    capturedRateLimitOptions = options;
     // Return a simple pass-through middleware stub.
     return vi.fn((_req: unknown, _res: unknown, next: () => void) => next());
   });
-  return { rateLimit: rate_limit_fn };
+  return { rateLimit: rateLimitFn };
 });
 
 // Mock config to control values independently of environment.
 vi.mock("../../src/lib/config.js", () => ({
   config: {
-    RATE_LIMIT_MAX: 500,
-    RATE_LIMIT_WINDOW_MINUTES: 10,
-    PORT: 3000,
-    NODE_ENV: "test",
-    ALLOWED_ORIGINS: ["http://localhost:5173"],
-    AUTH_SERVICE_URL: "http://localhost:3001",
-    DOCUMENT_SERVICE_URL: "http://localhost:3002",
-    AI_SERVICE_URL: "http://localhost:8000",
+    rateLimitMax: 500,
+    rateLimitWindowMinutes: 10,
+    port: 3000,
+    nodeEnv: "test",
+    allowedOrigins: ["http://localhost:5173"],
+    authServiceUrl: "http://localhost:3001",
+    documentServiceUrl: "http://localhost:3002",
+    aiServiceUrl: "http://localhost:8000",
   },
 }));
 
@@ -47,87 +47,87 @@ vi.mock("../../src/lib/config.js", () => ({
 // --------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let rate_limit_middleware: any;
-let rate_limit_spy: ReturnType<typeof vi.fn>;
+let rateLimitMiddleware: any;
+let rateLimitSpy: ReturnType<typeof vi.fn>;
 
 beforeAll(async () => {
-  const rl_module = await import("express-rate-limit");
-  rate_limit_spy = rl_module.rateLimit as ReturnType<typeof vi.fn>;
-  const middleware_module = await import("../../src/middleware/rate_limit_middleware.js");
-  rate_limit_middleware = middleware_module.rate_limit_middleware;
+  const rlModule = await import("express-rate-limit");
+  rateLimitSpy = rlModule.rateLimit as ReturnType<typeof vi.fn>;
+  const middlewareModule = await import("../../src/middleware/rate_limit_middleware.js");
+  rateLimitMiddleware = middlewareModule.rateLimitMiddleware;
 });
 
-describe("rate_limit_middleware", () => {
+describe("rateLimitMiddleware", () => {
   /**
    * Verifies that the exported value is a callable middleware function.
    */
-  it("should_export_a_callable_middleware_function", () => {
+  it("exports a callable middleware function", () => {
     // Arrange — module already loaded in beforeAll
 
     // Act — inspect the exported value
 
     // Assert
-    expect(typeof rate_limit_middleware).toBe("function");
+    expect(typeof rateLimitMiddleware).toBe("function");
   });
 
   /**
    * Verifies that `rateLimit()` was called exactly once at module load time.
    */
-  it("should_call_rate_limit_exactly_once_at_module_load", () => {
+  it("calls rateLimit exactly once at module load", () => {
     // Arrange — captured in beforeAll
 
     // Act — rateLimit() is called when the module is imported
 
     // Assert
-    expect(rate_limit_spy).toHaveBeenCalledTimes(1);
+    expect(rateLimitSpy).toHaveBeenCalledTimes(1);
   });
 
   /**
    * Verifies that `rateLimit()` is called with the correct windowMs derived
    * from config.RATE_LIMIT_WINDOW_MINUTES * 60 * 1000.
    */
-  it("should_configure_window_ms_from_config_window_minutes", () => {
+  it("configures windowMs from config window minutes", () => {
     // Arrange — options captured at module load time
 
     // Act — read from captured options
 
     // Assert — 10 minutes * 60 seconds * 1000 ms
-    expect(captured_rate_limit_options.windowMs).toBe(10 * 60 * 1000);
+    expect(capturedRateLimitOptions.windowMs).toBe(10 * 60 * 1000);
   });
 
   /**
    * Verifies that `rateLimit()` uses the max from config to limit requests.
    */
-  it("should_configure_max_requests_from_config", () => {
+  it("configures max requests from config", () => {
     // Arrange — options captured at module load time
 
     // Act — read from captured options
 
     // Assert
-    expect(captured_rate_limit_options.max).toBe(500);
+    expect(capturedRateLimitOptions.max).toBe(500);
   });
 
   /**
    * Verifies that standard headers (RateLimit-*) are enabled and legacy
    * X-RateLimit-* headers are disabled, following RFC 6585.
    */
-  it("should_enable_standard_headers_and_disable_legacy_headers", () => {
+  it("enables standard headers and disables legacy headers", () => {
     // Arrange — options captured at module load time
 
     // Act — read from captured options
 
     // Assert
-    expect(captured_rate_limit_options.standardHeaders).toBe(true);
-    expect(captured_rate_limit_options.legacyHeaders).toBe(false);
+    expect(capturedRateLimitOptions.standardHeaders).toBe(true);
+    expect(capturedRateLimitOptions.legacyHeaders).toBe(false);
   });
 
   /**
    * Verifies that the rate-limit error message is a descriptive object
    * with an `error` key so clients receive structured JSON on 429.
    */
-  it("should_return_structured_json_error_message_on_429", () => {
+  it("returns a structured JSON error message on 429", () => {
     // Arrange — options captured at module load time
-    const message = captured_rate_limit_options.message as Record<string, string>;
+    const message = capturedRateLimitOptions.message as Record<string, string>;
 
     // Act — inspect the message object
 
@@ -141,20 +141,20 @@ describe("rate_limit_middleware", () => {
    * Verifies the middleware calls next() when invoked, confirming it is a
    * proper Express middleware that does not swallow requests under the limit.
    */
-  it("should_call_next_when_request_is_within_limit", () => {
+  it("calls next when request is within limit", () => {
     // Arrange
-    const mock_req = {};
-    const mock_res = {};
-    const mock_next = vi.fn();
+    const mockReq = {};
+    const mockRes = {};
+    const mockNext = vi.fn();
 
     // Act
-    (rate_limit_middleware as (req: unknown, res: unknown, next: () => void) => void)(
-      mock_req,
-      mock_res,
-      mock_next,
+    (rateLimitMiddleware as (req: unknown, res: unknown, next: () => void) => void)(
+      mockReq,
+      mockRes,
+      mockNext,
     );
 
     // Assert
-    expect(mock_next).toHaveBeenCalledOnce();
+    expect(mockNext).toHaveBeenCalledOnce();
   });
 });

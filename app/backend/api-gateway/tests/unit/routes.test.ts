@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Express, Request, Response } from "express";
-import { register_routes } from "../../src/routes/index.js";
+import { registerRoutes } from "../../src/routes/index.js";
 
 /**
  * Unit tests for the API Gateway route table (`src/routes/index.ts`).
  *
- * Validates that `register_routes` mounts each proxy route on the correct
+ * Validates that `registerRoutes` mounts each proxy route on the correct
  * path prefix and that the /api/v1 info endpoint returns the expected
  * service metadata payload without proxying any traffic.
  */
@@ -19,9 +19,9 @@ vi.mock("../../src/lib/logger.js", () => ({
   },
 }));
 
-describe("register_routes", () => {
+describe("registerRoutes", () => {
   /** Build a minimal mock Express app that records use() and get() calls. */
-  const make_app = () => ({ use: vi.fn(), get: vi.fn() });
+  const makeApp = () => ({ use: vi.fn(), get: vi.fn() });
 
   // ─── proxy route registration ─────────────────────────────────────────────
 
@@ -32,10 +32,10 @@ describe("register_routes", () => {
   describe("proxy route registration", () => {
     it("mounts a proxy middleware on /api/v1/auth", () => {
       // Arrange
-      const app = make_app();
+      const app = makeApp();
 
       // Act
-      register_routes(app as unknown as Express);
+      registerRoutes(app as unknown as Express);
 
       // Assert
       const paths = app.use.mock.calls.map((c) => c[0]);
@@ -44,10 +44,10 @@ describe("register_routes", () => {
 
     it("mounts a proxy middleware on /api/v1/documents", () => {
       // Arrange
-      const app = make_app();
+      const app = makeApp();
 
       // Act
-      register_routes(app as unknown as Express);
+      registerRoutes(app as unknown as Express);
 
       // Assert
       const paths = app.use.mock.calls.map((c) => c[0]);
@@ -56,10 +56,10 @@ describe("register_routes", () => {
 
     it("mounts a proxy middleware on /api/v1/workspaces", () => {
       // Arrange
-      const app = make_app();
+      const app = makeApp();
 
       // Act
-      register_routes(app as unknown as Express);
+      registerRoutes(app as unknown as Express);
 
       // Assert
       const paths = app.use.mock.calls.map((c) => c[0]);
@@ -68,10 +68,10 @@ describe("register_routes", () => {
 
     it("mounts a proxy middleware on /api/v1/folders", () => {
       // Arrange
-      const app = make_app();
+      const app = makeApp();
 
       // Act
-      register_routes(app as unknown as Express);
+      registerRoutes(app as unknown as Express);
 
       // Assert
       const paths = app.use.mock.calls.map((c) => c[0]);
@@ -80,10 +80,10 @@ describe("register_routes", () => {
 
     it("mounts a proxy middleware on /api/v1/ai", () => {
       // Arrange
-      const app = make_app();
+      const app = makeApp();
 
       // Act
-      register_routes(app as unknown as Express);
+      registerRoutes(app as unknown as Express);
 
       // Assert
       const paths = app.use.mock.calls.map((c) => c[0]);
@@ -92,10 +92,10 @@ describe("register_routes", () => {
 
     it("each proxy route receives a function as its handler", () => {
       // Arrange
-      const app = make_app();
+      const app = makeApp();
 
       // Act
-      register_routes(app as unknown as Express);
+      registerRoutes(app as unknown as Express);
 
       // Assert — every call to app.use must pass a callable as the second arg
       for (const call of app.use.mock.calls) {
@@ -113,10 +113,10 @@ describe("register_routes", () => {
   describe("GET /api/v1 info endpoint", () => {
     it("registers a GET handler on /api/v1", () => {
       // Arrange
-      const app = make_app();
+      const app = makeApp();
 
       // Act
-      register_routes(app as unknown as Express);
+      registerRoutes(app as unknown as Express);
 
       // Assert
       const get_paths = app.get.mock.calls.map((c) => c[0]);
@@ -125,8 +125,8 @@ describe("register_routes", () => {
 
     it("handler returns the service name and API version", () => {
       // Arrange
-      const app = make_app();
-      register_routes(app as unknown as Express);
+      const app = makeApp();
+      registerRoutes(app as unknown as Express);
       const [, handler] = app.get.mock.calls.find((c) => c[0] === "/api/v1")!;
       const res = { json: vi.fn() } as unknown as Response;
 
@@ -141,8 +141,8 @@ describe("register_routes", () => {
 
     it("handler lists all five registered endpoint path prefixes", () => {
       // Arrange
-      const app = make_app();
-      register_routes(app as unknown as Express);
+      const app = makeApp();
+      registerRoutes(app as unknown as Express);
       const [, handler] = app.get.mock.calls.find((c) => c[0] === "/api/v1")!;
       const res = { json: vi.fn() } as unknown as Response;
 

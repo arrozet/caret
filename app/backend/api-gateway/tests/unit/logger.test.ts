@@ -9,11 +9,11 @@ import { logger } from "../../src/lib/logger.js";
  * optional `meta` objects are correctly spread into the top-level output.
  */
 describe("logger", () => {
-  let console_spy: ReturnType<typeof vi.spyOn>;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     // Silence real console output during the test run.
-    console_spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -21,8 +21,8 @@ describe("logger", () => {
   });
 
   /** Parse the first console.log call argument as a JSON object. */
-  const get_output = (): Record<string, unknown> =>
-    JSON.parse(console_spy.mock.calls[0][0] as string);
+  const getOutput = (): Record<string, unknown> =>
+    JSON.parse(consoleSpy.mock.calls[0][0] as string);
 
   // ─── log levels ───────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ describe("logger", () => {
       logger.info(message);
 
       // Assert
-      expect(get_output().level).toBe("info");
+      expect(getOutput().level).toBe("info");
     });
 
     it("logger.warn sets the level field to 'warn'", () => {
@@ -50,7 +50,7 @@ describe("logger", () => {
       logger.warn(message);
 
       // Assert
-      expect(get_output().level).toBe("warn");
+      expect(getOutput().level).toBe("warn");
     });
 
     it("logger.error sets the level field to 'error'", () => {
@@ -61,7 +61,7 @@ describe("logger", () => {
       logger.error(message);
 
       // Assert
-      expect(get_output().level).toBe("error");
+      expect(getOutput().level).toBe("error");
     });
 
     it("logger.debug sets the level field to 'debug'", () => {
@@ -72,7 +72,7 @@ describe("logger", () => {
       logger.debug(message);
 
       // Assert
-      expect(get_output().level).toBe("debug");
+      expect(getOutput().level).toBe("debug");
     });
   });
 
@@ -91,7 +91,7 @@ describe("logger", () => {
       logger.info(message);
 
       // Assert
-      expect(get_output().message).toBe(message);
+      expect(getOutput().message).toBe(message);
     });
 
     it("handles an empty string message without throwing", () => {
@@ -101,7 +101,7 @@ describe("logger", () => {
       logger.info("");
 
       // Assert
-      expect(get_output().message).toBe("");
+      expect(getOutput().message).toBe("");
     });
   });
 
@@ -119,7 +119,7 @@ describe("logger", () => {
       logger.info("ts test");
 
       // Assert
-      const { timestamp } = get_output();
+      const { timestamp } = getOutput();
       expect(typeof timestamp).toBe("string");
       expect((timestamp as string).length).toBeGreaterThan(0);
     });
@@ -131,7 +131,7 @@ describe("logger", () => {
       logger.info("iso check");
 
       // Assert
-      const parsed = new Date(get_output().timestamp as string);
+      const parsed = new Date(getOutput().timestamp as string);
       expect(isNaN(parsed.getTime())).toBe(false);
     });
   });
@@ -146,14 +146,14 @@ describe("logger", () => {
   describe("meta object spreading", () => {
     it("spreads all meta fields into the top-level output object", () => {
       // Arrange
-      const meta = { user_id: "abc", action: "login" };
+      const meta = { userId: "abc", action: "login" };
 
       // Act
       logger.info("with meta", meta);
 
       // Assert
-      const out = get_output();
-      expect(out.user_id).toBe("abc");
+      const out = getOutput();
+      expect(out.userId).toBe("abc");
       expect(out.action).toBe("login");
     });
 
@@ -164,7 +164,7 @@ describe("logger", () => {
       logger.info("no meta");
 
       // Assert
-      const keys = Object.keys(get_output()).sort();
+      const keys = Object.keys(getOutput()).sort();
       expect(keys).toEqual(["level", "message", "timestamp"].sort());
     });
   });
@@ -183,7 +183,7 @@ describe("logger", () => {
       logger.error("one call");
 
       // Assert
-      expect(console_spy).toHaveBeenCalledTimes(1);
+      expect(consoleSpy).toHaveBeenCalledTimes(1);
     });
 
     it("output is valid JSON-parseable text", () => {
@@ -193,7 +193,7 @@ describe("logger", () => {
       logger.debug("json test");
 
       // Assert
-      const raw = console_spy.mock.calls[0][0] as string;
+      const raw = consoleSpy.mock.calls[0][0] as string;
       expect(() => JSON.parse(raw)).not.toThrow();
     });
   });

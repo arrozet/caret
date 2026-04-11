@@ -17,11 +17,11 @@ type ProxyOptions = {
   proxyErrorHandler?: (err: Error, res: unknown, next: (err?: unknown) => void) => void;
 };
 
-const captured_proxy_calls: Array<{ target: string; options: ProxyOptions }> = [];
+const capturedProxyCalls: Array<{ target: string; options: ProxyOptions }> = [];
 
 vi.mock("express-http-proxy", () => ({
   default: vi.fn((target: string, options: ProxyOptions) => {
-    captured_proxy_calls.push({ target, options });
+    capturedProxyCalls.push({ target, options });
     // Return a simple passthrough middleware stub.
     return vi.fn((_req: unknown, _res: unknown, next: () => void) => next());
   }),
@@ -38,21 +38,21 @@ vi.mock("../../src/lib/logger.js", () => ({
 
 vi.mock("../../src/lib/config.js", () => ({
   config: {
-    PORT: 3000,
-    NODE_ENV: "test",
-    ALLOWED_ORIGINS: ["http://localhost:5173"],
-    RATE_LIMIT_MAX: 1000,
-    RATE_LIMIT_WINDOW_MINUTES: 15,
-    AUTH_SERVICE_URL: "http://auth:3001",
-    DOCUMENT_SERVICE_URL: "http://docs:3002",
-    AI_SERVICE_URL: "http://ai:8000",
+    port: 3000,
+    nodeEnv: "test",
+    allowedOrigins: ["http://localhost:5173"],
+    rateLimitMax: 1000,
+    rateLimitWindowMinutes: 15,
+    authServiceUrl: "http://auth:3001",
+    documentServiceUrl: "http://docs:3002",
+    aiServiceUrl: "http://ai:8000",
   },
 }));
 
-describe("proxy routing — proxyReqPathResolver", () => {
+describe("proxy routing - proxyReqPathResolver", () => {
   beforeEach(() => {
     // Clear captured calls before each test so assertions are independent.
-    captured_proxy_calls.length = 0;
+    capturedProxyCalls.length = 0;
     vi.clearAllMocks();
   });
 
@@ -60,11 +60,11 @@ describe("proxy routing — proxyReqPathResolver", () => {
    * Helper: trigger route registration and return all captured proxy options
    * for a given target URL.
    */
-  const get_options_for_target = async (target: string): Promise<ProxyOptions> => {
-    const { register_routes } = await import("../../src/routes/index.js");
-    const mock_app = { use: vi.fn(), get: vi.fn() };
-    register_routes(mock_app as never);
-    const found = captured_proxy_calls.find((c) => c.target === target);
+  const getOptionsForTarget = async (target: string): Promise<ProxyOptions> => {
+    const { registerRoutes } = await import("../../src/routes/index.js");
+    const mockApp = { use: vi.fn(), get: vi.fn() };
+    registerRoutes(mockApp as never);
+    const found = capturedProxyCalls.find((c) => c.target === target);
     if (!found) throw new Error(`No proxy created for target: ${target}`);
     return found.options;
   };
@@ -77,12 +77,12 @@ describe("proxy routing — proxyReqPathResolver", () => {
    */
   it("should_strip_api_v1_prefix_from_documents_path", async () => {
     // Arrange
-    const options = await get_options_for_target("http://docs:3002");
+    const options = await getOptionsForTarget("http://docs:3002");
     const resolver = options.proxyReqPathResolver!;
-    const mock_req = { originalUrl: "/api/v1/documents/abc-123", method: "GET" } as Request;
+    const mockReq = { originalUrl: "/api/v1/documents/abc-123", method: "GET" } as Request;
 
     // Act
-    const result = resolver(mock_req);
+    const result = resolver(mockReq);
 
     // Assert
     expect(result).toBe("/documents/abc-123");
@@ -93,12 +93,12 @@ describe("proxy routing — proxyReqPathResolver", () => {
    */
   it("should_strip_api_v1_prefix_from_auth_path", async () => {
     // Arrange
-    const options = await get_options_for_target("http://auth:3001");
+    const options = await getOptionsForTarget("http://auth:3001");
     const resolver = options.proxyReqPathResolver!;
-    const mock_req = { originalUrl: "/api/v1/auth/login", method: "POST" } as Request;
+    const mockReq = { originalUrl: "/api/v1/auth/login", method: "POST" } as Request;
 
     // Act
-    const result = resolver(mock_req);
+    const result = resolver(mockReq);
 
     // Assert
     expect(result).toBe("/auth/login");
@@ -109,12 +109,12 @@ describe("proxy routing — proxyReqPathResolver", () => {
    */
   it("should_strip_api_v1_prefix_from_ai_path", async () => {
     // Arrange
-    const options = await get_options_for_target("http://ai:8000");
+    const options = await getOptionsForTarget("http://ai:8000");
     const resolver = options.proxyReqPathResolver!;
-    const mock_req = { originalUrl: "/api/v1/ai/completions", method: "POST" } as Request;
+    const mockReq = { originalUrl: "/api/v1/ai/completions", method: "POST" } as Request;
 
     // Act
-    const result = resolver(mock_req);
+    const result = resolver(mockReq);
 
     // Assert
     expect(result).toBe("/ai/completions");
@@ -125,12 +125,12 @@ describe("proxy routing — proxyReqPathResolver", () => {
    */
   it("should_handle_path_with_no_sub_resource", async () => {
     // Arrange
-    const options = await get_options_for_target("http://docs:3002");
+    const options = await getOptionsForTarget("http://docs:3002");
     const resolver = options.proxyReqPathResolver!;
-    const mock_req = { originalUrl: "/api/v1/workspaces", method: "GET" } as Request;
+    const mockReq = { originalUrl: "/api/v1/workspaces", method: "GET" } as Request;
 
     // Act
-    const result = resolver(mock_req);
+    const result = resolver(mockReq);
 
     // Assert
     expect(result).toBe("/workspaces");
@@ -142,15 +142,15 @@ describe("proxy routing — proxyReqPathResolver", () => {
    */
   it("should_preserve_query_string_in_downstream_path", async () => {
     // Arrange
-    const options = await get_options_for_target("http://docs:3002");
+    const options = await getOptionsForTarget("http://docs:3002");
     const resolver = options.proxyReqPathResolver!;
-    const mock_req = {
+    const mockReq = {
       originalUrl: "/api/v1/documents?page=2&limit=10",
       method: "GET",
     } as Request;
 
     // Act
-    const result = resolver(mock_req);
+    const result = resolver(mockReq);
 
     // Assert
     expect(result).toBe("/documents?page=2&limit=10");
@@ -163,12 +163,12 @@ describe("proxy routing — proxyReqPathResolver", () => {
   it("should_log_the_proxied_request", async () => {
     // Arrange
     const { logger } = await import("../../src/lib/logger.js");
-    const options = await get_options_for_target("http://auth:3001");
+    const options = await getOptionsForTarget("http://auth:3001");
     const resolver = options.proxyReqPathResolver!;
-    const mock_req = { originalUrl: "/api/v1/auth/me", method: "GET" } as Request;
+    const mockReq = { originalUrl: "/api/v1/auth/me", method: "GET" } as Request;
 
     // Act
-    resolver(mock_req);
+    resolver(mockReq);
 
     // Assert
     expect(logger.info).toHaveBeenCalled();
@@ -177,18 +177,18 @@ describe("proxy routing — proxyReqPathResolver", () => {
 
 describe("proxy routing — proxyErrorHandler", () => {
   beforeEach(() => {
-    captured_proxy_calls.length = 0;
+    capturedProxyCalls.length = 0;
     vi.clearAllMocks();
   });
 
   /**
    * Helper: retrieve the proxyErrorHandler for the document service proxy.
    */
-  const get_error_handler = async () => {
-    const { register_routes } = await import("../../src/routes/index.js");
-    const mock_app = { use: vi.fn(), get: vi.fn() };
-    register_routes(mock_app as never);
-    const found = captured_proxy_calls.find((c) => c.target === "http://docs:3002");
+  const getErrorHandler = async () => {
+    const { registerRoutes } = await import("../../src/routes/index.js");
+    const mockApp = { use: vi.fn(), get: vi.fn() };
+    registerRoutes(mockApp as never);
+    const found = capturedProxyCalls.find((c) => c.target === "http://docs:3002");
     if (!found) throw new Error("No proxy for document service");
     return found.options.proxyErrorHandler!;
   };
@@ -199,16 +199,16 @@ describe("proxy routing — proxyErrorHandler", () => {
    */
   it("should_call_next_with_error_when_downstream_is_unreachable", async () => {
     // Arrange
-    const error_handler = await get_error_handler();
+    const errorHandler = await getErrorHandler();
     const err = new Error("ECONNREFUSED");
-    const mock_res = {};
-    const mock_next = vi.fn();
+    const mockRes = {};
+    const mockNext = vi.fn();
 
     // Act
-    error_handler(err, mock_res, mock_next);
+    errorHandler(err, mockRes, mockNext);
 
     // Assert
-    expect(mock_next).toHaveBeenCalledWith(err);
+    expect(mockNext).toHaveBeenCalledWith(err);
   });
 
   /**
@@ -218,12 +218,12 @@ describe("proxy routing — proxyErrorHandler", () => {
   it("should_log_the_proxy_error_message", async () => {
     // Arrange
     const { logger } = await import("../../src/lib/logger.js");
-    const error_handler = await get_error_handler();
+    const errorHandler = await getErrorHandler();
     const err = new Error("upstream timeout");
-    const mock_next = vi.fn();
+    const mockNext = vi.fn();
 
     // Act
-    error_handler(err, {}, mock_next);
+    errorHandler(err, {}, mockNext);
 
     // Assert
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("upstream timeout"));
@@ -235,21 +235,21 @@ describe("proxy routing — proxyErrorHandler", () => {
    */
   it("should_call_next_exactly_once_on_proxy_error", async () => {
     // Arrange
-    const error_handler = await get_error_handler();
+    const errorHandler = await getErrorHandler();
     const err = new Error("network error");
-    const mock_next = vi.fn();
+    const mockNext = vi.fn();
 
     // Act
-    error_handler(err, {}, mock_next);
+    errorHandler(err, {}, mockNext);
 
     // Assert
-    expect(mock_next).toHaveBeenCalledTimes(1);
+    expect(mockNext).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("proxy routing — target assignment", () => {
   beforeEach(() => {
-    captured_proxy_calls.length = 0;
+    capturedProxyCalls.length = 0;
     vi.clearAllMocks();
   });
 
@@ -259,15 +259,15 @@ describe("proxy routing — target assignment", () => {
    */
   it("should_proxy_auth_routes_to_auth_service_url", async () => {
     // Arrange
-    const { register_routes } = await import("../../src/routes/index.js");
-    const mock_app = { use: vi.fn(), get: vi.fn() };
+    const { registerRoutes } = await import("../../src/routes/index.js");
+    const mockApp = { use: vi.fn(), get: vi.fn() };
 
     // Act
-    register_routes(mock_app as never);
+    registerRoutes(mockApp as never);
 
     // Assert
-    const auth_proxy = captured_proxy_calls.find((c) => c.target === "http://auth:3001");
-    expect(auth_proxy).toBeDefined();
+    const authProxy = capturedProxyCalls.find((c) => c.target === "http://auth:3001");
+    expect(authProxy).toBeDefined();
   });
 
   /**
@@ -276,15 +276,15 @@ describe("proxy routing — target assignment", () => {
    */
   it("should_proxy_workspaces_and_folders_to_document_service_url", async () => {
     // Arrange
-    const { register_routes } = await import("../../src/routes/index.js");
-    const mock_app = { use: vi.fn(), get: vi.fn() };
+    const { registerRoutes } = await import("../../src/routes/index.js");
+    const mockApp = { use: vi.fn(), get: vi.fn() };
 
     // Act
-    register_routes(mock_app as never);
+    registerRoutes(mockApp as never);
 
     // Assert — document service proxy appears multiple times (documents + workspaces + folders)
-    const doc_proxies = captured_proxy_calls.filter((c) => c.target === "http://docs:3002");
-    expect(doc_proxies.length).toBeGreaterThanOrEqual(3);
+    const docProxies = capturedProxyCalls.filter((c) => c.target === "http://docs:3002");
+    expect(docProxies.length).toBeGreaterThanOrEqual(3);
   });
 
   /**
@@ -292,14 +292,14 @@ describe("proxy routing — target assignment", () => {
    */
   it("should_proxy_ai_routes_to_ai_service_url", async () => {
     // Arrange
-    const { register_routes } = await import("../../src/routes/index.js");
-    const mock_app = { use: vi.fn(), get: vi.fn() };
+    const { registerRoutes } = await import("../../src/routes/index.js");
+    const mockApp = { use: vi.fn(), get: vi.fn() };
 
     // Act
-    register_routes(mock_app as never);
+    registerRoutes(mockApp as never);
 
     // Assert
-    const ai_proxy = captured_proxy_calls.find((c) => c.target === "http://ai:8000");
-    expect(ai_proxy).toBeDefined();
+    const aiProxy = capturedProxyCalls.find((c) => c.target === "http://ai:8000");
+    expect(aiProxy).toBeDefined();
   });
 });

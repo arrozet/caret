@@ -8,12 +8,12 @@ import { logger } from "../lib/logger.js";
  * Strips only the `/api/v1` prefix so the downstream service receives
  * its own mount path (e.g., `/api/v1/documents/123` → `/documents/123`).
  */
-function create_proxy(target_url: string): ReturnType<typeof proxy> {
-  return proxy(target_url, {
+function createProxy(targetUrl: string): ReturnType<typeof proxy> {
+  return proxy(targetUrl, {
     proxyReqPathResolver(req: Request): string {
-      const downstream_path = req.originalUrl.replace("/api/v1", "") || "/";
-      logger.info(`Proxying ${req.method} ${req.originalUrl} → ${target_url}${downstream_path}`);
-      return downstream_path;
+      const downstreamPath = req.originalUrl.replace("/api/v1", "") || "/";
+      logger.info(`Proxying ${req.method} ${req.originalUrl} → ${targetUrl}${downstreamPath}`);
+      return downstreamPath;
     },
     proxyErrorHandler(err, _res, next) {
       logger.error(`Proxy error: ${err.message}`);
@@ -35,21 +35,21 @@ function create_proxy(target_url: string): ReturnType<typeof proxy> {
  *   /api/v1/folders/*      → document-service (port 3002)
  *   /api/v1/ai/*           → ai-service       (port 8000)
  */
-export function register_routes(app: Express): void {
+export function registerRoutes(app: Express): void {
   /* --- Auth Service --- */
-  app.use("/api/v1/auth", create_proxy(config.AUTH_SERVICE_URL));
+  app.use("/api/v1/auth", createProxy(config.authServiceUrl));
 
   /* --- Document Service --- */
-  app.use("/api/v1/documents", create_proxy(config.DOCUMENT_SERVICE_URL));
+  app.use("/api/v1/documents", createProxy(config.documentServiceUrl));
 
   /* --- Workspaces (handled by document-service) --- */
-  app.use("/api/v1/workspaces", create_proxy(config.DOCUMENT_SERVICE_URL));
+  app.use("/api/v1/workspaces", createProxy(config.documentServiceUrl));
 
   /* --- Folders (handled by document-service) --- */
-  app.use("/api/v1/folders", create_proxy(config.DOCUMENT_SERVICE_URL));
+  app.use("/api/v1/folders", createProxy(config.documentServiceUrl));
 
   /* --- AI Service --- */
-  app.use("/api/v1/ai", create_proxy(config.AI_SERVICE_URL));
+  app.use("/api/v1/ai", createProxy(config.aiServiceUrl));
 
   /* --- API info endpoint --- */
   app.get("/api/v1", (_req: Request, res: Response) => {

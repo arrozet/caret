@@ -47,14 +47,14 @@ vi.mock("cors", () => ({
 
 vi.mock("../../src/lib/config.js", () => ({
   config: {
-    PORT: 0, // Use port 0 to let OS assign a free port.
-    NODE_ENV: "test",
-    ALLOWED_ORIGINS: ["http://localhost:5173"],
-    RATE_LIMIT_MAX: 1000,
-    RATE_LIMIT_WINDOW_MINUTES: 15,
-    AUTH_SERVICE_URL: "http://localhost:3001",
-    DOCUMENT_SERVICE_URL: "http://localhost:3002",
-    AI_SERVICE_URL: "http://localhost:8000",
+    port: 0, // Use port 0 to let OS assign a free port.
+    nodeEnv: "test",
+    allowedOrigins: ["http://localhost:5173"],
+    rateLimitMax: 1000,
+    rateLimitWindowMinutes: 15,
+    authServiceUrl: "http://localhost:3001",
+    documentServiceUrl: "http://localhost:3002",
+    aiServiceUrl: "http://localhost:8000",
   },
 }));
 
@@ -63,12 +63,12 @@ vi.mock("../../src/lib/config.js", () => ({
 // ---------------------------------------------------------------------------
 
 /** Start an Express app on a random free port and return the base URL. */
-const start_app = (app: Express): Promise<{ base_url: string; close: () => void }> =>
+const startApp = (app: Express): Promise<{ baseUrl: string; close: () => void }> =>
   new Promise((resolve) => {
     const server = app.listen(0, () => {
       const addr = server.address() as { port: number };
       resolve({
-        base_url: `http://localhost:${addr.port}`,
+        baseUrl: `http://localhost:${addr.port}`,
         close: () => server.close(),
       });
     });
@@ -79,16 +79,16 @@ const start_app = (app: Express): Promise<{ base_url: string; close: () => void 
 // ---------------------------------------------------------------------------
 
 describe("app integration", () => {
-  let base_url: string;
-  let close_server: () => void;
+  let baseUrl: string;
+  let _closeServer: () => void;
 
   beforeAll(async () => {
     // Import app AFTER mocks are in place.
-    const app_module = await import("../../src/app.js");
-    const app = app_module.default;
-    const result = await start_app(app);
-    base_url = result.base_url;
-    close_server = result.close;
+    const appModule = await import("../../src/app.js");
+    const app = appModule.default;
+    const result = await startApp(app);
+    baseUrl = result.baseUrl;
+    _closeServer = result.close;
   });
 
   // Tear down after all tests in this suite.
@@ -105,8 +105,8 @@ describe("app integration", () => {
     // Arrange — server already started in beforeAll
 
     // Act
-    const response = await fetch(`${base_url}/health`);
-    const body = await response.json() as Record<string, string>;
+    const response = await fetch(`${baseUrl}/health`);
+    const body = (await response.json()) as Record<string, string>;
 
     // Assert
     expect(response.status).toBe(200);
@@ -124,8 +124,8 @@ describe("app integration", () => {
     // Arrange — server already started in beforeAll
 
     // Act
-    const response = await fetch(`${base_url}/api/v1`);
-    const body = await response.json() as Record<string, unknown>;
+    const response = await fetch(`${baseUrl}/api/v1`);
+    const body = (await response.json()) as Record<string, unknown>;
 
     // Assert
     expect(response.status).toBe(200);
@@ -141,8 +141,8 @@ describe("app integration", () => {
     // Arrange — server already started in beforeAll
 
     // Act
-    const response = await fetch(`${base_url}/api/v1`);
-    const { endpoints } = await response.json() as { endpoints: string[] };
+    const response = await fetch(`${baseUrl}/api/v1`);
+    const { endpoints } = (await response.json()) as { endpoints: string[] };
 
     // Assert
     expect(endpoints).toContain("/api/v1/auth");
@@ -162,8 +162,8 @@ describe("app integration", () => {
     // Arrange — proxy is stubbed to return 200 { proxied: true }
 
     // Act
-    const response = await fetch(`${base_url}/api/v1/auth/me`);
-    const body = await response.json() as Record<string, unknown>;
+    const response = await fetch(`${baseUrl}/api/v1/auth/me`);
+    const body = (await response.json()) as Record<string, unknown>;
 
     // Assert
     expect(response.status).toBe(200);
@@ -177,8 +177,8 @@ describe("app integration", () => {
     // Arrange — proxy is stubbed to return 200 { proxied: true }
 
     // Act
-    const response = await fetch(`${base_url}/api/v1/documents`);
-    const body = await response.json() as Record<string, unknown>;
+    const response = await fetch(`${baseUrl}/api/v1/documents`);
+    const body = (await response.json()) as Record<string, unknown>;
 
     // Assert
     expect(response.status).toBe(200);
@@ -192,12 +192,12 @@ describe("app integration", () => {
     // Arrange — proxy is stubbed to return 200 { proxied: true }
 
     // Act
-    const response = await fetch(`${base_url}/api/v1/ai/completions`, {
+    const response = await fetch(`${baseUrl}/api/v1/ai/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: "test" }),
     });
-    const body = await response.json() as Record<string, unknown>;
+    const body = (await response.json()) as Record<string, unknown>;
 
     // Assert
     expect(response.status).toBe(200);
@@ -215,10 +215,10 @@ describe("app integration", () => {
     // Arrange — server already started
 
     // Act
-    const response = await fetch(`${base_url}/health`);
+    const response = await fetch(`${baseUrl}/health`);
 
     // Assert
-    const content_type = response.headers.get("content-type") ?? "";
-    expect(content_type).toContain("application/json");
+    const contentType = response.headers.get("content-type") ?? "";
+    expect(contentType).toContain("application/json");
   });
 });

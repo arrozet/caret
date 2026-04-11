@@ -20,16 +20,16 @@ vi.mock("../../src/lib/logger.js", () => ({
   },
 }));
 
-describe("error_middleware", () => {
+describe("errorMiddleware", () => {
   /** Build a minimal mock Express Response with a chainable `status()`. */
-  const make_res = () =>
+  const makeRes = () =>
     ({
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
     }) as unknown as Response;
 
-  const make_req = () => ({}) as Request;
-  const make_next = () => vi.fn() as unknown as NextFunction;
+  const makeReq = () => ({}) as Request;
+  const makeNext = () => vi.fn() as unknown as NextFunction;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,12 +39,12 @@ describe("error_middleware", () => {
 
   it("responds with HTTP 500 for any unhandled error", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-    const res = make_res();
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+    const res = makeRes();
     const err = new Error("boom");
 
     // Act
-    error_middleware(err, make_req(), res, make_next());
+    errorMiddleware(err, makeReq(), res, makeNext());
 
     // Assert
     expect(res.status).toHaveBeenCalledWith(500);
@@ -54,12 +54,12 @@ describe("error_middleware", () => {
 
   it("responds with the standard 'Internal server error' JSON body", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-    const res = make_res();
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+    const res = makeRes();
     const err = new Error("boom");
 
     // Act
-    error_middleware(err, make_req(), res, make_next());
+    errorMiddleware(err, makeReq(), res, makeNext());
 
     // Assert
     expect(res.json).toHaveBeenCalledWith({ error: "Internal server error" });
@@ -69,13 +69,13 @@ describe("error_middleware", () => {
 
   it("logs the error message and stack via logger.error", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
     const { logger } = await import("../../src/lib/logger.js");
     const err = new Error("something broke");
-    const res = make_res();
+    const res = makeRes();
 
     // Act
-    error_middleware(err, make_req(), res, make_next());
+    errorMiddleware(err, makeReq(), res, makeNext());
 
     // Assert
     expect(logger.error).toHaveBeenCalledWith(
@@ -88,12 +88,12 @@ describe("error_middleware", () => {
 
   it("never calls next() because the error is fully handled here", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-    const next = make_next();
-    const res = make_res();
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+    const next = makeNext();
+    const res = makeRes();
 
     // Act
-    error_middleware(new Error("handled"), make_req(), res, next);
+    errorMiddleware(new Error("handled"), makeReq(), res, next);
 
     // Assert
     expect(next).not.toHaveBeenCalled();
@@ -103,13 +103,13 @@ describe("error_middleware", () => {
 
   it("handles errors that have no stack trace without throwing", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
     const err = new Error("no stack");
     delete err.stack;
-    const res = make_res();
+    const res = makeRes();
 
     // Act & Assert — must not throw internally
-    expect(() => error_middleware(err, make_req(), res, make_next())).not.toThrow();
+    expect(() => errorMiddleware(err, makeReq(), res, makeNext())).not.toThrow();
     expect(res.status).toHaveBeenCalledWith(500);
   });
 });
