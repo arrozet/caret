@@ -1,4 +1,4 @@
-import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 import type { PaginationParams } from "../lib/validation.js";
@@ -22,10 +22,7 @@ export class FolderRepository {
    * @returns The inserted folder row.
    */
   async create(data: typeof schema.folders.$inferInsert) {
-    const rows = await this.db
-      .insert(schema.folders)
-      .values(data)
-      .returning();
+    const rows = await this.db.insert(schema.folders).values(data).returning();
     return rows[0];
   }
 
@@ -34,14 +31,16 @@ export class FolderRepository {
    * @param id - Folder UUID.
    * @returns The folder row, or null if not found / deleted.
    */
-  async find_by_id(id: string) {
+  async findById(id: string) {
     const rows = await this.db
       .select()
       .from(schema.folders)
-      .where(
-        and(eq(schema.folders.id, id), isNull(schema.folders.deleted_at)),
-      );
+      .where(and(eq(schema.folders.id, id), isNull(schema.folders.deleted_at)));
     return rows[0] ?? null;
+  }
+
+  async find_by_id(id: string) {
+    return this.findById(id);
   }
 
   /**
@@ -52,41 +51,47 @@ export class FolderRepository {
    * @param pagination - Limit and offset for pagination.
    * @returns Object with data array and total count.
    */
-  async list_by_workspace(
-    workspace_id: string,
-    parent_folder_id: string | null = null,
+  async listByWorkspace(
+    workspaceId: string,
+    parentFolderId: string | null = null,
     pagination: PaginationParams,
   ): Promise<{ data: (typeof schema.folders.$inferSelect)[]; total: number }> {
     const conditions = [
-      eq(schema.folders.workspace_id, workspace_id),
+      eq(schema.folders.workspace_id, workspaceId),
       isNull(schema.folders.deleted_at),
     ];
 
-    if (parent_folder_id === null) {
+    if (parentFolderId === null) {
       conditions.push(isNull(schema.folders.parent_folder_id));
     } else {
-      conditions.push(
-        eq(schema.folders.parent_folder_id, parent_folder_id),
-      );
+      conditions.push(eq(schema.folders.parent_folder_id, parentFolderId));
     }
 
-    const where_clause = and(...conditions);
+    const whereClause = and(...conditions);
 
-    const [data, count_result] = await Promise.all([
+    const [data, countResult] = await Promise.all([
       this.db
         .select()
         .from(schema.folders)
-        .where(where_clause)
+        .where(whereClause)
         .orderBy(schema.folders.sort_order, schema.folders.name)
         .limit(pagination.limit)
         .offset(pagination.offset),
       this.db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.folders)
-        .where(where_clause),
+        .where(whereClause),
     ]);
 
-    return { data, total: count_result[0].count };
+    return { data, total: countResult[0].count };
+  }
+
+  async list_by_workspace(
+    workspaceId: string,
+    parentFolderId: string | null = null,
+    pagination: PaginationParams,
+  ) {
+    return this.listByWorkspace(workspaceId, parentFolderId, pagination);
   }
 
   /**
@@ -96,30 +101,34 @@ export class FolderRepository {
    * @param pagination - Limit and offset for pagination.
    * @returns Object with data array and total count.
    */
-  async list_all_by_workspace(
-    workspace_id: string,
+  async listAllByWorkspace(
+    workspaceId: string,
     pagination: PaginationParams,
   ): Promise<{ data: (typeof schema.folders.$inferSelect)[]; total: number }> {
-    const where_clause = and(
-      eq(schema.folders.workspace_id, workspace_id),
+    const whereClause = and(
+      eq(schema.folders.workspace_id, workspaceId),
       isNull(schema.folders.deleted_at),
     );
 
-    const [data, count_result] = await Promise.all([
+    const [data, countResult] = await Promise.all([
       this.db
         .select()
         .from(schema.folders)
-        .where(where_clause)
+        .where(whereClause)
         .orderBy(schema.folders.sort_order, schema.folders.name)
         .limit(pagination.limit)
         .offset(pagination.offset),
       this.db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.folders)
-        .where(where_clause),
+        .where(whereClause),
     ]);
 
-    return { data, total: count_result[0].count };
+    return { data, total: countResult[0].count };
+  }
+
+  async list_all_by_workspace(workspaceId: string, pagination: PaginationParams) {
+    return this.listAllByWorkspace(workspaceId, pagination);
   }
 
   /**
@@ -132,9 +141,7 @@ export class FolderRepository {
     const rows = await this.db
       .update(schema.folders)
       .set({ ...data, updated_at: new Date() })
-      .where(
-        and(eq(schema.folders.id, id), isNull(schema.folders.deleted_at)),
-      )
+      .where(and(eq(schema.folders.id, id), isNull(schema.folders.deleted_at)))
       .returning();
     return rows[0] ?? null;
   }
@@ -144,17 +151,19 @@ export class FolderRepository {
    * @param id - Folder UUID.
    * @returns The soft-deleted folder row, or null.
    */
-  async soft_delete(id: string) {
+  async softDelete(id: string) {
     const rows = await this.db
       .update(schema.folders)
       .set({
         deleted_at: new Date(),
         updated_at: new Date(),
       })
-      .where(
-        and(eq(schema.folders.id, id), isNull(schema.folders.deleted_at)),
-      )
+      .where(and(eq(schema.folders.id, id), isNull(schema.folders.deleted_at)))
       .returning();
     return rows[0] ?? null;
+  }
+
+  async soft_delete(id: string) {
+    return this.softDelete(id);
   }
 }

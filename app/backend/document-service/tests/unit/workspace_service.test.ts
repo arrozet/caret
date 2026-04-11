@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { WorkspaceService } from "../../src/services/workspace_service.js";
-import {
-  NotFoundError,
-  ForbiddenError,
-  ConflictError,
-} from "../../src/lib/errors.js";
+import { NotFoundError, ForbiddenError, ConflictError } from "../../src/lib/errors.js";
 
 /**
  * Unit tests for WorkspaceService.
@@ -17,11 +13,11 @@ describe("WorkspaceService", () => {
 
   type MockWorkspaceRepo = {
     create: ReturnType<typeof vi.fn>;
-    find_by_slug: ReturnType<typeof vi.fn>;
-    find_by_id: ReturnType<typeof vi.fn>;
-    list_by_user: ReturnType<typeof vi.fn>;
-    add_member: ReturnType<typeof vi.fn>;
-    find_membership: ReturnType<typeof vi.fn>;
+    findBySlug: ReturnType<typeof vi.fn>;
+    findById: ReturnType<typeof vi.fn>;
+    listByUser: ReturnType<typeof vi.fn>;
+    addMember: ReturnType<typeof vi.fn>;
+    findMembership: ReturnType<typeof vi.fn>;
   };
 
   /* ── fixtures ───────────────────────────────────────── */
@@ -61,12 +57,18 @@ describe("WorkspaceService", () => {
   beforeEach(() => {
     workspace_repo = {
       create: vi.fn(),
-      find_by_slug: vi.fn(),
-      find_by_id: vi.fn(),
-      list_by_user: vi.fn(),
-      add_member: vi.fn(),
-      find_membership: vi.fn(),
+      findBySlug: vi.fn(),
+      findById: vi.fn(),
+      listByUser: vi.fn(),
+      addMember: vi.fn(),
+      findMembership: vi.fn(),
     };
+
+    workspace_repo.find_by_slug = workspace_repo.findBySlug;
+    workspace_repo.find_by_id = workspace_repo.findById;
+    workspace_repo.list_by_user = workspace_repo.listByUser;
+    workspace_repo.add_member = workspace_repo.addMember;
+    workspace_repo.find_membership = workspace_repo.findMembership;
 
     service = new WorkspaceService(workspace_repo as never);
   });
@@ -82,9 +84,9 @@ describe("WorkspaceService", () => {
     it("should_create_workspace_and_add_creator_as_owner", async () => {
       // Arrange
       const dto = { name: "My Project", slug: "my-project" };
-      workspace_repo.find_by_slug.mockResolvedValue(null);
+      workspace_repo.findBySlug.mockResolvedValue(null);
       workspace_repo.create.mockResolvedValue(make_workspace());
-      workspace_repo.add_member.mockResolvedValue(make_membership());
+      workspace_repo.addMember.mockResolvedValue(make_membership());
 
       // Act
       const result = await service.create_workspace(dto, USER_ID);
@@ -97,7 +99,7 @@ describe("WorkspaceService", () => {
           created_by_user_id: USER_ID,
         }),
       );
-      expect(workspace_repo.add_member).toHaveBeenCalledWith(
+      expect(workspace_repo.addMember).toHaveBeenCalledWith(
         expect.objectContaining({
           workspace_id: WORKSPACE_ID,
           user_id: USER_ID,
@@ -112,11 +114,9 @@ describe("WorkspaceService", () => {
     it("should_auto_generate_slug_from_name_when_not_provided", async () => {
       // Arrange
       const dto = { name: "Hello World Project" };
-      workspace_repo.find_by_slug.mockResolvedValue(null);
-      workspace_repo.create.mockResolvedValue(
-        make_workspace({ slug: "hello-world-project" }),
-      );
-      workspace_repo.add_member.mockResolvedValue(make_membership());
+      workspace_repo.findBySlug.mockResolvedValue(null);
+      workspace_repo.create.mockResolvedValue(make_workspace({ slug: "hello-world-project" }));
+      workspace_repo.addMember.mockResolvedValue(make_membership());
 
       // Act
       await service.create_workspace(dto, USER_ID);
@@ -132,13 +132,11 @@ describe("WorkspaceService", () => {
       // Arrange
       const dto = { name: "My Project" };
       // Primera llamada (base slug) existe, segunda no
-      workspace_repo.find_by_slug
+      workspace_repo.findBySlug
         .mockResolvedValueOnce(make_workspace()) // "my-project" taken
         .mockResolvedValueOnce(null); // "my-project-2" free
-      workspace_repo.create.mockResolvedValue(
-        make_workspace({ slug: "my-project-2" }),
-      );
-      workspace_repo.add_member.mockResolvedValue(make_membership());
+      workspace_repo.create.mockResolvedValue(make_workspace({ slug: "my-project-2" }));
+      workspace_repo.addMember.mockResolvedValue(make_membership());
 
       // Act
       const result = await service.create_workspace(dto, USER_ID);
@@ -154,38 +152,34 @@ describe("WorkspaceService", () => {
     it("should_throw_ConflictError_on_unique_violation_from_repo", async () => {
       // Arrange
       const dto = { name: "My Project", slug: "my-project" };
-      workspace_repo.find_by_slug.mockResolvedValue(null);
+      workspace_repo.findBySlug.mockResolvedValue(null);
       const pg_unique_error = Object.assign(new Error("duplicate key"), {
         code: "23505",
       });
       workspace_repo.create.mockRejectedValue(pg_unique_error);
 
       // Act & Assert
-      await expect(service.create_workspace(dto, USER_ID)).rejects.toThrow(
-        ConflictError,
-      );
+      await expect(service.create_workspace(dto, USER_ID)).rejects.toThrow(ConflictError);
     });
 
     /** verifica que propaga errores desconocidos sin convertirlos */
     it("should_rethrow_unknown_errors_from_repo", async () => {
       // Arrange
       const dto = { name: "My Project", slug: "my-project" };
-      workspace_repo.find_by_slug.mockResolvedValue(null);
+      workspace_repo.findBySlug.mockResolvedValue(null);
       workspace_repo.create.mockRejectedValue(new Error("DB timeout"));
 
       // Act & Assert
-      await expect(service.create_workspace(dto, USER_ID)).rejects.toThrow(
-        "DB timeout",
-      );
+      await expect(service.create_workspace(dto, USER_ID)).rejects.toThrow("DB timeout");
     });
 
     /** verifica que el DTO de respuesta contiene campos correctos */
     it("should_return_correct_response_dto_shape", async () => {
       // Arrange
       const dto = { name: "My Project", slug: "my-project" };
-      workspace_repo.find_by_slug.mockResolvedValue(null);
+      workspace_repo.findBySlug.mockResolvedValue(null);
       workspace_repo.create.mockResolvedValue(make_workspace());
-      workspace_repo.add_member.mockResolvedValue(make_membership());
+      workspace_repo.addMember.mockResolvedValue(make_membership());
 
       // Act
       const result = await service.create_workspace(dto, USER_ID);
@@ -212,8 +206,8 @@ describe("WorkspaceService", () => {
     /** verifica que retorna el workspace con el rol del caller */
     it("should_return_workspace_with_caller_role", async () => {
       // Arrange
-      workspace_repo.find_by_id.mockResolvedValue(make_workspace());
-      workspace_repo.find_membership.mockResolvedValue(make_membership("admin"));
+      workspace_repo.findById.mockResolvedValue(make_workspace());
+      workspace_repo.findMembership.mockResolvedValue(make_membership("admin"));
 
       // Act
       const result = await service.get_workspace(WORKSPACE_ID, USER_ID);
@@ -226,24 +220,20 @@ describe("WorkspaceService", () => {
     /** verifica que lanza NotFoundError cuando el workspace no existe */
     it("should_throw_NotFoundError_when_workspace_not_found", async () => {
       // Arrange
-      workspace_repo.find_by_id.mockResolvedValue(null);
+      workspace_repo.findById.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(
-        service.get_workspace("nonexistent-id", USER_ID),
-      ).rejects.toThrow(NotFoundError);
+      await expect(service.get_workspace("nonexistent-id", USER_ID)).rejects.toThrow(NotFoundError);
     });
 
     /** verifica que lanza ForbiddenError cuando el usuario no es miembro */
     it("should_throw_ForbiddenError_when_user_not_member", async () => {
       // Arrange
-      workspace_repo.find_by_id.mockResolvedValue(make_workspace());
-      workspace_repo.find_membership.mockResolvedValue(null);
+      workspace_repo.findById.mockResolvedValue(make_workspace());
+      workspace_repo.findMembership.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(
-        service.get_workspace(WORKSPACE_ID, USER_ID),
-      ).rejects.toThrow(ForbiddenError);
+      await expect(service.get_workspace(WORKSPACE_ID, USER_ID)).rejects.toThrow(ForbiddenError);
     });
   });
 
@@ -260,7 +250,7 @@ describe("WorkspaceService", () => {
         ...make_workspace(),
         role: "member",
       };
-      workspace_repo.list_by_user.mockResolvedValue({
+      workspace_repo.listByUser.mockResolvedValue({
         data: [ws_row],
         total: 1,
       });
@@ -280,7 +270,7 @@ describe("WorkspaceService", () => {
     /** verifica que retorna lista vacía cuando el usuario no tiene workspaces */
     it("should_return_empty_list_when_user_has_no_workspaces", async () => {
       // Arrange
-      workspace_repo.list_by_user.mockResolvedValue({ data: [], total: 0 });
+      workspace_repo.listByUser.mockResolvedValue({ data: [], total: 0 });
 
       // Act
       const result = await service.list_workspaces(USER_ID, {
@@ -296,17 +286,14 @@ describe("WorkspaceService", () => {
     /** verifica que pasa correctamente la paginación al repositorio */
     it("should_pass_pagination_params_to_repo", async () => {
       // Arrange
-      workspace_repo.list_by_user.mockResolvedValue({ data: [], total: 0 });
+      workspace_repo.listByUser.mockResolvedValue({ data: [], total: 0 });
       const pagination = { limit: 10, offset: 20 };
 
       // Act
       await service.list_workspaces(USER_ID, pagination);
 
       // Assert
-      expect(workspace_repo.list_by_user).toHaveBeenCalledWith(
-        USER_ID,
-        pagination,
-      );
+      expect(workspace_repo.listByUser).toHaveBeenCalledWith(USER_ID, pagination);
     });
   });
 });

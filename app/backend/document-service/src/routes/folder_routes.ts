@@ -5,10 +5,10 @@ import type { CreateFolderDto } from "../dtos/create_folder_dto.js";
 import type { UpdateFolderDto } from "../dtos/update_folder_dto.js";
 import { ValidationError } from "../lib/errors.js";
 import {
-  validate_uuid,
-  validate_non_empty_string,
-  validate_optional_uuid,
-  parse_pagination,
+  validateUuid,
+  validateNonEmptyString,
+  validateOptionalUuid,
+  parsePagination,
 } from "../lib/validation.js";
 
 /**
@@ -26,165 +26,137 @@ import {
  * @param folder_service - Injected FolderService instance.
  * @returns Configured Express Router.
  */
-export function create_folder_routes(folder_service: FolderService): Router {
+export function createFolderRoutes(folderService: FolderService): Router {
   const router = Router();
 
   /**
    * POST / — Create a new folder.
    * Body: { workspace_id: string, name: string, parent_folder_id?: string, sort_order?: number }
    */
-  router.post(
-    "/",
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-      try {
-        const dto = req.body as CreateFolderDto;
-        validate_non_empty_string(dto.name, "name");
-        validate_non_empty_string(dto.workspace_id, "workspace_id");
-        validate_uuid(dto.workspace_id, "workspace_id");
-        validate_optional_uuid(dto.parent_folder_id, "parent_folder_id");
-        const user_id = req.auth_user!.sub;
-        const result = await folder_service.create_folder(dto, user_id);
-        res.status(201).json(result);
-      } catch (err) {
-        next(err);
-      }
-    },
-  );
+  router.post("/", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const dto = req.body as CreateFolderDto;
+      validateNonEmptyString(dto.name, "name");
+      validateNonEmptyString(dto.workspace_id, "workspace_id");
+      validateUuid(dto.workspace_id, "workspace_id");
+      validateOptionalUuid(dto.parent_folder_id, "parent_folder_id");
+      const userId = req.auth_user!.sub;
+      const result = await folderService.createFolder(dto, userId);
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   /**
    * GET / — List folders in a workspace, optionally by parent.
    * Query: workspace_id (required), parent_folder_id (optional), limit (optional), offset (optional).
    */
-  router.get(
-    "/",
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-      try {
-        const workspace_id = req.query.workspace_id as string | undefined;
-        if (!workspace_id) {
-          throw new ValidationError("workspace_id query parameter is required");
-        }
-        validate_uuid(workspace_id, "workspace_id");
-        const parent_folder_id =
-          (req.query.parent_folder_id as string | undefined) ?? null;
-        if (parent_folder_id !== null) {
-          validate_uuid(parent_folder_id, "parent_folder_id");
-        }
-        const raw_limit = req.query.limit as string | undefined;
-        const raw_offset = req.query.offset as string | undefined;
-        const pagination = parse_pagination(raw_limit, raw_offset);
-        const user_id = req.auth_user!.sub;
-        const result = await folder_service.list_folders(
-          workspace_id,
-          user_id,
-          parent_folder_id,
-          pagination,
-        );
-        /* Backward compatibility: return flat array when no pagination params were sent */
-        const wants_pagination = raw_limit !== undefined || raw_offset !== undefined;
-        res.json(wants_pagination ? result : result.data);
-      } catch (err) {
-        next(err);
+  router.get("/", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const workspaceId = req.query.workspace_id as string | undefined;
+      if (!workspaceId) {
+        throw new ValidationError("workspace_id query parameter is required");
       }
-    },
-  );
+      validateUuid(workspaceId, "workspace_id");
+      const parentFolderId = (req.query.parent_folder_id as string | undefined) ?? null;
+      if (parentFolderId !== null) {
+        validateUuid(parentFolderId, "parent_folder_id");
+      }
+      const rawLimit = req.query.limit as string | undefined;
+      const rawOffset = req.query.offset as string | undefined;
+      const pagination = parsePagination(rawLimit, rawOffset);
+      const userId = req.auth_user!.sub;
+      const result = await folderService.listFolders(
+        workspaceId,
+        userId,
+        parentFolderId,
+        pagination,
+      );
+      /* Backward compatibility: return flat array when no pagination params were sent */
+      const wantsPagination = rawLimit !== undefined || rawOffset !== undefined;
+      res.json(wantsPagination ? result : result.data);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   /**
    * GET /all — List all folders in a workspace (flat list for tree building).
    * Query: workspace_id (required), limit (optional), offset (optional).
    */
-  router.get(
-    "/all",
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-      try {
-        const workspace_id = req.query.workspace_id as string | undefined;
-        if (!workspace_id) {
-          throw new ValidationError("workspace_id query parameter is required");
-        }
-        validate_uuid(workspace_id, "workspace_id");
-        const raw_limit = req.query.limit as string | undefined;
-        const raw_offset = req.query.offset as string | undefined;
-        const pagination = parse_pagination(raw_limit, raw_offset);
-        const user_id = req.auth_user!.sub;
-        const result = await folder_service.list_all_folders(
-          workspace_id,
-          user_id,
-          pagination,
-        );
-        /* Backward compatibility: return flat array when no pagination params were sent */
-        const wants_pagination = raw_limit !== undefined || raw_offset !== undefined;
-        res.json(wants_pagination ? result : result.data);
-      } catch (err) {
-        next(err);
+  router.get("/all", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const workspaceId = req.query.workspace_id as string | undefined;
+      if (!workspaceId) {
+        throw new ValidationError("workspace_id query parameter is required");
       }
-    },
-  );
+      validateUuid(workspaceId, "workspace_id");
+      const rawLimit = req.query.limit as string | undefined;
+      const rawOffset = req.query.offset as string | undefined;
+      const pagination = parsePagination(rawLimit, rawOffset);
+      const userId = req.auth_user!.sub;
+      const result = await folderService.listAllFolders(workspaceId, userId, pagination);
+      /* Backward compatibility: return flat array when no pagination params were sent */
+      const wantsPagination = rawLimit !== undefined || rawOffset !== undefined;
+      res.json(wantsPagination ? result : result.data);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   /**
    * GET /:id — Get a single folder by ID.
    */
-  router.get(
-    "/:id",
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-      try {
-        const user_id = req.auth_user!.sub;
-        const id = req.params.id as string;
-        validate_uuid(id, "id");
-        const result = await folder_service.get_folder(
-          id,
-          user_id,
-        );
-        res.json(result);
-      } catch (err) {
-        next(err);
-      }
-    },
-  );
+  router.get("/:id", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = req.auth_user!.sub;
+      const id = req.params.id as string;
+      validateUuid(id, "id");
+      const result = await folderService.getFolder(id, userId);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   /**
    * PATCH /:id — Update a folder (name, parent_folder_id, sort_order).
    */
-  router.patch(
-    "/:id",
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-      try {
-        const id = req.params.id as string;
-        validate_uuid(id, "id");
-        const dto = req.body as UpdateFolderDto;
-        /* name is optional on update, but if provided must be non-empty */
-        if (dto.name !== undefined) {
-          validate_non_empty_string(dto.name, "name");
-        }
-        validate_optional_uuid(dto.parent_folder_id, "parent_folder_id");
-        const user_id = req.auth_user!.sub;
-        const result = await folder_service.update_folder(
-          id,
-          dto,
-          user_id,
-        );
-        res.json(result);
-      } catch (err) {
-        next(err);
+  router.patch("/:id", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = req.params.id as string;
+      validateUuid(id, "id");
+      const dto = req.body as UpdateFolderDto;
+      /* name is optional on update, but if provided must be non-empty */
+      if (dto.name !== undefined) {
+        validateNonEmptyString(dto.name, "name");
       }
-    },
-  );
+      validateOptionalUuid(dto.parent_folder_id, "parent_folder_id");
+      const userId = req.auth_user!.sub;
+      const result = await folderService.updateFolder(id, dto, userId);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   /**
    * DELETE /:id — Soft-delete a folder.
    */
-  router.delete(
-    "/:id",
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-      try {
-        const id = req.params.id as string;
-        validate_uuid(id, "id");
-        const user_id = req.auth_user!.sub;
-        await folder_service.delete_folder(id, user_id);
-        res.status(204).send();
-      } catch (err) {
-        next(err);
-      }
-    },
-  );
+  router.delete("/:id", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const id = req.params.id as string;
+      validateUuid(id, "id");
+      const userId = req.auth_user!.sub;
+      await folderService.deleteFolder(id, userId);
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  });
 
   return router;
 }
+
+export const create_folder_routes = createFolderRoutes;

@@ -17,20 +17,20 @@ import { NotFoundError, ForbiddenError, ConflictError } from "../lib/errors.js";
  */
 export class DocumentService {
   /** Document table repository. */
-  private document_repo: DocumentRepository;
+  private documentRepository: DocumentRepository;
   /** Document version table repository. */
-  private version_repo: DocumentVersionRepository;
+  private versionRepository: DocumentVersionRepository;
   /** Workspace membership repository (for authorization checks). */
-  private workspace_repo: WorkspaceRepository;
+  private workspaceRepository: WorkspaceRepository;
 
   constructor(
-    document_repo: DocumentRepository,
-    version_repo: DocumentVersionRepository,
-    workspace_repo: WorkspaceRepository,
+    documentRepository: DocumentRepository,
+    versionRepository: DocumentVersionRepository,
+    workspaceRepository: WorkspaceRepository,
   ) {
-    this.document_repo = document_repo;
-    this.version_repo = version_repo;
-    this.workspace_repo = workspace_repo;
+    this.documentRepository = documentRepository;
+    this.versionRepository = versionRepository;
+    this.workspaceRepository = workspaceRepository;
   }
 
   /**
@@ -41,39 +41,39 @@ export class DocumentService {
    * @param user_id - Authenticated user's UUID.
    * @returns The created document as a response DTO.
    */
-  async create_document(dto: CreateDocumentDto, user_id: string): Promise<DocumentResponseDto> {
+  async createDocument(dto: CreateDocumentDto, userId: string): Promise<DocumentResponseDto> {
     /* Authorization: caller must belong to the workspace */
-    const membership = await this.workspace_repo.find_membership(dto.workspace_id, user_id);
+    const membership = await this.workspaceRepository.findMembership(dto.workspace_id, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const doc = await this.document_repo.create({
+    const doc = await this.documentRepository.create({
       title: dto.title,
       workspace_id: dto.workspace_id,
       folder_id: dto.folder_id ?? null,
-      owner_user_id: user_id,
-      created_by_user_id: user_id,
-      updated_by_user_id: user_id,
+      owner_user_id: userId,
+      created_by_user_id: userId,
+      updated_by_user_id: userId,
     });
 
     /* Create the initial version (v1) with empty content */
-    const initial_content = { type: "doc", content: [] };
-    const initial_version = await this.version_repo.create({
+    const initialContent = { type: "doc", content: [] };
+    const initialVersion = await this.versionRepository.create({
       document_id: doc.id,
       version_number: 1,
       source: "manual",
-      content_json: initial_content,
+      content_json: initialContent,
       content_text: "",
-      created_by_user_id: user_id,
+      created_by_user_id: userId,
     });
 
     /* Set the denormalized latest_version_id pointer */
-    const updated_doc = await this.document_repo.update(doc.id, {
-      latest_version_id: initial_version.id,
+    const updatedDoc = await this.documentRepository.update(doc.id, {
+      latest_version_id: initialVersion.id,
     });
 
-    return this.to_response_dto(updated_doc ?? doc, initial_content, "");
+    return this.toResponseDto(updatedDoc ?? doc, initialContent, "");
   }
 
   /**
@@ -83,24 +83,24 @@ export class DocumentService {
    * @param user_id - Authenticated user's UUID.
    * @returns The document as a response DTO.
    */
-  async get_document(document_id: string, user_id: string): Promise<DocumentResponseDto> {
-    const doc = await this.document_repo.find_by_id(document_id);
+  async getDocument(documentId: string, userId: string): Promise<DocumentResponseDto> {
+    const doc = await this.documentRepository.findById(documentId);
     if (!doc) {
       throw new NotFoundError("Document not found");
     }
 
     /* Authorization */
-    const membership = await this.workspace_repo.find_membership(doc.workspace_id, user_id);
+    const membership = await this.workspaceRepository.findMembership(doc.workspace_id, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const latest_version = await this.version_repo.find_latest(document_id);
+    const latestVersion = await this.versionRepository.findLatest(documentId);
 
-    return this.to_response_dto(
+    return this.toResponseDto(
       doc,
-      (latest_version?.content_json as Record<string, unknown>) ?? null,
-      latest_version?.content_text ?? null,
+      (latestVersion?.content_json as Record<string, unknown>) ?? null,
+      latestVersion?.content_text ?? null,
     );
   }
 
@@ -112,19 +112,19 @@ export class DocumentService {
    * @param pagination - Limit and offset for pagination.
    * @returns Paginated array of document response DTOs (without content).
    */
-  async list_documents(
-    workspace_id: string,
-    user_id: string,
+  async listDocuments(
+    workspaceId: string,
+    userId: string,
     pagination: PaginationParams,
   ): Promise<PaginatedResponse<DocumentResponseDto>> {
-    const membership = await this.workspace_repo.find_membership(workspace_id, user_id);
+    const membership = await this.workspaceRepository.findMembership(workspaceId, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const { data, total } = await this.document_repo.list_by_workspace(workspace_id, pagination);
+    const { data, total } = await this.documentRepository.listByWorkspace(workspaceId, pagination);
     return {
-      data: data.map((doc) => this.to_response_dto(doc)),
+      data: data.map((doc) => this.toResponseDto(doc)),
       pagination: {
         total,
         limit: pagination.limit,
@@ -141,58 +141,58 @@ export class DocumentService {
    * @param user_id - Authenticated user's UUID.
    * @returns The updated document as a response DTO.
    */
-  async update_document(
-    document_id: string,
+  async updateDocument(
+    documentId: string,
     dto: UpdateDocumentDto,
-    user_id: string,
+    userId: string,
   ): Promise<DocumentResponseDto> {
-    const doc = await this.document_repo.find_by_id(document_id);
+    const doc = await this.documentRepository.findById(documentId);
     if (!doc) {
       throw new NotFoundError("Document not found");
     }
 
-    const membership = await this.workspace_repo.find_membership(doc.workspace_id, user_id);
+    const membership = await this.workspaceRepository.findMembership(doc.workspace_id, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
     /* Build a type-safe update payload — only whitelisted fields */
-    const update_fields: Partial<{
+    const updateFields: Partial<{
       title: string;
       updated_by_user_id: string;
       latest_version_id: string;
     }> = {
-      updated_by_user_id: user_id,
+      updated_by_user_id: userId,
     };
     if (dto.title !== undefined) {
-      update_fields.title = dto.title;
+      updateFields.title = dto.title;
     }
 
     /* If content was provided, create a new version snapshot */
-    let content_json: Record<string, unknown> | null = null;
-    let content_text: string | null = null;
+    let contentJson: Record<string, unknown> | null = null;
+    let contentText: string | null = null;
 
     if (dto.content_json !== undefined) {
-      const version = await this.create_version_with_retry({
-        document_id,
-        content_json: dto.content_json,
-        content_text: dto.content_text ?? "",
-        user_id,
+      const version = await this.createVersionWithRetry({
+        documentId,
+        contentJson: dto.content_json,
+        contentText: dto.content_text ?? "",
+        userId,
       });
 
-      content_json = version.content_json as Record<string, unknown>;
-      content_text = version.content_text;
+      contentJson = version.content_json as Record<string, unknown>;
+      contentText = version.content_text;
 
       /* Update the denormalized latest_version_id pointer */
-      update_fields.latest_version_id = version.id;
+      updateFields.latest_version_id = version.id;
     }
 
-    const updated_doc = await this.document_repo.update(document_id, update_fields);
-    if (!updated_doc) {
+    const updatedDoc = await this.documentRepository.update(documentId, updateFields);
+    if (!updatedDoc) {
       throw new NotFoundError("Document was deleted during update");
     }
 
-    return this.to_response_dto(updated_doc, content_json, content_text);
+    return this.toResponseDto(updatedDoc, contentJson, contentText);
   }
 
   /**
@@ -201,18 +201,18 @@ export class DocumentService {
    * @param document_id - Document UUID.
    * @param user_id - Authenticated user's UUID.
    */
-  async delete_document(document_id: string, user_id: string): Promise<void> {
-    const doc = await this.document_repo.find_by_id(document_id);
+  async deleteDocument(documentId: string, userId: string): Promise<void> {
+    const doc = await this.documentRepository.findById(documentId);
     if (!doc) {
       throw new NotFoundError("Document not found");
     }
 
-    const membership = await this.workspace_repo.find_membership(doc.workspace_id, user_id);
+    const membership = await this.workspaceRepository.findMembership(doc.workspace_id, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    await this.document_repo.soft_delete(document_id, user_id);
+    await this.documentRepository.softDelete(documentId, userId);
   }
 
   /**
@@ -221,35 +221,35 @@ export class DocumentService {
    * Concurrent saves can race on `(document_id, version_number)`. When that
    * happens we recompute the latest version and retry with the next number.
    */
-  private async create_version_with_retry(params: {
-    document_id: string;
-    content_json: Record<string, unknown>;
-    content_text: string;
-    user_id: string;
+  private async createVersionWithRetry(params: {
+    documentId: string;
+    contentJson: Record<string, unknown>;
+    contentText: string;
+    userId: string;
   }) {
-    const { document_id, content_json, content_text, user_id } = params;
-    const MAX_ATTEMPTS = 3;
+    const { documentId, contentJson, contentText, userId } = params;
+    const maxAttempts = 3;
 
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      const latest = await this.version_repo.find_latest(document_id);
-      const next_version = (latest?.version_number ?? 0) + 1;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const latest = await this.versionRepository.findLatest(documentId);
+      const nextVersion = (latest?.version_number ?? 0) + 1;
 
       try {
-        const version = await this.version_repo.create({
-          document_id,
-          version_number: next_version,
+        const version = await this.versionRepository.create({
+          document_id: documentId,
+          version_number: nextVersion,
           source: "autosnapshot",
-          content_json,
-          content_text,
-          created_by_user_id: user_id,
+          content_json: contentJson,
+          content_text: contentText,
+          created_by_user_id: userId,
         });
         return version;
       } catch (err: unknown) {
-        if (is_unique_violation(err) && attempt < MAX_ATTEMPTS) {
+        if (isUniqueViolation(err) && attempt < maxAttempts) {
           continue;
         }
 
-        if (is_unique_violation(err)) {
+        if (isUniqueViolation(err)) {
           throw new ConflictError("Document was updated concurrently. Please retry.");
         }
 
@@ -271,68 +271,68 @@ export class DocumentService {
    * @param inviter_user_id - Authenticated inviter user UUID.
    * @returns Invitation result payload.
    */
-  async invite_document_collaborator(
-    document_id: string,
-    invited_email: string,
-    inviter_user_id: string,
+  async inviteDocumentCollaborator(
+    documentId: string,
+    invitedEmail: string,
+    inviterUserId: string,
   ): Promise<InviteWorkspaceMemberResponseDto> {
-    const doc = await this.document_repo.find_by_id(document_id);
+    const doc = await this.documentRepository.findById(documentId);
     if (!doc) {
       throw new NotFoundError("Document not found");
     }
 
-    const inviter_membership = await this.workspace_repo.find_membership(
+    const inviterMembership = await this.workspaceRepository.findMembership(
       doc.workspace_id,
-      inviter_user_id,
+      inviterUserId,
     );
-    if (!inviter_membership) {
+    if (!inviterMembership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const invited_user_id = await this.workspace_repo.find_auth_user_id_by_email(invited_email);
+    const invitedUserId = await this.workspaceRepository.findAuthUserIdByEmail(invitedEmail);
 
-    if (!invited_user_id) {
+    if (!invitedUserId) {
       throw new NotFoundError("User with this email does not exist in Caret");
     }
 
-    const existing_active = await this.workspace_repo.find_membership(
+    const existingActive = await this.workspaceRepository.findMembership(
       doc.workspace_id,
-      invited_user_id,
+      invitedUserId,
     );
 
-    if (existing_active) {
+    if (existingActive) {
       return {
         workspace_id: doc.workspace_id,
-        user_id: invited_user_id,
-        email: invited_email,
+        user_id: invitedUserId,
+        email: invitedEmail,
         role: "member",
       };
     }
 
-    const existing_any = await this.workspace_repo.find_membership_any(
+    const existingAny = await this.workspaceRepository.findMembershipAny(
       doc.workspace_id,
-      invited_user_id,
+      invitedUserId,
     );
 
-    if (existing_any) {
-      await this.workspace_repo.reactivate_member(
+    if (existingAny) {
+      await this.workspaceRepository.reactivateMember(
         doc.workspace_id,
-        invited_user_id,
-        inviter_user_id,
+        invitedUserId,
+        inviterUserId,
       );
     } else {
-      await this.workspace_repo.add_member({
+      await this.workspaceRepository.addMember({
         workspace_id: doc.workspace_id,
-        user_id: invited_user_id,
+        user_id: invitedUserId,
         role: "member",
-        invited_by_user_id: inviter_user_id,
+        invited_by_user_id: inviterUserId,
       });
     }
 
     return {
       workspace_id: doc.workspace_id,
-      user_id: invited_user_id,
-      email: invited_email,
+      user_id: invitedUserId,
+      email: invitedEmail,
       role: "member",
     };
   }
@@ -344,7 +344,7 @@ export class DocumentService {
    * @param content_text - Optional plain text from the latest version.
    * @returns Formatted response DTO.
    */
-  private to_response_dto(
+  private toResponseDto(
     doc: {
       id: string;
       workspace_id: string;
@@ -373,12 +373,48 @@ export class DocumentService {
       updated_at: doc.updated_at.toISOString(),
     };
   }
+
+  async create_document(dto: CreateDocumentDto, userId: string): Promise<DocumentResponseDto> {
+    return this.createDocument(dto, userId);
+  }
+
+  async get_document(documentId: string, userId: string): Promise<DocumentResponseDto> {
+    return this.getDocument(documentId, userId);
+  }
+
+  async list_documents(
+    workspaceId: string,
+    userId: string,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<DocumentResponseDto>> {
+    return this.listDocuments(workspaceId, userId, pagination);
+  }
+
+  async update_document(
+    documentId: string,
+    dto: UpdateDocumentDto,
+    userId: string,
+  ): Promise<DocumentResponseDto> {
+    return this.updateDocument(documentId, dto, userId);
+  }
+
+  async delete_document(documentId: string, userId: string): Promise<void> {
+    return this.deleteDocument(documentId, userId);
+  }
+
+  async invite_document_collaborator(
+    documentId: string,
+    invitedEmail: string,
+    inviterUserId: string,
+  ): Promise<InviteWorkspaceMemberResponseDto> {
+    return this.inviteDocumentCollaborator(documentId, invitedEmail, inviterUserId);
+  }
 }
 
 /**
  * Check whether a thrown error is a Postgres unique constraint violation (code 23505).
  */
-function is_unique_violation(err: unknown): boolean {
+function isUniqueViolation(err: unknown): boolean {
   return (
     typeof err === "object" &&
     err !== null &&

@@ -2,11 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { create_folder_routes } from "../../src/routes/folder_routes.js";
-import {
-  NotFoundError,
-  ForbiddenError,
-  ValidationError,
-} from "../../src/lib/errors.js";
+import { NotFoundError, ForbiddenError, ValidationError } from "../../src/lib/errors.js";
 
 /**
  * Unit tests for create_folder_routes (folder_routes.ts).
@@ -66,8 +62,7 @@ describe("folder_routes", () => {
     body: unknown;
     next_error: Error | undefined;
   }> {
-    const { body = {}, query = {}, params = {}, auth_user = { sub: USER_ID } } =
-      options;
+    const { body = {}, query = {}, params = {}, auth_user = { sub: USER_ID } } = options;
 
     let status_code = 200;
     let response_body: unknown = null;
@@ -102,7 +97,16 @@ describe("folder_routes", () => {
       next_error = err;
     }) as unknown as NextFunction;
 
-    const layers = (router as unknown as { stack: Array<{ route?: { path: string; stack: Array<{ method: string; handle: Function }> } }> }).stack;
+    const layers = (
+      router as unknown as {
+        stack: Array<{
+          route?: {
+            path: string;
+            stack: Array<{ method: string; handle: (...args: unknown[]) => unknown }>;
+          };
+        }>;
+      }
+    ).stack;
 
     for (const layer of layers) {
       if (!layer.route) continue;
@@ -140,6 +144,13 @@ describe("folder_routes", () => {
       delete_folder: vi.fn(),
     };
 
+    folder_service.createFolder = folder_service.create_folder;
+    folder_service.getFolder = folder_service.get_folder;
+    folder_service.listFolders = folder_service.list_folders;
+    folder_service.listAllFolders = folder_service.list_all_folders;
+    folder_service.updateFolder = folder_service.update_folder;
+    folder_service.deleteFolder = folder_service.delete_folder;
+
     router = create_folder_routes(folder_service as never);
   });
 
@@ -156,12 +167,9 @@ describe("folder_routes", () => {
       folder_service.create_folder.mockResolvedValue(make_folder_dto());
 
       // Act
-      const { status_code, body, next_error } = await call_route_handler(
-        router,
-        "post",
-        "/",
-        { body: dto },
-      );
+      const { status_code, body, next_error } = await call_route_handler(router, "post", "/", {
+        body: dto,
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -242,9 +250,7 @@ describe("folder_routes", () => {
     it("should_pass_ForbiddenError_from_service_to_next", async () => {
       // Arrange
       const dto = { workspace_id: WORKSPACE_ID, name: "My Folder" };
-      folder_service.create_folder.mockRejectedValue(
-        new ForbiddenError("Not a member"),
-      );
+      folder_service.create_folder.mockRejectedValue(new ForbiddenError("Not a member"));
 
       // Act
       const { next_error } = await call_route_handler(router, "post", "/", {
@@ -362,12 +368,9 @@ describe("folder_routes", () => {
       });
 
       // Act
-      const { body, next_error } = await call_route_handler(
-        router,
-        "get",
-        "/all",
-        { query: { workspace_id: WORKSPACE_ID } },
-      );
+      const { body, next_error } = await call_route_handler(router, "get", "/all", {
+        query: { workspace_id: WORKSPACE_ID },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -377,12 +380,7 @@ describe("folder_routes", () => {
     /** verifica que pasa next(ValidationError) cuando falta workspace_id */
     it("should_call_next_with_ValidationError_when_workspace_id_missing", async () => {
       // Arrange & Act
-      const { next_error } = await call_route_handler(
-        router,
-        "get",
-        "/all",
-        { query: {} },
-      );
+      const { next_error } = await call_route_handler(router, "get", "/all", { query: {} });
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
@@ -401,12 +399,9 @@ describe("folder_routes", () => {
       folder_service.get_folder.mockResolvedValue(make_folder_dto());
 
       // Act
-      const { body, next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: FOLDER_ID } },
-      );
+      const { body, next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: FOLDER_ID },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -416,12 +411,9 @@ describe("folder_routes", () => {
     /** verifica que pasa next(ValidationError) cuando el ID no es UUID */
     it("should_call_next_with_ValidationError_for_invalid_uuid", async () => {
       // Arrange & Act
-      const { next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: "not-a-uuid" } },
-      );
+      const { next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: "not-a-uuid" },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
@@ -430,17 +422,12 @@ describe("folder_routes", () => {
     /** verifica que pasa next(NotFoundError) del servicio */
     it("should_pass_NotFoundError_from_service_to_next", async () => {
       // Arrange
-      folder_service.get_folder.mockRejectedValue(
-        new NotFoundError("Folder not found"),
-      );
+      folder_service.get_folder.mockRejectedValue(new NotFoundError("Folder not found"));
 
       // Act
-      const { next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: FOLDER_ID } },
-      );
+      const { next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: FOLDER_ID },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(NotFoundError);
@@ -456,20 +443,13 @@ describe("folder_routes", () => {
     /** verifica que actualiza el folder y retorna el DTO actualizado */
     it("should_update_folder_and_return_200", async () => {
       // Arrange
-      folder_service.update_folder.mockResolvedValue(
-        make_folder_dto({ name: "Renamed" }),
-      );
+      folder_service.update_folder.mockResolvedValue(make_folder_dto({ name: "Renamed" }));
 
       // Act
-      const { body, next_error } = await call_route_handler(
-        router,
-        "patch",
-        "/:id",
-        {
-          params: { id: FOLDER_ID },
-          body: { name: "Renamed" },
-        },
-      );
+      const { body, next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: FOLDER_ID },
+        body: { name: "Renamed" },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -479,15 +459,10 @@ describe("folder_routes", () => {
     /** verifica que pasa next(ValidationError) cuando name es cadena vacía */
     it("should_call_next_with_ValidationError_for_empty_name", async () => {
       // Arrange & Act
-      const { next_error } = await call_route_handler(
-        router,
-        "patch",
-        "/:id",
-        {
-          params: { id: FOLDER_ID },
-          body: { name: "" },
-        },
-      );
+      const { next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: FOLDER_ID },
+        body: { name: "" },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
@@ -496,15 +471,10 @@ describe("folder_routes", () => {
     /** verifica que pasa next(ValidationError) cuando parent_folder_id no es UUID */
     it("should_call_next_with_ValidationError_for_invalid_parent_uuid", async () => {
       // Arrange & Act
-      const { next_error } = await call_route_handler(
-        router,
-        "patch",
-        "/:id",
-        {
-          params: { id: FOLDER_ID },
-          body: { parent_folder_id: "bad-uuid" },
-        },
-      );
+      const { next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: FOLDER_ID },
+        body: { parent_folder_id: "bad-uuid" },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
@@ -516,15 +486,10 @@ describe("folder_routes", () => {
       folder_service.update_folder.mockResolvedValue(make_folder_dto());
 
       // Act
-      const { next_error } = await call_route_handler(
-        router,
-        "patch",
-        "/:id",
-        {
-          params: { id: FOLDER_ID },
-          body: { sort_order: 2 },
-        },
-      );
+      const { next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: FOLDER_ID },
+        body: { sort_order: 2 },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -543,30 +508,21 @@ describe("folder_routes", () => {
       folder_service.delete_folder.mockResolvedValue(undefined);
 
       // Act
-      const { next_error } = await call_route_handler(
-        router,
-        "delete",
-        "/:id",
-        { params: { id: FOLDER_ID } },
-      );
+      const { next_error } = await call_route_handler(router, "delete", "/:id", {
+        params: { id: FOLDER_ID },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
-      expect(folder_service.delete_folder).toHaveBeenCalledWith(
-        FOLDER_ID,
-        USER_ID,
-      );
+      expect(folder_service.delete_folder).toHaveBeenCalledWith(FOLDER_ID, USER_ID);
     });
 
     /** verifica que pasa next(ValidationError) cuando el ID no es UUID */
     it("should_call_next_with_ValidationError_for_invalid_uuid", async () => {
       // Arrange & Act
-      const { next_error } = await call_route_handler(
-        router,
-        "delete",
-        "/:id",
-        { params: { id: "bad-id" } },
-      );
+      const { next_error } = await call_route_handler(router, "delete", "/:id", {
+        params: { id: "bad-id" },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
@@ -575,17 +531,12 @@ describe("folder_routes", () => {
     /** verifica que propaga NotFoundError del servicio */
     it("should_pass_NotFoundError_from_service_to_next", async () => {
       // Arrange
-      folder_service.delete_folder.mockRejectedValue(
-        new NotFoundError("Folder not found"),
-      );
+      folder_service.delete_folder.mockRejectedValue(new NotFoundError("Folder not found"));
 
       // Act
-      const { next_error } = await call_route_handler(
-        router,
-        "delete",
-        "/:id",
-        { params: { id: FOLDER_ID } },
-      );
+      const { next_error } = await call_route_handler(router, "delete", "/:id", {
+        params: { id: FOLDER_ID },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(NotFoundError);

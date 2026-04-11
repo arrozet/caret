@@ -154,6 +154,13 @@ describe("document_routes", () => {
       invite_document_collaborator: vi.fn(),
     };
 
+    document_service.createDocument = document_service.create_document;
+    document_service.getDocument = document_service.get_document;
+    document_service.listDocuments = document_service.list_documents;
+    document_service.updateDocument = document_service.update_document;
+    document_service.deleteDocument = document_service.delete_document;
+    document_service.inviteDocumentCollaborator = document_service.invite_document_collaborator;
+
     router = create_document_routes(document_service as never);
   });
 

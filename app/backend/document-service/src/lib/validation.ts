@@ -33,12 +33,12 @@ export interface PaginatedResponse<T> {
  * @param raw_offset - Raw offset string from query params.
  * @returns Validated pagination parameters with safe defaults.
  */
-export function parse_pagination(raw_limit?: string, raw_offset?: string): PaginationParams {
+export function parsePagination(rawLimit?: string, rawOffset?: string): PaginationParams {
   let limit = DEFAULT_PAGE_LIMIT;
   let offset = 0;
 
-  if (raw_limit !== undefined) {
-    limit = Number(raw_limit);
+  if (rawLimit !== undefined) {
+    limit = Number(rawLimit);
     if (!Number.isInteger(limit) || limit < 1) {
       throw new ValidationError("limit must be a positive integer");
     }
@@ -47,8 +47,8 @@ export function parse_pagination(raw_limit?: string, raw_offset?: string): Pagin
     }
   }
 
-  if (raw_offset !== undefined) {
-    offset = Number(raw_offset);
+  if (rawOffset !== undefined) {
+    offset = Number(rawOffset);
     if (!Number.isInteger(offset) || offset < 0) {
       throw new ValidationError("offset must be a non-negative integer");
     }
@@ -57,17 +57,21 @@ export function parse_pagination(raw_limit?: string, raw_offset?: string): Pagin
   return { limit, offset };
 }
 
+export const parse_pagination = parsePagination;
+
 /**
  * Validate that a string is a valid UUID v4 format.
  * @param value - The string to validate.
  * @param field_name - Field name for the error message.
  * @throws ValidationError if the value is not a valid UUID.
  */
-export function validate_uuid(value: string, field_name: string): void {
+export function validateUuid(value: string, fieldName: string): void {
   if (!UUID_REGEX.test(value)) {
-    throw new ValidationError(`${field_name} must be a valid UUID`);
+    throw new ValidationError(`${fieldName} must be a valid UUID`);
   }
 }
+
+export const validate_uuid = validateUuid;
 
 /**
  * Validate that a string is not empty after trimming.
@@ -75,27 +79,28 @@ export function validate_uuid(value: string, field_name: string): void {
  * @param field_name - Field name for the error message.
  * @throws ValidationError if the value is empty.
  */
-export function validate_non_empty_string(
-  value: unknown,
-  field_name: string,
-): asserts value is string {
+export function validateNonEmptyString(value: unknown, fieldName: string): asserts value is string {
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new ValidationError(`${field_name} is required and must be a non-empty string`);
+    throw new ValidationError(`${fieldName} is required and must be a non-empty string`);
   }
 }
+
+export const validate_non_empty_string = validateNonEmptyString;
 
 /**
  * Validate that a value, if present, is a valid UUID.
  * @param value - The value to validate (may be undefined/null).
  * @param field_name - Field name for the error message.
  */
-export function validate_optional_uuid(value: unknown, field_name: string): void {
+export function validateOptionalUuid(value: unknown, fieldName: string): void {
   if (value !== undefined && value !== null) {
     if (typeof value !== "string" || !UUID_REGEX.test(value)) {
-      throw new ValidationError(`${field_name} must be a valid UUID`);
+      throw new ValidationError(`${fieldName} must be a valid UUID`);
     }
   }
 }
+
+export const validate_optional_uuid = validateOptionalUuid;
 
 /**
  * Validate that a value is a syntactically valid email address.
@@ -103,8 +108,10 @@ export function validate_optional_uuid(value: unknown, field_name: string): void
  * @param field_name - Field name for the error message.
  * @throws ValidationError if the value is not a valid email string.
  */
-export function validate_email(value: unknown, field_name: string): asserts value is string {
+export function validateEmail(value: unknown, fieldName: string): asserts value is string {
   if (typeof value !== "string" || !EMAIL_REGEX.test(value.trim())) {
-    throw new ValidationError(`${field_name} must be a valid email`);
+    throw new ValidationError(`${fieldName} must be a valid email`);
   }
 }
+
+export const validate_email = validateEmail;

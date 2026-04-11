@@ -15,16 +15,13 @@ import { NotFoundError, ForbiddenError } from "../lib/errors.js";
  */
 export class FolderService {
   /** Folder table repository. */
-  private folder_repo: FolderRepository;
+  private folderRepository: FolderRepository;
   /** Workspace membership repository (for authorization checks). */
-  private workspace_repo: WorkspaceRepository;
+  private workspaceRepository: WorkspaceRepository;
 
-  constructor(
-    folder_repo: FolderRepository,
-    workspace_repo: WorkspaceRepository,
-  ) {
-    this.folder_repo = folder_repo;
-    this.workspace_repo = workspace_repo;
+  constructor(folderRepository: FolderRepository, workspaceRepository: WorkspaceRepository) {
+    this.folderRepository = folderRepository;
+    this.workspaceRepository = workspaceRepository;
   }
 
   /**
@@ -34,41 +31,37 @@ export class FolderService {
    * @param user_id - Authenticated user's UUID.
    * @returns The created folder as a response DTO.
    */
-  async create_folder(
-    dto: CreateFolderDto,
-    user_id: string,
-  ): Promise<FolderResponseDto> {
+  async createFolder(dto: CreateFolderDto, userId: string): Promise<FolderResponseDto> {
     /* Authorization: caller must belong to the workspace */
-    const membership = await this.workspace_repo.find_membership(
-      dto.workspace_id,
-      user_id,
-    );
+    const membership = await this.workspaceRepository.findMembership(dto.workspace_id, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
     /* If a parent_folder_id is provided, verify it exists and belongs to the same workspace */
     if (dto.parent_folder_id) {
-      const parent = await this.folder_repo.find_by_id(dto.parent_folder_id);
+      const parent = await this.folderRepository.findById(dto.parent_folder_id);
       if (!parent) {
         throw new NotFoundError("Parent folder not found");
       }
       if (parent.workspace_id !== dto.workspace_id) {
-        throw new ForbiddenError(
-          "Parent folder does not belong to the specified workspace",
-        );
+        throw new ForbiddenError("Parent folder does not belong to the specified workspace");
       }
     }
 
-    const folder = await this.folder_repo.create({
+    const folder = await this.folderRepository.create({
       workspace_id: dto.workspace_id,
       parent_folder_id: dto.parent_folder_id ?? null,
       name: dto.name,
       sort_order: dto.sort_order ?? null,
-      created_by_user_id: user_id,
+      created_by_user_id: userId,
     });
 
-    return this.to_response_dto(folder);
+    return this.toResponseDto(folder);
+  }
+
+  async create_folder(dto: CreateFolderDto, userId: string): Promise<FolderResponseDto> {
+    return this.createFolder(dto, userId);
   }
 
   /**
@@ -78,25 +71,23 @@ export class FolderService {
    * @param user_id - Authenticated user's UUID.
    * @returns The folder as a response DTO.
    */
-  async get_folder(
-    folder_id: string,
-    user_id: string,
-  ): Promise<FolderResponseDto> {
-    const folder = await this.folder_repo.find_by_id(folder_id);
+  async getFolder(folderId: string, userId: string): Promise<FolderResponseDto> {
+    const folder = await this.folderRepository.findById(folderId);
     if (!folder) {
       throw new NotFoundError("Folder not found");
     }
 
     /* Authorization */
-    const membership = await this.workspace_repo.find_membership(
-      folder.workspace_id,
-      user_id,
-    );
+    const membership = await this.workspaceRepository.findMembership(folder.workspace_id, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    return this.to_response_dto(folder);
+    return this.toResponseDto(folder);
+  }
+
+  async get_folder(folderId: string, userId: string): Promise<FolderResponseDto> {
+    return this.getFolder(folderId, userId);
   }
 
   /**
@@ -108,33 +99,39 @@ export class FolderService {
    * @param pagination - Limit and offset for pagination.
    * @returns Paginated array of folder response DTOs.
    */
-  async list_folders(
-    workspace_id: string,
-    user_id: string,
-    parent_folder_id: string | null = null,
+  async listFolders(
+    workspaceId: string,
+    userId: string,
+    parentFolderId: string | null = null,
     pagination: PaginationParams,
   ): Promise<PaginatedResponse<FolderResponseDto>> {
-    const membership = await this.workspace_repo.find_membership(
-      workspace_id,
-      user_id,
-    );
+    const membership = await this.workspaceRepository.findMembership(workspaceId, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const { data, total } = await this.folder_repo.list_by_workspace(
-      workspace_id,
-      parent_folder_id,
+    const { data, total } = await this.folderRepository.listByWorkspace(
+      workspaceId,
+      parentFolderId,
       pagination,
     );
     return {
-      data: data.map((folder) => this.to_response_dto(folder)),
+      data: data.map((folder) => this.toResponseDto(folder)),
       pagination: {
         total,
         limit: pagination.limit,
         offset: pagination.offset,
       },
     };
+  }
+
+  async list_folders(
+    workspaceId: string,
+    userId: string,
+    parentFolderId: string | null = null,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<FolderResponseDto>> {
+    return this.listFolders(workspaceId, userId, parentFolderId, pagination);
   }
 
   /**
@@ -145,31 +142,33 @@ export class FolderService {
    * @param pagination - Limit and offset for pagination.
    * @returns Paginated array of all folder response DTOs in the workspace.
    */
-  async list_all_folders(
-    workspace_id: string,
-    user_id: string,
+  async listAllFolders(
+    workspaceId: string,
+    userId: string,
     pagination: PaginationParams,
   ): Promise<PaginatedResponse<FolderResponseDto>> {
-    const membership = await this.workspace_repo.find_membership(
-      workspace_id,
-      user_id,
-    );
+    const membership = await this.workspaceRepository.findMembership(workspaceId, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const { data, total } = await this.folder_repo.list_all_by_workspace(
-      workspace_id,
-      pagination,
-    );
+    const { data, total } = await this.folderRepository.listAllByWorkspace(workspaceId, pagination);
     return {
-      data: data.map((folder) => this.to_response_dto(folder)),
+      data: data.map((folder) => this.toResponseDto(folder)),
       pagination: {
         total,
         limit: pagination.limit,
         offset: pagination.offset,
       },
     };
+  }
+
+  async list_all_folders(
+    workspaceId: string,
+    userId: string,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<FolderResponseDto>> {
+    return this.listAllFolders(workspaceId, userId, pagination);
   }
 
   /**
@@ -179,54 +178,56 @@ export class FolderService {
    * @param user_id - Authenticated user's UUID.
    * @returns The updated folder as a response DTO.
    */
-  async update_folder(
-    folder_id: string,
+  async updateFolder(
+    folderId: string,
     dto: UpdateFolderDto,
-    user_id: string,
+    userId: string,
   ): Promise<FolderResponseDto> {
-    const folder = await this.folder_repo.find_by_id(folder_id);
+    const folder = await this.folderRepository.findById(folderId);
     if (!folder) {
       throw new NotFoundError("Folder not found");
     }
 
-    const membership = await this.workspace_repo.find_membership(
-      folder.workspace_id,
-      user_id,
-    );
+    const membership = await this.workspaceRepository.findMembership(folder.workspace_id, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
     /* Build a type-safe update payload — only whitelisted fields */
-    const update_fields: Partial<{
+    const updateFields: Partial<{
       name: string;
       parent_folder_id: string | null;
       sort_order: number | null;
     }> = {};
 
     if (dto.name !== undefined) {
-      update_fields.name = dto.name;
+      updateFields.name = dto.name;
     }
     if (dto.parent_folder_id !== undefined) {
       /* Prevent circular references: a folder cannot be its own parent */
-      if (dto.parent_folder_id === folder_id) {
+      if (dto.parent_folder_id === folderId) {
         throw new ForbiddenError("A folder cannot be its own parent");
       }
-      update_fields.parent_folder_id = dto.parent_folder_id;
+      updateFields.parent_folder_id = dto.parent_folder_id;
     }
     if (dto.sort_order !== undefined) {
-      update_fields.sort_order = dto.sort_order;
+      updateFields.sort_order = dto.sort_order;
     }
 
-    const updated_folder = await this.folder_repo.update(
-      folder_id,
-      update_fields,
-    );
-    if (!updated_folder) {
+    const updatedFolder = await this.folderRepository.update(folderId, updateFields);
+    if (!updatedFolder) {
       throw new NotFoundError("Folder was deleted during update");
     }
 
-    return this.to_response_dto(updated_folder);
+    return this.toResponseDto(updatedFolder);
+  }
+
+  async update_folder(
+    folderId: string,
+    dto: UpdateFolderDto,
+    userId: string,
+  ): Promise<FolderResponseDto> {
+    return this.updateFolder(folderId, dto, userId);
   }
 
   /**
@@ -235,21 +236,22 @@ export class FolderService {
    * @param folder_id - Folder UUID.
    * @param user_id - Authenticated user's UUID.
    */
-  async delete_folder(folder_id: string, user_id: string): Promise<void> {
-    const folder = await this.folder_repo.find_by_id(folder_id);
+  async deleteFolder(folderId: string, userId: string): Promise<void> {
+    const folder = await this.folderRepository.findById(folderId);
     if (!folder) {
       throw new NotFoundError("Folder not found");
     }
 
-    const membership = await this.workspace_repo.find_membership(
-      folder.workspace_id,
-      user_id,
-    );
+    const membership = await this.workspaceRepository.findMembership(folder.workspace_id, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    await this.folder_repo.soft_delete(folder_id);
+    await this.folderRepository.softDelete(folderId);
+  }
+
+  async delete_folder(folderId: string, userId: string): Promise<void> {
+    return this.deleteFolder(folderId, userId);
   }
 
   /**
@@ -257,7 +259,7 @@ export class FolderService {
    * @param folder - Database folder row.
    * @returns Formatted response DTO.
    */
-  private to_response_dto(folder: {
+  private toResponseDto(folder: {
     id: string;
     workspace_id: string;
     parent_folder_id: string | null;

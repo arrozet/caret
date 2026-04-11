@@ -31,7 +31,7 @@ export class WorkspaceRepository {
    * @param slug - Workspace slug (case-insensitive via citext).
    * @returns The workspace row, or null if not found / deleted.
    */
-  async find_by_slug(slug: string) {
+  async findBySlug(slug: string) {
     const rows = await this.db
       .select()
       .from(schema.workspaces)
@@ -39,17 +39,25 @@ export class WorkspaceRepository {
     return rows[0] ?? null;
   }
 
+  async find_by_slug(slug: string) {
+    return this.findBySlug(slug);
+  }
+
   /**
    * Find a single non-deleted workspace by UUID.
    * @param id - Workspace UUID.
    * @returns The workspace row, or null if not found / deleted.
    */
-  async find_by_id(id: string) {
+  async findById(id: string) {
     const rows = await this.db
       .select()
       .from(schema.workspaces)
       .where(and(eq(schema.workspaces.id, id), isNull(schema.workspaces.deleted_at)));
     return rows[0] ?? null;
+  }
+
+  async find_by_id(id: string) {
+    return this.findById(id);
   }
 
   /**
@@ -58,14 +66,14 @@ export class WorkspaceRepository {
    * @param pagination - Limit and offset for pagination.
    * @returns Object with data array (workspace + role) and total count.
    */
-  async list_by_user(user_id: string, pagination: PaginationParams) {
-    const where_clause = and(
-      eq(schema.workspace_members.user_id, user_id),
+  async listByUser(userId: string, pagination: PaginationParams) {
+    const whereClause = and(
+      eq(schema.workspace_members.user_id, userId),
       isNull(schema.workspace_members.revoked_at),
       isNull(schema.workspaces.deleted_at),
     );
 
-    const select_fields = {
+    const selectFields = {
       id: schema.workspaces.id,
       slug: schema.workspaces.slug,
       name: schema.workspaces.name,
@@ -77,15 +85,15 @@ export class WorkspaceRepository {
       role: schema.workspace_members.role,
     };
 
-    const [data, count_result] = await Promise.all([
+    const [data, countResult] = await Promise.all([
       this.db
-        .select(select_fields)
+        .select(selectFields)
         .from(schema.workspace_members)
         .innerJoin(
           schema.workspaces,
           eq(schema.workspace_members.workspace_id, schema.workspaces.id),
         )
-        .where(where_clause)
+        .where(whereClause)
         .limit(pagination.limit)
         .offset(pagination.offset),
       this.db
@@ -95,10 +103,14 @@ export class WorkspaceRepository {
           schema.workspaces,
           eq(schema.workspace_members.workspace_id, schema.workspaces.id),
         )
-        .where(where_clause),
+        .where(whereClause),
     ]);
 
-    return { data, total: count_result[0].count };
+    return { data, total: countResult[0].count };
+  }
+
+  async list_by_user(userId: string, pagination: PaginationParams) {
+    return this.listByUser(userId, pagination);
   }
 
   /**
@@ -106,9 +118,13 @@ export class WorkspaceRepository {
    * @param data - Membership row values.
    * @returns The inserted membership row.
    */
-  async add_member(data: typeof schema.workspace_members.$inferInsert) {
+  async addMember(data: typeof schema.workspace_members.$inferInsert) {
     const rows = await this.db.insert(schema.workspace_members).values(data).returning();
     return rows[0];
+  }
+
+  async add_member(data: typeof schema.workspace_members.$inferInsert) {
+    return this.addMember(data);
   }
 
   /**
@@ -117,18 +133,22 @@ export class WorkspaceRepository {
    * @param user_id - User UUID.
    * @returns The membership row if active, or null.
    */
-  async find_membership(workspace_id: string, user_id: string) {
+  async findMembership(workspaceId: string, userId: string) {
     const rows = await this.db
       .select()
       .from(schema.workspace_members)
       .where(
         and(
-          eq(schema.workspace_members.workspace_id, workspace_id),
-          eq(schema.workspace_members.user_id, user_id),
+          eq(schema.workspace_members.workspace_id, workspaceId),
+          eq(schema.workspace_members.user_id, userId),
           isNull(schema.workspace_members.revoked_at),
         ),
       );
     return rows[0] ?? null;
+  }
+
+  async find_membership(workspaceId: string, userId: string) {
+    return this.findMembership(workspaceId, userId);
   }
 
   /**
@@ -138,17 +158,21 @@ export class WorkspaceRepository {
    * @param user_id - User UUID.
    * @returns The membership row if found, or null.
    */
-  async find_membership_any(workspace_id: string, user_id: string) {
+  async findMembershipAny(workspaceId: string, userId: string) {
     const rows = await this.db
       .select()
       .from(schema.workspace_members)
       .where(
         and(
-          eq(schema.workspace_members.workspace_id, workspace_id),
-          eq(schema.workspace_members.user_id, user_id),
+          eq(schema.workspace_members.workspace_id, workspaceId),
+          eq(schema.workspace_members.user_id, userId),
         ),
       );
     return rows[0] ?? null;
+  }
+
+  async find_membership_any(workspaceId: string, userId: string) {
+    return this.findMembershipAny(workspaceId, userId);
   }
 
   /**
@@ -157,7 +181,7 @@ export class WorkspaceRepository {
    * @param email - Target email to resolve.
    * @returns Matching user id, or null when not found.
    */
-  async find_auth_user_id_by_email(email: string): Promise<string | null> {
+  async findAuthUserIdByEmail(email: string): Promise<string | null> {
     const rows = await this.db.execute(sql<{ id: string }>`
       SELECT id::text AS id
       FROM auth.users
@@ -169,6 +193,10 @@ export class WorkspaceRepository {
     return row?.id ?? null;
   }
 
+  async find_auth_user_id_by_email(email: string): Promise<string | null> {
+    return this.findAuthUserIdByEmail(email);
+  }
+
   /**
    * Reactivate a revoked workspace membership and set member metadata.
    * @param workspace_id - Workspace UUID.
@@ -176,24 +204,28 @@ export class WorkspaceRepository {
    * @param invited_by_user_id - User UUID who performed the invite.
    * @returns Updated membership row, or null if no row exists.
    */
-  async reactivate_member(workspace_id: string, user_id: string, invited_by_user_id: string) {
+  async reactivateMember(workspaceId: string, userId: string, invitedByUserId: string) {
     const rows = await this.db
       .update(schema.workspace_members)
       .set({
         role: "member",
-        invited_by_user_id,
+        invited_by_user_id: invitedByUserId,
         revoked_at: null,
         revoked_by_user_id: null,
         joined_at: new Date(),
       })
       .where(
         and(
-          eq(schema.workspace_members.workspace_id, workspace_id),
-          eq(schema.workspace_members.user_id, user_id),
+          eq(schema.workspace_members.workspace_id, workspaceId),
+          eq(schema.workspace_members.user_id, userId),
         ),
       )
       .returning();
 
     return rows[0] ?? null;
+  }
+
+  async reactivate_member(workspaceId: string, userId: string, invitedByUserId: string) {
+    return this.reactivateMember(workspaceId, userId, invitedByUserId);
   }
 }

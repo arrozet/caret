@@ -6,11 +6,11 @@ import type { UpdateDocumentDto } from "../dtos/update_document_dto.js";
 import type { InviteWorkspaceMemberDto } from "../dtos/invite_workspace_member_dto.js";
 import { ValidationError } from "../lib/errors.js";
 import {
-  validate_uuid,
-  validate_non_empty_string,
-  validate_optional_uuid,
-  parse_pagination,
-  validate_email,
+  validateUuid,
+  validateNonEmptyString,
+  validateOptionalUuid,
+  parsePagination,
+  validateEmail,
 } from "../lib/validation.js";
 
 /**
@@ -28,7 +28,7 @@ import {
  * @param document_service - Injected DocumentService instance.
  * @returns Configured Express Router.
  */
-export function create_document_routes(document_service: DocumentService): Router {
+export function createDocumentRoutes(documentService: DocumentService): Router {
   const router = Router();
 
   /**
@@ -38,12 +38,12 @@ export function create_document_routes(document_service: DocumentService): Route
   router.post("/", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const dto = req.body as CreateDocumentDto;
-      validate_non_empty_string(dto.title, "title");
-      validate_non_empty_string(dto.workspace_id, "workspace_id");
-      validate_uuid(dto.workspace_id, "workspace_id");
-      validate_optional_uuid(dto.folder_id, "folder_id");
-      const user_id = req.auth_user!.sub;
-      const result = await document_service.create_document(dto, user_id);
+      validateNonEmptyString(dto.title, "title");
+      validateNonEmptyString(dto.workspace_id, "workspace_id");
+      validateUuid(dto.workspace_id, "workspace_id");
+      validateOptionalUuid(dto.folder_id, "folder_id");
+      const userId = req.auth_user!.sub;
+      const result = await documentService.createDocument(dto, userId);
       res.status(201).json(result);
     } catch (err) {
       next(err);
@@ -56,19 +56,19 @@ export function create_document_routes(document_service: DocumentService): Route
    */
   router.get("/", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const workspace_id = req.query.workspace_id as string | undefined;
-      if (!workspace_id) {
+      const workspaceId = req.query.workspace_id as string | undefined;
+      if (!workspaceId) {
         throw new ValidationError("workspace_id query parameter is required");
       }
-      validate_uuid(workspace_id, "workspace_id");
-      const raw_limit = req.query.limit as string | undefined;
-      const raw_offset = req.query.offset as string | undefined;
-      const pagination = parse_pagination(raw_limit, raw_offset);
-      const user_id = req.auth_user!.sub;
-      const result = await document_service.list_documents(workspace_id, user_id, pagination);
+      validateUuid(workspaceId, "workspace_id");
+      const rawLimit = req.query.limit as string | undefined;
+      const rawOffset = req.query.offset as string | undefined;
+      const pagination = parsePagination(rawLimit, rawOffset);
+      const userId = req.auth_user!.sub;
+      const result = await documentService.listDocuments(workspaceId, userId, pagination);
       /* Backward compatibility: return flat array when no pagination params were sent */
-      const wants_pagination = raw_limit !== undefined || raw_offset !== undefined;
-      res.json(wants_pagination ? result : result.data);
+      const wantsPagination = rawLimit !== undefined || rawOffset !== undefined;
+      res.json(wantsPagination ? result : result.data);
     } catch (err) {
       next(err);
     }
@@ -80,9 +80,9 @@ export function create_document_routes(document_service: DocumentService): Route
   router.get("/:id", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = req.params.id as string;
-      validate_uuid(id, "id");
-      const user_id = req.auth_user!.sub;
-      const result = await document_service.get_document(id, user_id);
+      validateUuid(id, "id");
+      const userId = req.auth_user!.sub;
+      const result = await documentService.getDocument(id, userId);
       res.json(result);
     } catch (err) {
       next(err);
@@ -95,14 +95,14 @@ export function create_document_routes(document_service: DocumentService): Route
   router.patch("/:id", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = req.params.id as string;
-      validate_uuid(id, "id");
+      validateUuid(id, "id");
       const dto = req.body as UpdateDocumentDto;
       /* title is optional on update, but if provided must be non-empty */
       if (dto.title !== undefined) {
-        validate_non_empty_string(dto.title, "title");
+        validateNonEmptyString(dto.title, "title");
       }
-      const user_id = req.auth_user!.sub;
-      const result = await document_service.update_document(id, dto, user_id);
+      const userId = req.auth_user!.sub;
+      const result = await documentService.updateDocument(id, dto, userId);
       res.json(result);
     } catch (err) {
       next(err);
@@ -115,9 +115,9 @@ export function create_document_routes(document_service: DocumentService): Route
   router.delete("/:id", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = req.params.id as string;
-      validate_uuid(id, "id");
-      const user_id = req.auth_user!.sub;
-      await document_service.delete_document(id, user_id);
+      validateUuid(id, "id");
+      const userId = req.auth_user!.sub;
+      await documentService.deleteDocument(id, userId);
       res.status(204).send();
     } catch (err) {
       next(err);
@@ -133,17 +133,17 @@ export function create_document_routes(document_service: DocumentService): Route
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       try {
         const id = req.params.id as string;
-        validate_uuid(id, "id");
+        validateUuid(id, "id");
 
         const dto = req.body as InviteWorkspaceMemberDto;
-        validate_non_empty_string(dto.email, "email");
-        validate_email(dto.email, "email");
+        validateNonEmptyString(dto.email, "email");
+        validateEmail(dto.email, "email");
 
-        const user_id = req.auth_user!.sub;
-        const result = await document_service.invite_document_collaborator(
+        const userId = req.auth_user!.sub;
+        const result = await documentService.inviteDocumentCollaborator(
           id,
           dto.email.trim(),
-          user_id,
+          userId,
         );
         res.status(201).json(result);
       } catch (err) {
@@ -154,3 +154,5 @@ export function create_document_routes(document_service: DocumentService): Route
 
   return router;
 }
+
+export const create_document_routes = createDocumentRoutes;

@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FolderService } from "../../src/services/folder_service.js";
-import {
-  NotFoundError,
-  ForbiddenError,
-} from "../../src/lib/errors.js";
+import { NotFoundError, ForbiddenError } from "../../src/lib/errors.js";
 
 /**
  * Unit tests for FolderService.
@@ -17,14 +14,19 @@ describe("FolderService", () => {
   type MockFolderRepo = {
     create: ReturnType<typeof vi.fn>;
     find_by_id: ReturnType<typeof vi.fn>;
+    findById: ReturnType<typeof vi.fn>;
     list_by_workspace: ReturnType<typeof vi.fn>;
+    listByWorkspace: ReturnType<typeof vi.fn>;
     list_all_by_workspace: ReturnType<typeof vi.fn>;
+    listAllByWorkspace: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     soft_delete: ReturnType<typeof vi.fn>;
+    softDelete: ReturnType<typeof vi.fn>;
   };
 
   type MockWorkspaceRepo = {
     find_membership: ReturnType<typeof vi.fn>;
+    findMembership: ReturnType<typeof vi.fn>;
   };
 
   /* ── fixtures ───────────────────────────────────────── */
@@ -65,15 +67,25 @@ describe("FolderService", () => {
     folder_repo = {
       create: vi.fn(),
       find_by_id: vi.fn(),
+      findById: vi.fn(),
       list_by_workspace: vi.fn(),
+      listByWorkspace: vi.fn(),
       list_all_by_workspace: vi.fn(),
+      listAllByWorkspace: vi.fn(),
       update: vi.fn(),
       soft_delete: vi.fn(),
+      softDelete: vi.fn(),
     };
+    folder_repo.findById = folder_repo.find_by_id;
+    folder_repo.listByWorkspace = folder_repo.list_by_workspace;
+    folder_repo.listAllByWorkspace = folder_repo.list_all_by_workspace;
+    folder_repo.softDelete = folder_repo.soft_delete;
 
     workspace_repo = {
       find_membership: vi.fn(),
+      findMembership: vi.fn(),
     };
+    workspace_repo.findMembership = workspace_repo.find_membership;
 
     service = new FolderService(folder_repo as never, workspace_repo as never);
   });
@@ -116,12 +128,8 @@ describe("FolderService", () => {
         parent_folder_id: PARENT_FOLDER_ID,
       };
       workspace_repo.find_membership.mockResolvedValue(make_membership());
-      folder_repo.find_by_id.mockResolvedValue(
-        make_folder({ id: PARENT_FOLDER_ID }),
-      );
-      folder_repo.create.mockResolvedValue(
-        make_folder({ parent_folder_id: PARENT_FOLDER_ID }),
-      );
+      folder_repo.find_by_id.mockResolvedValue(make_folder({ id: PARENT_FOLDER_ID }));
+      folder_repo.create.mockResolvedValue(make_folder({ parent_folder_id: PARENT_FOLDER_ID }));
 
       // Act
       const result = await service.create_folder(dto, USER_ID);
@@ -138,9 +146,7 @@ describe("FolderService", () => {
       workspace_repo.find_membership.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(service.create_folder(dto, USER_ID)).rejects.toThrow(
-        ForbiddenError,
-      );
+      await expect(service.create_folder(dto, USER_ID)).rejects.toThrow(ForbiddenError);
       expect(folder_repo.create).not.toHaveBeenCalled();
     });
 
@@ -156,9 +162,7 @@ describe("FolderService", () => {
       folder_repo.find_by_id.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(service.create_folder(dto, USER_ID)).rejects.toThrow(
-        NotFoundError,
-      );
+      await expect(service.create_folder(dto, USER_ID)).rejects.toThrow(NotFoundError);
     });
 
     /** verifica que lanza ForbiddenError cuando el parent pertenece a otro workspace */
@@ -178,9 +182,7 @@ describe("FolderService", () => {
       );
 
       // Act & Assert
-      await expect(service.create_folder(dto, USER_ID)).rejects.toThrow(
-        ForbiddenError,
-      );
+      await expect(service.create_folder(dto, USER_ID)).rejects.toThrow(ForbiddenError);
     });
 
     /** verifica que el DTO de respuesta tiene los campos correctos */
@@ -192,9 +194,7 @@ describe("FolderService", () => {
         sort_order: 3,
       };
       workspace_repo.find_membership.mockResolvedValue(make_membership());
-      folder_repo.create.mockResolvedValue(
-        make_folder({ sort_order: 3 }),
-      );
+      folder_repo.create.mockResolvedValue(make_folder({ sort_order: 3 }));
 
       // Act
       const result = await service.create_folder(dto, USER_ID);
@@ -237,9 +237,7 @@ describe("FolderService", () => {
       folder_repo.find_by_id.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(
-        service.get_folder("nonexistent-id", USER_ID),
-      ).rejects.toThrow(NotFoundError);
+      await expect(service.get_folder("nonexistent-id", USER_ID)).rejects.toThrow(NotFoundError);
     });
 
     /** verifica que lanza ForbiddenError cuando el usuario no es miembro del workspace */
@@ -249,9 +247,7 @@ describe("FolderService", () => {
       workspace_repo.find_membership.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(
-        service.get_folder(FOLDER_ID, USER_ID),
-      ).rejects.toThrow(ForbiddenError);
+      await expect(service.get_folder(FOLDER_ID, USER_ID)).rejects.toThrow(ForbiddenError);
     });
   });
 
@@ -271,12 +267,10 @@ describe("FolderService", () => {
       });
 
       // Act
-      const result = await service.list_folders(
-        WORKSPACE_ID,
-        USER_ID,
-        null,
-        { limit: 50, offset: 0 },
-      );
+      const result = await service.list_folders(WORKSPACE_ID, USER_ID, null, {
+        limit: 50,
+        offset: 0,
+      });
 
       // Assert
       expect(result.data).toHaveLength(2);
@@ -290,19 +284,13 @@ describe("FolderService", () => {
       folder_repo.list_by_workspace.mockResolvedValue({ data: [], total: 0 });
 
       // Act
-      await service.list_folders(
-        WORKSPACE_ID,
-        USER_ID,
-        PARENT_FOLDER_ID,
-        { limit: 50, offset: 0 },
-      );
+      await service.list_folders(WORKSPACE_ID, USER_ID, PARENT_FOLDER_ID, { limit: 50, offset: 0 });
 
       // Assert
-      expect(folder_repo.list_by_workspace).toHaveBeenCalledWith(
-        WORKSPACE_ID,
-        PARENT_FOLDER_ID,
-        { limit: 50, offset: 0 },
-      );
+      expect(folder_repo.list_by_workspace).toHaveBeenCalledWith(WORKSPACE_ID, PARENT_FOLDER_ID, {
+        limit: 50,
+        offset: 0,
+      });
     });
 
     /** verifica que lanza ForbiddenError cuando el usuario no es miembro */
@@ -339,18 +327,17 @@ describe("FolderService", () => {
       });
 
       // Act
-      const result = await service.list_all_folders(
-        WORKSPACE_ID,
-        USER_ID,
-        { limit: 100, offset: 0 },
-      );
+      const result = await service.list_all_folders(WORKSPACE_ID, USER_ID, {
+        limit: 100,
+        offset: 0,
+      });
 
       // Assert
       expect(result.data).toHaveLength(2);
-      expect(folder_repo.list_all_by_workspace).toHaveBeenCalledWith(
-        WORKSPACE_ID,
-        { limit: 100, offset: 0 },
-      );
+      expect(folder_repo.list_all_by_workspace).toHaveBeenCalledWith(WORKSPACE_ID, {
+        limit: 100,
+        offset: 0,
+      });
     });
 
     /** verifica que lanza ForbiddenError cuando el usuario no es miembro */
@@ -380,11 +367,7 @@ describe("FolderService", () => {
       folder_repo.update.mockResolvedValue(make_folder({ name: "Renamed" }));
 
       // Act
-      const result = await service.update_folder(
-        FOLDER_ID,
-        { name: "Renamed" },
-        USER_ID,
-      );
+      const result = await service.update_folder(FOLDER_ID, { name: "Renamed" }, USER_ID);
 
       // Assert
       expect(folder_repo.update).toHaveBeenCalledWith(
@@ -402,11 +385,7 @@ describe("FolderService", () => {
       folder_repo.update.mockResolvedValue(make_folder({ sort_order: 5 }));
 
       // Act
-      const result = await service.update_folder(
-        FOLDER_ID,
-        { sort_order: 5 },
-        USER_ID,
-      );
+      const result = await service.update_folder(FOLDER_ID, { sort_order: 5 }, USER_ID);
 
       // Assert
       expect(result.sort_order).toBe(5);
@@ -420,11 +399,7 @@ describe("FolderService", () => {
 
       // Act & Assert
       await expect(
-        service.update_folder(
-          FOLDER_ID,
-          { parent_folder_id: FOLDER_ID },
-          USER_ID,
-        ),
+        service.update_folder(FOLDER_ID, { parent_folder_id: FOLDER_ID }, USER_ID),
       ).rejects.toThrow(ForbiddenError);
     });
 
@@ -434,9 +409,9 @@ describe("FolderService", () => {
       folder_repo.find_by_id.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(
-        service.update_folder(FOLDER_ID, { name: "New" }, USER_ID),
-      ).rejects.toThrow(NotFoundError);
+      await expect(service.update_folder(FOLDER_ID, { name: "New" }, USER_ID)).rejects.toThrow(
+        NotFoundError,
+      );
     });
 
     /** verifica que lanza ForbiddenError cuando el usuario no es miembro */
@@ -446,9 +421,9 @@ describe("FolderService", () => {
       workspace_repo.find_membership.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(
-        service.update_folder(FOLDER_ID, { name: "New" }, USER_ID),
-      ).rejects.toThrow(ForbiddenError);
+      await expect(service.update_folder(FOLDER_ID, { name: "New" }, USER_ID)).rejects.toThrow(
+        ForbiddenError,
+      );
     });
 
     /** verifica que lanza NotFoundError cuando el folder fue borrado durante el update */
@@ -459,9 +434,9 @@ describe("FolderService", () => {
       folder_repo.update.mockResolvedValue(null); // deleted during update
 
       // Act & Assert
-      await expect(
-        service.update_folder(FOLDER_ID, { name: "New" }, USER_ID),
-      ).rejects.toThrow(NotFoundError);
+      await expect(service.update_folder(FOLDER_ID, { name: "New" }, USER_ID)).rejects.toThrow(
+        NotFoundError,
+      );
     });
 
     /** verifica que no actualiza campos no enviados en el DTO */
@@ -505,9 +480,7 @@ describe("FolderService", () => {
       folder_repo.find_by_id.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(
-        service.delete_folder("nonexistent-id", USER_ID),
-      ).rejects.toThrow(NotFoundError);
+      await expect(service.delete_folder("nonexistent-id", USER_ID)).rejects.toThrow(NotFoundError);
     });
 
     /** verifica que lanza ForbiddenError cuando el usuario no es miembro */
@@ -517,9 +490,7 @@ describe("FolderService", () => {
       workspace_repo.find_membership.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(
-        service.delete_folder(FOLDER_ID, USER_ID),
-      ).rejects.toThrow(ForbiddenError);
+      await expect(service.delete_folder(FOLDER_ID, USER_ID)).rejects.toThrow(ForbiddenError);
     });
   });
 });

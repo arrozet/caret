@@ -2,11 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { create_workspace_routes } from "../../src/routes/workspace_routes.js";
-import {
-  NotFoundError,
-  ForbiddenError,
-  ValidationError,
-} from "../../src/lib/errors.js";
+import { NotFoundError, ForbiddenError, ValidationError } from "../../src/lib/errors.js";
 
 /**
  * Unit tests for create_workspace_routes (workspace_routes.ts).
@@ -59,8 +55,7 @@ describe("workspace_routes", () => {
     body: unknown;
     next_error: Error | undefined;
   }> {
-    const { body = {}, query = {}, params = {}, auth_user = { sub: USER_ID } } =
-      options;
+    const { body = {}, query = {}, params = {}, auth_user = { sub: USER_ID } } = options;
 
     let status_code = 200;
     let response_body: unknown = null;
@@ -95,7 +90,16 @@ describe("workspace_routes", () => {
       next_error = err;
     }) as unknown as NextFunction;
 
-    const layers = (router as unknown as { stack: Array<{ route?: { path: string; stack: Array<{ method: string; handle: Function }> } }> }).stack;
+    const layers = (
+      router as unknown as {
+        stack: Array<{
+          route?: {
+            path: string;
+            stack: Array<{ method: string; handle: (...args: unknown[]) => unknown }>;
+          };
+        }>;
+      }
+    ).stack;
 
     for (const layer of layers) {
       if (!layer.route) continue;
@@ -130,6 +134,10 @@ describe("workspace_routes", () => {
       list_workspaces: vi.fn(),
     };
 
+    workspace_service.createWorkspace = workspace_service.create_workspace;
+    workspace_service.getWorkspace = workspace_service.get_workspace;
+    workspace_service.listWorkspaces = workspace_service.list_workspaces;
+
     router = create_workspace_routes(workspace_service as never);
   });
 
@@ -143,26 +151,18 @@ describe("workspace_routes", () => {
     it("should_create_workspace_and_return_201", async () => {
       // Arrange
       const dto = { name: "My Workspace" };
-      workspace_service.create_workspace.mockResolvedValue(
-        make_workspace_dto(),
-      );
+      workspace_service.create_workspace.mockResolvedValue(make_workspace_dto());
 
       // Act
-      const { status_code, body, next_error } = await call_route_handler(
-        router,
-        "post",
-        "/",
-        { body: dto },
-      );
+      const { status_code, body, next_error } = await call_route_handler(router, "post", "/", {
+        body: dto,
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
       expect(status_code).toBe(201);
       expect(body).toMatchObject({ id: WORKSPACE_ID, name: "My Workspace" });
-      expect(workspace_service.create_workspace).toHaveBeenCalledWith(
-        dto,
-        USER_ID,
-      );
+      expect(workspace_service.create_workspace).toHaveBeenCalledWith(dto, USER_ID);
     });
 
     /** verifica que pasa next(ValidationError) cuando name está vacío */
@@ -212,12 +212,7 @@ describe("workspace_routes", () => {
       });
 
       // Act
-      const { body, next_error } = await call_route_handler(
-        router,
-        "get",
-        "/",
-        { query: {} },
-      );
+      const { body, next_error } = await call_route_handler(router, "get", "/", { query: {} });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -233,12 +228,9 @@ describe("workspace_routes", () => {
       });
 
       // Act
-      const { body, next_error } = await call_route_handler(
-        router,
-        "get",
-        "/",
-        { query: { limit: "10", offset: "0" } },
-      );
+      const { body, next_error } = await call_route_handler(router, "get", "/", {
+        query: { limit: "10", offset: "0" },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -270,12 +262,9 @@ describe("workspace_routes", () => {
       workspace_service.get_workspace.mockResolvedValue(make_workspace_dto());
 
       // Act
-      const { body, next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: WORKSPACE_ID } },
-      );
+      const { body, next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: WORKSPACE_ID },
+      });
 
       // Assert
       expect(next_error).toBeUndefined();
@@ -285,12 +274,9 @@ describe("workspace_routes", () => {
     /** verifica que pasa next(ValidationError) cuando el ID no es UUID */
     it("should_call_next_with_ValidationError_for_invalid_uuid", async () => {
       // Arrange & Act
-      const { next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: "not-a-valid-uuid" } },
-      );
+      const { next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: "not-a-valid-uuid" },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
@@ -299,17 +285,12 @@ describe("workspace_routes", () => {
     /** verifica que pasa next(NotFoundError) del servicio */
     it("should_pass_NotFoundError_from_service_to_next", async () => {
       // Arrange
-      workspace_service.get_workspace.mockRejectedValue(
-        new NotFoundError("Workspace not found"),
-      );
+      workspace_service.get_workspace.mockRejectedValue(new NotFoundError("Workspace not found"));
 
       // Act
-      const { next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: WORKSPACE_ID } },
-      );
+      const { next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: WORKSPACE_ID },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(NotFoundError);
@@ -318,17 +299,12 @@ describe("workspace_routes", () => {
     /** verifica que pasa next(ForbiddenError) del servicio */
     it("should_pass_ForbiddenError_from_service_to_next", async () => {
       // Arrange
-      workspace_service.get_workspace.mockRejectedValue(
-        new ForbiddenError("Not a member"),
-      );
+      workspace_service.get_workspace.mockRejectedValue(new ForbiddenError("Not a member"));
 
       // Act
-      const { next_error } = await call_route_handler(
-        router,
-        "get",
-        "/:id",
-        { params: { id: WORKSPACE_ID } },
-      );
+      const { next_error } = await call_route_handler(router, "get", "/:id", {
+        params: { id: WORKSPACE_ID },
+      });
 
       // Assert
       expect(next_error).toBeInstanceOf(ForbiddenError);

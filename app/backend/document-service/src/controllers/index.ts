@@ -5,5 +5,7 @@
  * Rule: no business logic inside controllers.
  * Rule: no direct Repository or ORM imports — delegate to Services.
  */
+export { createDocumentRoutes } from "../routes/document_routes.js";
+export { createWorkspaceRoutes } from "../routes/workspace_routes.js";
 export { create_document_routes } from "../routes/document_routes.js";
 export { create_workspace_routes } from "../routes/workspace_routes.js";

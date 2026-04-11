@@ -22,10 +22,7 @@ export class DocumentRepository {
    * @returns The inserted document row.
    */
   async create(data: typeof schema.documents.$inferInsert) {
-    const rows = await this.db
-      .insert(schema.documents)
-      .values(data)
-      .returning();
+    const rows = await this.db.insert(schema.documents).values(data).returning();
     return rows[0];
   }
 
@@ -34,12 +31,16 @@ export class DocumentRepository {
    * @param id - Document UUID.
    * @returns The document row, or undefined if not found / deleted.
    */
-  async find_by_id(id: string) {
+  async findById(id: string) {
     const rows = await this.db
       .select()
       .from(schema.documents)
       .where(and(eq(schema.documents.id, id), isNull(schema.documents.deleted_at)));
     return rows[0] ?? null;
+  }
+
+  async find_by_id(id: string) {
+    return this.findById(id);
   }
 
   /**
@@ -48,30 +49,34 @@ export class DocumentRepository {
    * @param pagination - Limit and offset for pagination.
    * @returns Object with data array and total count.
    */
-  async list_by_workspace(
-    workspace_id: string,
+  async listByWorkspace(
+    workspaceId: string,
     pagination: PaginationParams,
   ): Promise<{ data: (typeof schema.documents.$inferSelect)[]; total: number }> {
-    const where_clause = and(
-      eq(schema.documents.workspace_id, workspace_id),
+    const whereClause = and(
+      eq(schema.documents.workspace_id, workspaceId),
       isNull(schema.documents.deleted_at),
     );
 
-    const [data, count_result] = await Promise.all([
+    const [data, countResult] = await Promise.all([
       this.db
         .select()
         .from(schema.documents)
-        .where(where_clause)
+        .where(whereClause)
         .orderBy(desc(schema.documents.updated_at))
         .limit(pagination.limit)
         .offset(pagination.offset),
       this.db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.documents)
-        .where(where_clause),
+        .where(whereClause),
     ]);
 
-    return { data, total: count_result[0].count };
+    return { data, total: countResult[0].count };
+  }
+
+  async list_by_workspace(workspaceId: string, pagination: PaginationParams) {
+    return this.listByWorkspace(workspaceId, pagination);
   }
 
   /**
@@ -95,16 +100,20 @@ export class DocumentRepository {
    * @param deleted_by_user_id - User performing the deletion.
    * @returns The soft-deleted document row, or undefined.
    */
-  async soft_delete(id: string, deleted_by_user_id: string) {
+  async softDelete(id: string, deletedByUserId: string) {
     const rows = await this.db
       .update(schema.documents)
       .set({
         deleted_at: new Date(),
-        deleted_by_user_id,
+        deleted_by_user_id: deletedByUserId,
         updated_at: new Date(),
       })
       .where(and(eq(schema.documents.id, id), isNull(schema.documents.deleted_at)))
       .returning();
     return rows[0] ?? null;
+  }
+
+  async soft_delete(id: string, deletedByUserId: string) {
+    return this.softDelete(id, deletedByUserId);
   }
 }

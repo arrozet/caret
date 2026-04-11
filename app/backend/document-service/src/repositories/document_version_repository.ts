@@ -21,10 +21,7 @@ export class DocumentVersionRepository {
    * @returns The inserted version row.
    */
   async create(data: typeof schema.document_versions.$inferInsert) {
-    const rows = await this.db
-      .insert(schema.document_versions)
-      .values(data)
-      .returning();
+    const rows = await this.db.insert(schema.document_versions).values(data).returning();
     return rows[0];
   }
 
@@ -33,14 +30,18 @@ export class DocumentVersionRepository {
    * @param document_id - Document UUID.
    * @returns The latest version row, or null if none exist.
    */
-  async find_latest(document_id: string) {
+  async findLatest(documentId: string) {
     const rows = await this.db
       .select()
       .from(schema.document_versions)
-      .where(eq(schema.document_versions.document_id, document_id))
+      .where(eq(schema.document_versions.document_id, documentId))
       .orderBy(desc(schema.document_versions.version_number))
       .limit(1);
     return rows[0] ?? null;
+  }
+
+  async find_latest(documentId: string) {
+    return this.findLatest(documentId);
   }
 
   /**
@@ -49,26 +50,30 @@ export class DocumentVersionRepository {
    * @param pagination - Limit and offset for pagination.
    * @returns Object with data array and total count.
    */
-  async list_by_document(
-    document_id: string,
+  async listByDocument(
+    documentId: string,
     pagination: PaginationParams,
   ): Promise<{ data: (typeof schema.document_versions.$inferSelect)[]; total: number }> {
-    const where_clause = eq(schema.document_versions.document_id, document_id);
+    const whereClause = eq(schema.document_versions.document_id, documentId);
 
     const [data, count_result] = await Promise.all([
       this.db
         .select()
         .from(schema.document_versions)
-        .where(where_clause)
+        .where(whereClause)
         .orderBy(desc(schema.document_versions.version_number))
         .limit(pagination.limit)
         .offset(pagination.offset),
       this.db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.document_versions)
-        .where(where_clause),
+        .where(whereClause),
     ]);
 
     return { data, total: count_result[0].count };
+  }
+
+  async list_by_document(documentId: string, pagination: PaginationParams) {
+    return this.listByDocument(documentId, pagination);
   }
 }

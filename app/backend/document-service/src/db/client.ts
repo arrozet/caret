@@ -15,7 +15,7 @@ import * as schema from "./schema.js";
  *
  * @returns The IPv4 address, or undefined to fall back to default resolution.
  */
-async function resolve_ipv4_host(): Promise<string | undefined> {
+async function resolveIpv4Host(): Promise<string | undefined> {
   try {
     const hostname = new URL(config.DATABASE_URL).hostname;
     const addresses = await resolve4(hostname);
@@ -25,7 +25,7 @@ async function resolve_ipv4_host(): Promise<string | undefined> {
   }
 }
 
-const resolved_host = await resolve_ipv4_host();
+const resolvedHost = await resolveIpv4Host();
 
 /**
  * Drizzle ORM client connected to the Supabase PostgreSQL instance.
@@ -35,7 +35,7 @@ const resolved_host = await resolve_ipv4_host();
  * When an IPv4 address is resolved, it overrides the hostname in the
  * connection string so the driver connects via IPv4 directly.
  */
-const query_client = postgres(config.DATABASE_URL, {
-  ...(resolved_host ? { host: resolved_host } : {}),
+const queryClient = postgres(config.DATABASE_URL, {
+  ...(resolvedHost ? { host: resolvedHost } : {}),
 });
-export const db = drizzle(query_client, { schema });
+export const db = drizzle(queryClient, { schema });
