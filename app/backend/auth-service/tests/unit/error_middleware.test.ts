@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Request, Response, NextFunction } from "express";
 import {
-  AppError,
   NotFoundError,
   UnauthorizedError,
   ForbiddenError,
@@ -29,14 +28,14 @@ vi.mock("../../src/lib/logger.js", () => ({
 
 describe("error_middleware", () => {
   /** Build a minimal mock Express Response with a chainable `status()`. */
-  const make_res = () =>
+  const makeRes = () =>
     ({
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
     }) as unknown as Response;
 
-  const make_req = () => ({}) as Request;
-  const make_next = () => vi.fn() as unknown as NextFunction;
+  const makeReq = () => ({}) as Request;
+  const makeNext = () => vi.fn() as unknown as NextFunction;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,11 +50,11 @@ describe("error_middleware", () => {
   describe("AppError subclasses are mapped to their declared status codes", () => {
     it("maps NotFoundError to HTTP 404 with the default message", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-      const res = make_res();
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+      const res = makeRes();
 
       // Act
-      error_middleware(new NotFoundError(), make_req(), res, make_next());
+      errorMiddleware(new NotFoundError(), makeReq(), res, makeNext());
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(404);
@@ -64,11 +63,11 @@ describe("error_middleware", () => {
 
     it("maps UnauthorizedError to HTTP 401 with the default message", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-      const res = make_res();
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+      const res = makeRes();
 
       // Act
-      error_middleware(new UnauthorizedError(), make_req(), res, make_next());
+      errorMiddleware(new UnauthorizedError(), makeReq(), res, makeNext());
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(401);
@@ -77,11 +76,11 @@ describe("error_middleware", () => {
 
     it("maps ForbiddenError to HTTP 403", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-      const res = make_res();
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+      const res = makeRes();
 
       // Act
-      error_middleware(new ForbiddenError(), make_req(), res, make_next());
+      errorMiddleware(new ForbiddenError(), makeReq(), res, makeNext());
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(403);
@@ -89,11 +88,11 @@ describe("error_middleware", () => {
 
     it("maps ConflictError to HTTP 409", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-      const res = make_res();
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+      const res = makeRes();
 
       // Act
-      error_middleware(new ConflictError(), make_req(), res, make_next());
+      errorMiddleware(new ConflictError(), makeReq(), res, makeNext());
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(409);
@@ -101,11 +100,11 @@ describe("error_middleware", () => {
 
     it("maps ValidationError to HTTP 422", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-      const res = make_res();
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+      const res = makeRes();
 
       // Act
-      error_middleware(new ValidationError(), make_req(), res, make_next());
+      errorMiddleware(new ValidationError(), makeReq(), res, makeNext());
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(422);
@@ -113,11 +112,11 @@ describe("error_middleware", () => {
 
     it("preserves a custom AppError message in the response body", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-      const res = make_res();
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+      const res = makeRes();
 
       // Act
-      error_middleware(new NotFoundError("document not found"), make_req(), res, make_next());
+      errorMiddleware(new NotFoundError("document not found"), makeReq(), res, makeNext());
 
       // Assert
       expect(res.json).toHaveBeenCalledWith({ error: "document not found" });
@@ -125,11 +124,11 @@ describe("error_middleware", () => {
 
     it("does not call next() when handling an AppError", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-      const next = make_next();
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+      const next = makeNext();
 
       // Act
-      error_middleware(new UnauthorizedError(), make_req(), make_res(), next);
+      errorMiddleware(new UnauthorizedError(), makeReq(), makeRes(), next);
 
       // Assert
       expect(next).not.toHaveBeenCalled();
@@ -145,11 +144,11 @@ describe("error_middleware", () => {
   describe("unknown errors produce a safe HTTP 500 response", () => {
     it("returns HTTP 500 for a plain Error", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-      const res = make_res();
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+      const res = makeRes();
 
       // Act
-      error_middleware(new Error("something unexpected"), make_req(), res, make_next());
+      errorMiddleware(new Error("something unexpected"), makeReq(), res, makeNext());
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(500);
@@ -158,12 +157,12 @@ describe("error_middleware", () => {
 
     it("calls logger.error for unknown errors", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
       const { logger } = await import("../../src/lib/logger.js");
-      const res = make_res();
+      const res = makeRes();
 
       // Act
-      error_middleware(new Error("crash"), make_req(), res, make_next());
+      errorMiddleware(new Error("crash"), makeReq(), res, makeNext());
 
       // Assert
       expect(logger.error).toHaveBeenCalled();
@@ -171,11 +170,11 @@ describe("error_middleware", () => {
 
     it("does not call next() for unknown errors", async () => {
       // Arrange
-      const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-      const next = make_next();
+      const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+      const next = makeNext();
 
       // Act
-      error_middleware(new Error("crash"), make_req(), make_res(), next);
+      errorMiddleware(new Error("crash"), makeReq(), makeRes(), next);
 
       // Assert
       expect(next).not.toHaveBeenCalled();

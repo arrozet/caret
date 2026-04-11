@@ -7,10 +7,10 @@ import { logger } from "../../src/lib/logger.js";
  * empty-string messages, special characters, and multiple consecutive calls.
  */
 describe("logger — extended coverage", () => {
-  let console_spy: ReturnType<typeof vi.spyOn>;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    console_spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -19,7 +19,7 @@ describe("logger — extended coverage", () => {
 
   /** Parse the i-th captured console.log call as JSON. */
   const get_output = (index = 0): Record<string, unknown> =>
-    JSON.parse(console_spy.mock.calls[index][0] as string);
+    JSON.parse(consoleSpy.mock.calls[index][0] as string);
 
   // ─── meta with various value types ────────────────────────────────────────
 
@@ -96,7 +96,7 @@ describe("logger — extended coverage", () => {
     logger.error("third");
 
     // Assert
-    expect(console_spy).toHaveBeenCalledTimes(3);
+    expect(consoleSpy).toHaveBeenCalledTimes(3);
 
     expect(get_output(0).message).toBe("first");
     expect(get_output(1).message).toBe("second");
@@ -159,6 +159,6 @@ describe("logger — extended coverage", () => {
 
     // Assert
     expect(get_output().level).toBe(expected_level);
-    console_spy.mockClear();
+    consoleSpy.mockClear();
   });
 });

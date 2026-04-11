@@ -1,37 +1,35 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 import { generateKeyPair, exportJWK, SignJWT, createLocalJWKSet, type KeyLike } from "jose";
 
 /**
- * Extended unit tests for the auth_middleware module.
+ * Extended unit tests for the authMiddleware module.
  * Covers the JWKS caching mechanism (TTL expiry, reset, re-injection),
- * the `reset_jwks_cache` export, the expired token edge case, and
+ * the `resetJwksCache` export, the expired token edge case, and
  * all branches of the error classification logic.
  */
 
 // ─── shared key pair ──────────────────────────────────────────────────────
 
-let private_key: KeyLike;
-let public_jwk: Awaited<ReturnType<typeof exportJWK>>;
+let privateKey: KeyLike;
+let publicJwk: Awaited<ReturnType<typeof exportJWK>>;
 
-const make_req = (auth_header?: string): Partial<Request> => ({
-  headers: auth_header ? { authorization: auth_header } : {},
+const makeReq = (authHeader?: string): Partial<Request> => ({
+  headers: authHeader ? { authorization: authHeader } : {},
 });
 
-const make_res = (): Partial<Response> => ({});
+const makeRes = (): Partial<Response> => ({});
 
-async function sign_token(
+async function signToken(
   payload: Record<string, unknown>,
   opts?: { expired?: boolean; key?: KeyLike },
 ): Promise<string> {
-  const key = opts?.key ?? private_key;
+  const key = opts?.key ?? privateKey;
   const builder = new SignJWT(payload)
     .setProtectedHeader({ alg: "ES256", typ: "JWT" })
     .setIssuedAt();
 
-  builder.setExpirationTime(
-    opts?.expired ? Math.floor(Date.now() / 1000) - 3600 : "1h",
-  );
+  builder.setExpirationTime(opts?.expired ? Math.floor(Date.now() / 1000) - 3600 : "1h");
 
   return builder.sign(key);
 }
@@ -39,12 +37,12 @@ async function sign_token(
 // ─── setup ────────────────────────────────────────────────────────────────
 
 beforeEach(async () => {
-  const { privateKey, publicKey } = await generateKeyPair("ES256");
-  private_key = privateKey;
-  public_jwk = await exportJWK(publicKey);
-  public_jwk.alg = "ES256";
-  public_jwk.use = "sig";
-  public_jwk.kid = "test-key-extended";
+  const { privateKey: generatedPrivateKey, publicKey } = await generateKeyPair("ES256");
+  privateKey = generatedPrivateKey;
+  publicJwk = await exportJWK(publicKey);
+  publicJwk.alg = "ES256";
+  publicJwk.use = "sig";
+  publicJwk.kid = "test-key-extended";
 });
 
 afterEach(() => {
@@ -54,14 +52,14 @@ afterEach(() => {
 
 // ─── suite ────────────────────────────────────────────────────────────────
 
-describe("auth_middleware — extended coverage", () => {
+describe("authMiddleware — extended coverage", () => {
   // Helper: load a fresh module instance with env configured
   async function load_module() {
     vi.stubEnv("SUPABASE_URL", "https://test.supabase.co");
     vi.stubEnv("SUPABASE_ANON_KEY", "test-anon-key");
     vi.resetModules();
     const mod = await import("../../src/middleware/auth_middleware.js");
-    mod.set_jwks_for_testing(createLocalJWKSet({ keys: [public_jwk] }));
+    mod.setJwksForTesting(createLocalJWKSet({ keys: [publicJwk] }));
     return mod;
   }
 
@@ -73,16 +71,12 @@ describe("auth_middleware — extended coverage", () => {
    */
   it("rejects an expired token with 'Invalid or expired' message", async () => {
     // Arrange
-    const { auth_middleware } = await load_module();
-    const token = await sign_token({ sub: "user-expired" }, { expired: true });
+    const { authMiddleware } = await load_module();
+    const token = await signToken({ sub: "user-expired" }, { expired: true });
     const next = vi.fn();
 
     // Act
-    await auth_middleware(
-      make_req(`Bearer ${token}`) as Request,
-      make_res() as Response,
-      next,
-    );
+    await authMiddleware(makeReq(`Bearer ${token}`) as Request, makeRes() as Response, next);
 
     // Assert
     expect(next).toHaveBeenCalledOnce();
@@ -98,15 +92,11 @@ describe("auth_middleware — extended coverage", () => {
    */
   it("rejects a header that is exactly 'Bearer' without a space or token", async () => {
     // Arrange
-    const { auth_middleware } = await load_module();
+    const { authMiddleware } = await load_module();
     const next = vi.fn();
 
     // Act
-    await auth_middleware(
-      make_req("Bearer") as Request,
-      make_res() as Response,
-      next,
-    );
+    await authMiddleware(makeReq("Bearer") as Request, makeRes() as Response, next);
 
     // Assert
     expect(next).toHaveBeenCalledOnce();
@@ -120,15 +110,11 @@ describe("auth_middleware — extended coverage", () => {
    */
   it("rejects 'Bearer ' (with space but empty token) as invalid JWT", async () => {
     // Arrange
-    const { auth_middleware } = await load_module();
+    const { authMiddleware } = await load_module();
     const next = vi.fn();
 
     // Act
-    await auth_middleware(
-      make_req("Bearer ") as Request,
-      make_res() as Response,
-      next,
-    );
+    await authMiddleware(makeReq("Bearer ") as Request, makeRes() as Response, next);
 
     // Assert
     expect(next).toHaveBeenCalledOnce();
@@ -137,15 +123,15 @@ describe("auth_middleware — extended coverage", () => {
     expect(err.message).toMatch(/Invalid or expired/i);
   });
 
-  // ─── reset_jwks_cache ─────────────────────────────────────────────────
+  // ─── resetJwksCache ─────────────────────────────────────────────────
 
   /**
-   * `reset_jwks_cache` must clear the module-level cache so that the next
+   * `resetJwksCache` must clear the module-level cache so that the next
    * call to `get_jwks` fetches fresh keys from Supabase.
    * We verify the reset by confirming that an attempt without re-injecting
    * the test JWKS will attempt a real network call (which we mock to fail).
    */
-  it("reset_jwks_cache clears the cached resolver", async () => {
+  it("resetJwksCache clears the cached resolver", async () => {
     // Arrange
     vi.stubEnv("SUPABASE_URL", "https://test.supabase.co");
     vi.stubEnv("SUPABASE_ANON_KEY", "test-key");
@@ -153,10 +139,10 @@ describe("auth_middleware — extended coverage", () => {
     const mod = await import("../../src/middleware/auth_middleware.js");
 
     // Inject a working resolver first
-    mod.set_jwks_for_testing(createLocalJWKSet({ keys: [public_jwk] }));
+    mod.setJwksForTesting(createLocalJWKSet({ keys: [publicJwk] }));
 
     // Act — reset the cache
-    mod.reset_jwks_cache();
+    mod.resetJwksCache();
 
     // Mock fetch to return a failure so we can detect the re-fetch attempt
     const fetch_mock = vi.fn().mockResolvedValue({
@@ -166,45 +152,41 @@ describe("auth_middleware — extended coverage", () => {
     });
     vi.stubGlobal("fetch", fetch_mock);
 
-    const token = await sign_token({ sub: "user-1" });
+    const token = await signToken({ sub: "user-1" });
     const next = vi.fn();
 
-    await mod.auth_middleware(
-      make_req(`Bearer ${token}`) as Request,
-      make_res() as Response,
-      next,
-    );
+    await mod.authMiddleware(makeReq(`Bearer ${token}`) as Request, makeRes() as Response, next);
 
     // Assert — next must have been called with an error (fetch failed)
     expect(next).toHaveBeenCalledOnce();
     expect(next.mock.calls[0][0]).toBeInstanceOf(Error);
   });
 
-  // ─── set_jwks_for_testing ─────────────────────────────────────────────
+  // ─── setJwksForTesting ─────────────────────────────────────────────
 
   /**
-   * `set_jwks_for_testing` must replace the resolver so that the next
+   * `setJwksForTesting` must replace the resolver so that the next
    * request uses the injected key set without hitting the network.
    */
-  it("set_jwks_for_testing allows verifying valid tokens without network calls", async () => {
+  it("setJwksForTesting allows verifying valid tokens without network calls", async () => {
     // Arrange
-    const { auth_middleware, set_jwks_for_testing } = await load_module();
+    const { authMiddleware } = await load_module();
     const payload = {
       sub: "user-set-jwks",
       email: "jwks@example.com",
       aud: "authenticated",
       role: "authenticated",
     };
-    const token = await sign_token(payload);
-    const req = make_req(`Bearer ${token}`) as Request;
+    const token = await signToken(payload);
+    const req = makeReq(`Bearer ${token}`) as Request;
     const next = vi.fn();
 
     // Act
-    await auth_middleware(req, make_res() as Response, next);
+    await authMiddleware(req, makeRes() as Response, next);
 
     // Assert — next called with no args (success)
     expect(next).toHaveBeenCalledWith();
-    expect(req.auth_user?.sub).toBe("user-set-jwks");
+    expect(req.authUser?.sub).toBe("user-set-jwks");
   });
 
   // ─── SUPABASE_ANON_KEY missing ────────────────────────────────────────
@@ -217,33 +199,28 @@ describe("auth_middleware — extended coverage", () => {
     vi.stubEnv("SUPABASE_URL", "https://test.supabase.co");
     vi.stubEnv("SUPABASE_ANON_KEY", "");
     vi.resetModules();
-    const { auth_middleware: unconfigured } = await import(
-      "../../src/middleware/auth_middleware.js"
-    );
-    const token = await sign_token({ sub: "user-1" });
+    const { authMiddleware: unconfigured } =
+      await import("../../src/middleware/auth_middleware.js");
+    const token = await signToken({ sub: "user-1" });
     const next = vi.fn();
 
     // Act
-    await unconfigured(
-      make_req(`Bearer ${token}`) as Request,
-      make_res() as Response,
-      next,
-    );
+    await unconfigured(makeReq(`Bearer ${token}`) as Request, makeRes() as Response, next);
 
     // Assert
     expect(next).toHaveBeenCalledOnce();
     expect((next.mock.calls[0][0] as Error).message).toMatch(/not configured/i);
   });
 
-  // ─── req.auth_user populated correctly ───────────────────────────────
+  // ─── req.authUser populated correctly ───────────────────────────────
 
   /**
    * All claims present in the signed payload must be accessible on
-   * req.auth_user after successful verification.
+   * req.authUser after successful verification.
    */
-  it("populates req.auth_user with all claims from the JWT payload", async () => {
+  it("populates req.authUser with all claims from the JWT payload", async () => {
     // Arrange
-    const { auth_middleware } = await load_module();
+    const { authMiddleware } = await load_module();
     const now = Math.floor(Date.now() / 1000);
     const payload = {
       sub: "uuid-abc",
@@ -252,19 +229,19 @@ describe("auth_middleware — extended coverage", () => {
       role: "authenticated",
       iat: now,
     };
-    const token = await sign_token(payload);
-    const req = make_req(`Bearer ${token}`) as Request;
+    const token = await signToken(payload);
+    const req = makeReq(`Bearer ${token}`) as Request;
     const next = vi.fn();
 
     // Act
-    await auth_middleware(req, make_res() as Response, next);
+    await authMiddleware(req, makeRes() as Response, next);
 
     // Assert
     expect(next).toHaveBeenCalledWith();
-    expect(req.auth_user?.sub).toBe("uuid-abc");
-    expect(req.auth_user?.email).toBe("claims@test.com");
-    expect(req.auth_user?.aud).toBe("authenticated");
-    expect(req.auth_user?.role).toBe("authenticated");
+    expect(req.authUser?.sub).toBe("uuid-abc");
+    expect(req.authUser?.email).toBe("claims@test.com");
+    expect(req.authUser?.aud).toBe("authenticated");
+    expect(req.authUser?.role).toBe("authenticated");
   });
 
   // ─── non-jose unexpected error propagation ────────────────────────────
@@ -287,15 +264,11 @@ describe("auth_middleware — extended coverage", () => {
 
     const mod = await import("../../src/middleware/auth_middleware.js");
     // Do NOT inject JWKS so it will try to fetch
-    const token = await sign_token({ sub: "user-1" });
+    const token = await signToken({ sub: "user-1" });
     const next = vi.fn();
 
     // Act
-    await mod.auth_middleware(
-      make_req(`Bearer ${token}`) as Request,
-      make_res() as Response,
-      next,
-    );
+    await mod.authMiddleware(makeReq(`Bearer ${token}`) as Request, makeRes() as Response, next);
 
     // Assert — must be forwarded as-is (not wrapped)
     expect(next).toHaveBeenCalledOnce();

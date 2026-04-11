@@ -10,11 +10,11 @@ import { logger } from "../../src/lib/logger.js";
  * can be indexed by log-aggregation tools.
  */
 describe("logger", () => {
-  let console_spy: ReturnType<typeof vi.spyOn>;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     // Silence real console output and capture calls for assertions.
-    console_spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -23,7 +23,7 @@ describe("logger", () => {
 
   /** Parse the first captured console.log argument as a JSON object. */
   const get_output = (): Record<string, unknown> =>
-    JSON.parse(console_spy.mock.calls[0][0] as string);
+    JSON.parse(consoleSpy.mock.calls[0][0] as string);
 
   // ─── log levels ───────────────────────────────────────────────────────────
 
@@ -170,7 +170,7 @@ describe("logger", () => {
       logger.warn("single call");
 
       // Assert
-      expect(console_spy).toHaveBeenCalledTimes(1);
+      expect(consoleSpy).toHaveBeenCalledTimes(1);
     });
 
     it("output is valid JSON-parseable text", () => {
@@ -180,7 +180,7 @@ describe("logger", () => {
       logger.info("json check");
 
       // Assert
-      const raw = console_spy.mock.calls[0][0] as string;
+      const raw = consoleSpy.mock.calls[0][0] as string;
       expect(() => JSON.parse(raw)).not.toThrow();
     });
   });

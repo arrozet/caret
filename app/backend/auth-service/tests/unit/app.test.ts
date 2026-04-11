@@ -80,8 +80,9 @@ async function call_route(
     const noop_next: NextFunction = vi.fn();
 
     // Dispatch through the app's handle method (internal Express API)
-    (app as unknown as { handle: (req: Request, res: Response, next: NextFunction) => void })
-      .handle(mock_req, mock_res as Response, noop_next);
+    (
+      app as unknown as { handle: (req: Request, res: Response, next: NextFunction) => void }
+    ).handle(mock_req, mock_res as Response, noop_next);
   });
 }
 
@@ -104,15 +105,13 @@ describe("app — health endpoint", () => {
    */
   it("GET /health returns status ok and service name", async () => {
     // Arrange — construct a mirror app with the same routes as app.ts
-    const { error_middleware } = await import(
-      "../../src/middleware/error_middleware.js"
-    );
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
     const test_app = express();
     test_app.use(express.json());
     test_app.get("/health", (_req, res) => {
       res.json({ status: "ok", service: "auth-service" });
     });
-    test_app.use(error_middleware);
+    test_app.use(errorMiddleware);
 
     // Act
     const result = await call_route(test_app, "GET", "/health");
@@ -159,9 +158,7 @@ describe("app — health endpoint", () => {
    */
   it("error_middleware handles AppError thrown from a route", async () => {
     // Arrange
-    const { error_middleware } = await import(
-      "../../src/middleware/error_middleware.js"
-    );
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
     const { UnauthorizedError } = await import("../../src/lib/errors.js");
 
     const test_app = express();
@@ -169,7 +166,7 @@ describe("app — health endpoint", () => {
     test_app.get("/protected", () => {
       throw new UnauthorizedError("must be logged in");
     });
-    test_app.use(error_middleware);
+    test_app.use(errorMiddleware);
 
     // Act
     const result = await call_route(test_app, "GET", "/protected");

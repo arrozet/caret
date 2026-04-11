@@ -1,5 +1,5 @@
 import express from "express";
-import { error_middleware } from "./middleware/error_middleware.js";
+import { errorMiddleware } from "./middleware/error_middleware.js";
 import { config } from "./lib/config.js";
 import { logger } from "./lib/logger.js";
 
@@ -15,7 +15,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "auth-service" });
 });
 
-app.use(error_middleware);
+app.use(errorMiddleware);
 
 app.listen(config.PORT, () => {
   logger.info(`Auth Service running on port ${config.PORT}`);

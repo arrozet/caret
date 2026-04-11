@@ -26,14 +26,14 @@ vi.mock("../../src/lib/logger.js", () => ({
 }));
 
 describe("error_middleware — extended coverage", () => {
-  const make_res = () =>
+  const makeRes = () =>
     ({
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
     }) as unknown as Response;
 
-  const make_req = () => ({}) as Request;
-  const make_next = () => vi.fn() as unknown as NextFunction;
+  const makeReq = () => ({}) as Request;
+  const makeNext = () => vi.fn() as unknown as NextFunction;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,14 +45,14 @@ describe("error_middleware — extended coverage", () => {
    * AppError constructed directly with a non-standard HTTP status code (e.g.
    * 429 Too Many Requests) must use that exact code in the response.
    */
-  it("uses the custom status_code of a direct AppError instance", async () => {
+  it("uses the custom statusCode of a direct AppError instance", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-    const res = make_res();
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+    const res = makeRes();
     const rate_limit_error = new AppError("rate limit exceeded", 429);
 
     // Act
-    error_middleware(rate_limit_error, make_req(), res, make_next());
+    errorMiddleware(rate_limit_error, makeReq(), res, makeNext());
 
     // Assert
     expect(res.status).toHaveBeenCalledWith(429);
@@ -67,11 +67,11 @@ describe("error_middleware — extended coverage", () => {
    */
   it("response body for AppError contains only the 'error' key", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-    const res = make_res();
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+    const res = makeRes();
 
     // Act
-    error_middleware(new ValidationError("bad input"), make_req(), res, make_next());
+    errorMiddleware(new ValidationError("bad input"), makeReq(), res, makeNext());
 
     // Assert
     const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<
@@ -84,11 +84,11 @@ describe("error_middleware — extended coverage", () => {
 
   it("response body for unknown errors contains only the 'error' key", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-    const res = make_res();
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+    const res = makeRes();
 
     // Act
-    error_middleware(new Error("something broke"), make_req(), res, make_next());
+    errorMiddleware(new Error("something broke"), makeReq(), res, makeNext());
 
     // Assert
     const payload = (res.json as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<
@@ -111,13 +111,13 @@ describe("error_middleware — extended coverage", () => {
     [new ForbiddenError(), "ForbiddenError"],
     [new ConflictError(), "ConflictError"],
     [new ValidationError(), "ValidationError"],
-  ])("%s has the correct name property", (error, expected_name) => {
+  ])("%s has the correct name property", (error, expectedName) => {
     // Arrange — error already instantiated in the table
 
     // Act — check the name property
 
     // Assert
-    expect(error.name).toBe(expected_name);
+    expect(error.name).toBe(expectedName);
   });
 
   // ─── AppError subclasses are instanceof AppError ──────────────────────────
@@ -146,14 +146,14 @@ describe("error_middleware — extended coverage", () => {
    */
   it("handles an error with no stack trace without throwing", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-    const res = make_res();
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+    const res = makeRes();
     const err = new Error("no stack");
     delete err.stack;
 
     // Act & Assert — must not throw
     expect(() => {
-      error_middleware(err, make_req(), res, make_next());
+      errorMiddleware(err, makeReq(), res, makeNext());
     }).not.toThrow();
 
     expect(res.status).toHaveBeenCalledWith(500);
@@ -163,16 +163,11 @@ describe("error_middleware — extended coverage", () => {
 
   it("uses HTTP 401 with a custom message for UnauthorizedError", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
-    const res = make_res();
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
+    const res = makeRes();
 
     // Act
-    error_middleware(
-      new UnauthorizedError("token expired"),
-      make_req(),
-      res,
-      make_next(),
-    );
+    errorMiddleware(new UnauthorizedError("token expired"), makeReq(), res, makeNext());
 
     // Assert
     expect(res.status).toHaveBeenCalledWith(401);
@@ -183,13 +178,13 @@ describe("error_middleware — extended coverage", () => {
 
   it("passes message and stack metadata to logger.error for unknown errors", async () => {
     // Arrange
-    const { error_middleware } = await import("../../src/middleware/error_middleware.js");
+    const { errorMiddleware } = await import("../../src/middleware/error_middleware.js");
     const { logger } = await import("../../src/lib/logger.js");
-    const res = make_res();
+    const res = makeRes();
     const err = new Error("unexpected failure");
 
     // Act
-    error_middleware(err, make_req(), res, make_next());
+    errorMiddleware(err, makeReq(), res, makeNext());
 
     // Assert
     expect(logger.error).toHaveBeenCalledWith(

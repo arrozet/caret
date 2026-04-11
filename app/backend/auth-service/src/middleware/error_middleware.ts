@@ -7,14 +7,14 @@ import { logger } from "../lib/logger.js";
  * Maps AppError subclasses to their corresponding HTTP status codes.
  * All unknown errors return 500.
  */
-export function error_middleware(
+export function errorMiddleware(
   err: Error,
   _req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
   if (err instanceof AppError) {
-    res.status(err.status_code).json({ error: err.message });
+    res.status(err.statusCode).json({ error: err.message });
     return;
   }
   logger.error("Unhandled error", { message: err.message, stack: err.stack });

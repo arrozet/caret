@@ -49,10 +49,10 @@ describe("error classes — extended coverage", () => {
   // ─── status_code readonly ─────────────────────────────────────────────────
 
   /**
-   * status_code is declared `readonly` in TypeScript. At runtime we verify
+   * statusCode is declared `readonly` in TypeScript. At runtime we verify
    * that the value is a positive integer and that it is accessible.
    */
-  describe("status_code is accessible and correct", () => {
+  describe("statusCode is accessible and correct", () => {
     it.each([
       [new NotFoundError(), 404],
       [new UnauthorizedError(), 401],
@@ -61,7 +61,7 @@ describe("error classes — extended coverage", () => {
       [new ValidationError(), 422],
       [new AppError("base", 500), 500],
     ])("status_code is %i", (error, expected) => {
-      expect(error.status_code).toBe(expected);
+      expect(error.statusCode).toBe(expected);
     });
   });
 
@@ -124,23 +124,23 @@ describe("error classes — extended coverage", () => {
    * Edge case: status code 0 is falsy but technically valid (not used in HTTP
    * but could be set programmatically). Ensure it is stored as-is.
    */
-  it("AppError stores status_code of 0 as-is", () => {
+  it("AppError stores statusCode of 0 as-is", () => {
     // Arrange
     const err = new AppError("zero code", 0);
 
     // Assert
-    expect(err.status_code).toBe(0);
+    expect(err.statusCode).toBe(0);
   });
 
   // ─── re-throw preservation ────────────────────────────────────────────────
 
   /**
-   * When caught and re-thrown, the error message and status code must be
+   * When caught and re-thrown, the error message and statusCode must be
    * preserved — i.e., they are not lost through any getter magic.
    */
   it("message and status_code survive a catch-and-rethrow cycle", () => {
     // Arrange
-    let caught: AppError | null = null;
+    let caught: AppError | null;
 
     // Act
     try {
@@ -152,7 +152,7 @@ describe("error classes — extended coverage", () => {
     // Assert
     expect(caught).not.toBeNull();
     expect(caught!.message).toBe("email taken");
-    expect(caught!.status_code).toBe(409);
+    expect(caught!.statusCode).toBe(409);
     expect(caught!).toBeInstanceOf(ConflictError);
     expect(caught!).toBeInstanceOf(AppError);
   });

@@ -43,7 +43,7 @@ describe("error classes", () => {
       const error = new AppError("oops");
 
       // Assert
-      expect(error.status_code).toBe(500);
+      expect(error.statusCode).toBe(500);
     });
 
     it("accepts a custom status code", () => {
@@ -54,7 +54,7 @@ describe("error classes", () => {
       const error = new AppError("conflict", custom_code);
 
       // Assert
-      expect(error.status_code).toBe(custom_code);
+      expect(error.statusCode).toBe(custom_code);
     });
 
     it("sets the name property to 'AppError'", () => {
@@ -92,7 +92,7 @@ describe("error classes", () => {
       const error = new NotFoundError();
 
       // Assert
-      expect(error.status_code).toBe(404);
+      expect(error.statusCode).toBe(404);
     });
 
     it("uses the default 'Resource not found' message", () => {
@@ -141,7 +141,7 @@ describe("error classes", () => {
       const error = new UnauthorizedError();
 
       // Assert
-      expect(error.status_code).toBe(401);
+      expect(error.statusCode).toBe(401);
     });
 
     it("uses the default 'Unauthorized' message", () => {
@@ -169,7 +169,7 @@ describe("error classes", () => {
       const error = new ForbiddenError();
 
       // Assert
-      expect(error.status_code).toBe(403);
+      expect(error.statusCode).toBe(403);
     });
 
     it("uses the default 'Forbidden' message", () => {
@@ -197,7 +197,7 @@ describe("error classes", () => {
       const error = new ConflictError();
 
       // Assert
-      expect(error.status_code).toBe(409);
+      expect(error.statusCode).toBe(409);
     });
 
     it("uses the default 'Resource already exists' message", () => {
@@ -225,7 +225,7 @@ describe("error classes", () => {
       const error = new ValidationError();
 
       // Assert
-      expect(error.status_code).toBe(422);
+      expect(error.statusCode).toBe(422);
     });
 
     it("uses the default 'Validation failed' message", () => {

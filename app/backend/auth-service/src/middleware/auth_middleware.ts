@@ -24,16 +24,10 @@ export interface SupabaseJwtPayload {
   exp: number;
 }
 
-/**
- * Extend the Express Request type to include the authenticated user payload.
- * This augmentation is available throughout the auth-service codebase.
- */
-declare global {
-  namespace Express {
-    interface Request {
-      /** Decoded JWT payload attached by auth_middleware. */
-      auth_user?: SupabaseJwtPayload;
-    }
+declare module "express-serve-static-core" {
+  interface Request {
+    /** Decoded JWT payload attached by authMiddleware. */
+    authUser?: SupabaseJwtPayload;
   }
 }
 
@@ -41,10 +35,14 @@ declare global {
 type JwksResolver = (
   protectedHeader?: JWSHeaderParameters,
   token?: FlattenedJWSInput,
-) => Promise<ReturnType<typeof import("jose").createLocalJWKSet> extends (...args: never[]) => infer R ? Awaited<R> : never>;
+) => Promise<
+  ReturnType<typeof import("jose").createLocalJWKSet> extends (...args: never[]) => infer R
+    ? Awaited<R>
+    : never
+>;
 
 /** Cached JWKS resolver and the timestamp (ms) when it was fetched. */
-let cached_jwks: { resolver: JwksResolver; fetched_at: number } | null = null;
+let cachedJwks: { resolver: JwksResolver; fetchedAt: number } | null = null;
 
 /** How long to cache the JWKS before refetching (5 minutes). */
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -56,7 +54,7 @@ const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
  * including `/auth/v1/.well-known/jwks.json`.  `createRemoteJWKSet` from jose cannot
  * send custom headers, so we fetch manually and use `createLocalJWKSet`.
  */
-async function fetch_jwks(): Promise<JSONWebKeySet> {
+async function fetchJwks(): Promise<JSONWebKeySet> {
   const base = config.SUPABASE_URL.replace(/\/+$/, "");
   const url = `${base}/auth/v1/.well-known/jwks.json`;
 
@@ -67,9 +65,7 @@ async function fetch_jwks(): Promise<JSONWebKeySet> {
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to fetch JWKS from ${url}: ${response.status} ${response.statusText}`,
-    );
+    throw new Error(`Failed to fetch JWKS from ${url}: ${response.status} ${response.statusText}`);
   }
 
   return response.json() as Promise<JSONWebKeySet>;
@@ -79,18 +75,18 @@ async function fetch_jwks(): Promise<JSONWebKeySet> {
  * Get or refresh the cached JWKS resolver.
  * Fetches the key set from Supabase if the cache is empty or stale.
  */
-async function get_jwks(): Promise<JwksResolver> {
+async function getJwks(): Promise<JwksResolver> {
   const now = Date.now();
 
-  if (cached_jwks && now - cached_jwks.fetched_at < JWKS_CACHE_TTL_MS) {
-    return cached_jwks.resolver;
+  if (cachedJwks && now - cachedJwks.fetchedAt < JWKS_CACHE_TTL_MS) {
+    return cachedJwks.resolver;
   }
 
   logger.info("[auth] Fetching JWKS from Supabase...");
-  const jwks_data = await fetch_jwks();
-  const resolver = createLocalJWKSet(jwks_data) as unknown as JwksResolver;
-  cached_jwks = { resolver, fetched_at: now };
-  logger.info(`[auth] JWKS loaded — ${jwks_data.keys.length} key(s) cached`);
+  const jwksData = await fetchJwks();
+  const resolver = createLocalJWKSet(jwksData) as unknown as JwksResolver;
+  cachedJwks = { resolver, fetchedAt: now };
+  logger.info(`[auth] JWKS loaded — ${jwksData.keys.length} key(s) cached`);
 
   return resolver;
 }
@@ -98,15 +94,15 @@ async function get_jwks(): Promise<JwksResolver> {
 /**
  * Reset the cached JWKS — used by tests to inject a fresh key set.
  */
-export function reset_jwks_cache(): void {
-  cached_jwks = null;
+export function resetJwksCache(): void {
+  cachedJwks = null;
 }
 
 /**
  * Override the JWKS resolver — used by tests to provide a local key set.
  */
-export function set_jwks_for_testing(test_jwks: JwksResolver): void {
-  cached_jwks = { resolver: test_jwks, fetched_at: Date.now() };
+export function setJwksForTesting(testJwks: JwksResolver): void {
+  cachedJwks = { resolver: testJwks, fetchedAt: Date.now() };
 }
 
 /**
@@ -114,32 +110,32 @@ export function set_jwks_for_testing(test_jwks: JwksResolver): void {
  *
  * Validates the Bearer token from the Authorization header by verifying
  * the signature against Supabase's JWKS (ES256).  On success, attaches
- * the decoded payload to `req.auth_user` for downstream handlers.
+ * the decoded payload to `req.authUser` for downstream handlers.
  *
  * Throws UnauthorizedError if the token is missing, malformed, or invalid.
  */
-export async function auth_middleware(
+export async function authMiddleware(
   req: Request,
   _res: Response,
   next: NextFunction,
 ): Promise<void> {
   try {
-    const auth_header = req.headers.authorization;
+    const authHeader = req.headers.authorization;
 
-    if (!auth_header?.startsWith("Bearer ")) {
+    if (!authHeader?.startsWith("Bearer ")) {
       throw new UnauthorizedError("Missing or malformed Authorization header");
     }
 
-    const token = auth_header.slice(7); /* Strip "Bearer " prefix */
+    const token = authHeader.slice(7); /* Strip "Bearer " prefix */
 
     if (!config.SUPABASE_URL || !config.SUPABASE_ANON_KEY) {
       logger.error("SUPABASE_URL or SUPABASE_ANON_KEY is not configured");
       throw new UnauthorizedError("Authentication is not configured");
     }
 
-    const jwks_resolver = await get_jwks();
+    const jwksResolver = await getJwks();
 
-    const { payload } = await jwtVerify(token, jwks_resolver, {
+    const { payload } = await jwtVerify(token, jwksResolver, {
       algorithms: ["ES256"],
     });
 
@@ -150,7 +146,7 @@ export async function auth_middleware(
       throw new UnauthorizedError("Token missing subject claim");
     }
 
-    req.auth_user = decoded;
+    req.authUser = decoded;
     next();
   } catch (err) {
     if (err instanceof UnauthorizedError) {
