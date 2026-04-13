@@ -28,6 +28,11 @@ const mock_load_messages = vi.fn();
 const mock_clear = vi.fn();
 const mock_clear_pending_change = vi.fn();
 
+const { mock_get_models, mock_list_conversations } = vi.hoisted(() => ({
+  mock_get_models: vi.fn(() => new Promise<never>(() => {})),
+  mock_list_conversations: vi.fn(() => new Promise<never>(() => {})),
+}));
+
 let mock_messages: Array<{
   id: string;
   role: "user" | "assistant";
@@ -86,9 +91,9 @@ vi.mock("../api/aiApi", () => ({
   deleteConversation: vi.fn().mockResolvedValue(undefined),
   createConversation: vi.fn(),
   listMessages: vi.fn(),
-  listConversations: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  listConversations: mock_list_conversations,
   streamAiResponse: vi.fn(),
-  getModels: vi.fn().mockResolvedValue({ models: [], default_model_id: "" }),
+  getModels: mock_get_models,
 }));
 
 // ---------------------------------------------------------------------------
@@ -128,17 +133,15 @@ describe("ChatPanel", () => {
     expect(mock_close_panel).toHaveBeenCalledTimes(1);
   });
 
-  it("renders suggested prompts when there are no messages", () => {
+  it("renders the empty state when there are no messages", () => {
     render(<ChatPanel document_id="doc-1" />);
-    expect(screen.getByText("suggested_prompts.summarize")).toBeInTheDocument();
-    expect(screen.getByText("suggested_prompts.improve_intro")).toBeInTheDocument();
-    expect(screen.getByText("suggested_prompts.check_clarity")).toBeInTheDocument();
+    expect(screen.getByText("empty_state")).toBeInTheDocument();
   });
 
-  it("does not render suggested prompts when messages exist", () => {
+  it("does not render the empty state when messages exist", () => {
     mock_messages = [{ id: "m1", role: "user", content: "Hello" }];
     render(<ChatPanel document_id="doc-1" />);
-    expect(screen.queryByText("suggested_prompts.summarize")).not.toBeInTheDocument();
+    expect(screen.queryByText("empty_state")).not.toBeInTheDocument();
   });
 
   it("renders user and assistant messages", () => {
@@ -207,18 +210,5 @@ describe("ChatPanel", () => {
     render(<ChatPanel document_id="doc-1" />);
     const log = screen.getByRole("log");
     expect(log).toHaveAttribute("aria-live", "polite");
-  });
-
-  it("clicking a suggested prompt calls send_message with the prompt text", () => {
-    render(<ChatPanel document_id="doc-1" />);
-    const summarize_btn = screen.getByText("suggested_prompts.summarize");
-    fireEvent.click(summarize_btn);
-    expect(mock_send_message).toHaveBeenCalledWith(
-      "suggested_prompts.summarize",
-      "doc-1",
-      undefined,
-      undefined,
-      undefined,
-    );
   });
 });

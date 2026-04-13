@@ -14,6 +14,8 @@ from pydantic import ValidationError
 from models.ai import AiMessageRole, AiSuggestionStatus
 from schemas.ai import (
     ConversationCreate,
+    DocumentChangePayload,
+    DocumentContextPayload,
     MessageCreate,
     ModelInfo,
     ModelsResponse,
@@ -189,6 +191,41 @@ class TestStreamRequest:
         assert schema.document_context == "The quick brown fox."
         assert schema.model_id == "z-ai/glm-4.5-air:free"
 
+    def test_valid_with_structured_document_context(self) -> None:
+        """StreamRequest should accept structured JSON-compatible document context."""
+        # Arrange
+        context = {
+            "content_text": "Hi",
+            "content_json": {
+                "type": "doc",
+                "content": [{"type": "paragraph"}],
+            },
+            "type": "doc",
+            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Hi"}]}],
+        }
+
+        # Act
+        schema = StreamRequest(message="Summarise", document_context=context)
+
+        # Assert
+        assert schema.document_context is not None
+        assert isinstance(schema.document_context, DocumentContextPayload)
+        assert schema.document_context.content_text == "Hi"
+
+    def test_valid_with_document_context_model(self) -> None:
+        """StreamRequest should accept a structured DocumentContextPayload instance."""
+        # Arrange
+        context = DocumentContextPayload(
+            content_text="Document snapshot",
+            content_json={"type": "doc", "content": []},
+        )
+
+        # Act
+        schema = StreamRequest(message="Summarise", document_context=context)
+
+        # Assert
+        assert schema.document_context == context
+
     def test_empty_message_raises(self) -> None:
         """StreamRequest with empty message must raise ValidationError."""
         # Arrange / Act / Assert
@@ -310,6 +347,21 @@ class TestSuggestionCreate:
         assert schema.suggested_text == "Better phrasing here."
         assert schema.position_start is None
         assert schema.position_end is None
+
+    def test_document_change_payload_accepts_selection_offsets(self) -> None:
+        """DocumentChangePayload should preserve optional selection offsets for range edits."""
+        # Arrange / Act
+        payload = DocumentChangePayload(
+            operation="replace_full",
+            proposed_text="Edited text",
+            original_text="Original text",
+            position_start=3,
+            position_end=11,
+        )
+
+        # Assert
+        assert payload.position_start == 3
+        assert payload.position_end == 11
 
     def test_empty_suggested_text_raises(self) -> None:
         """SuggestionCreate with empty suggested_text must raise ValidationError."""

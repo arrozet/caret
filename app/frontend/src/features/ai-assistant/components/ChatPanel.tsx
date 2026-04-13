@@ -16,7 +16,7 @@ import { useAiStore } from "../../../stores/aiStore";
 import { useAiStream } from "../hooks/useAiStream";
 import type { ChatMessage } from "../hooks/useAiStream";
 import { deleteConversation, getModels, listConversations } from "../api/aiApi";
-import type { ModelInfo } from "../api/aiApi";
+import type { DocumentContextSnapshot, ModelInfo } from "../api/aiApi";
 
 const FALLBACK_MODELS: ModelInfo[] = [
   {
@@ -170,12 +170,12 @@ interface ChatPanelProps {
    */
   document_id: string;
   /**
-   * Callback that returns the current plain-text content of the editor on
-   * demand. Called immediately before each message is sent so the AI always
-   * receives an up-to-date document snapshot, regardless of when the panel
-   * was opened or how the document has changed since.
+   * Callback that returns the current live editor snapshot on demand.
+   * Called immediately before each message is sent so the AI always receives
+   * an up-to-date document view, regardless of when the panel was opened or
+   * how the document has changed since.
    */
-  get_document_context?: () => string | undefined;
+  get_document_context?: () => DocumentContextSnapshot | string | undefined;
   /**
    * Increment this token whenever the parent resolves a pending change.
    * The panel will clear its local pending state when this value changes.

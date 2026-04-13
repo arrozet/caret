@@ -44,7 +44,7 @@ export interface UseAiStreamReturn {
   send_message: (
     user_message: string,
     document_id: string,
-    document_context?: string,
+    document_context?: string | DocumentContextSnapshot,
     model_id?: string,
     agent_type?: string,
   ) => Promise<void>;
@@ -127,7 +127,7 @@ export function useAiStream(): UseAiStreamReturn {
     async (
       user_message: string,
       document_id: string,
-      document_context?: string,
+      document_context?: string | DocumentContextSnapshot,
       model_id?: string,
       agent_type?: string,
     ): Promise<void> => {
@@ -172,6 +172,7 @@ export function useAiStream(): UseAiStreamReturn {
       try {
         const stream = streamAiResponse({
           conversation_id: conversationId,
+          document_id,
           message: user_message,
           document_context,
           model_id,
@@ -205,7 +206,7 @@ export function useAiStream(): UseAiStreamReturn {
             );
             streamingIdRef.current = null;
           } else if (chunk.type === "error") {
-            setError(chunk.error ?? "AI service error");
+            setError(chunk.error ?? chunk.content ?? "AI service error");
             const currentStreamingId = streamingIdRef.current;
             setMessages((prev) => prev.filter((msg) => msg.id !== currentStreamingId));
             streamingIdRef.current = null;

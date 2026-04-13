@@ -1,31 +1,11 @@
 import { useState, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
-import Collaboration from "@tiptap/extension-collaboration";
-import StarterKit from "@tiptap/starter-kit";
-import TextAlign from "@tiptap/extension-text-align";
-import Placeholder from "@tiptap/extension-placeholder";
-import Highlight from "@tiptap/extension-highlight";
-import { TextStyle } from "@tiptap/extension-text-style";
-import Color from "@tiptap/extension-color";
-import FontFamily from "@tiptap/extension-font-family";
-import Underline from "@tiptap/extension-underline";
-import { Link } from "@tiptap/extension-link";
-import { Image } from "@tiptap/extension-image";
-import { TaskList } from "@tiptap/extension-task-list";
-import { TaskItem } from "@tiptap/extension-task-item";
-import { Table } from "@tiptap/extension-table";
-import { TableRow } from "@tiptap/extension-table-row";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TableHeader } from "@tiptap/extension-table-header";
 import type { JSONContent, Editor } from "@tiptap/react";
 import { EditorToolbar } from "./EditorToolbar";
 import { SelectionMenu } from "./SelectionMenu";
-import { Pagination } from "../extensions/pagination";
 import type { PaperSize } from "../extensions/pagination";
-import { GhostText } from "../extensions/GhostText";
-import { SuggestionInsert } from "../extensions/SuggestionInsert";
-import { SuggestionDelete } from "../extensions/SuggestionDelete";
 import type * as Y from "yjs";
+import { create_editor_extensions } from "../utils";
 
 /**
  * Props for the CaretEditor component.
@@ -65,66 +45,16 @@ export function CaretEditor({
 
   const editor = useEditor(
     {
-      extensions: [
-        StarterKit.configure({
-          heading: { levels: [1, 2, 3] },
-          // Disable undo/redo when using collaboration (Y.js handles history)
-          undoRedo: collaborationDocument ? false : undefined,
-          // Tiptap v3 StarterKit bundles Link and Underline by default.
-          // Disable them here to avoid "Duplicate extension names" warnings;
-          // we register both below with our own configuration options.
-          link: false,
-          underline: false,
-        }),
-        ...(collaborationDocument
-          ? [
-              Collaboration.configure({
-                document: collaborationDocument,
-                field: "content",
-              }),
-            ]
-          : []),
-        TextStyle,
-        Color,
-        FontFamily.configure({
-          types: ["textStyle"],
-        }),
-        Highlight.configure({
-          multicolor: true,
-        }),
-        TextAlign.configure({
-          types: ["heading", "paragraph"],
-        }),
-        Placeholder.configure({
-          placeholder: "Start writing...",
-        }),
-        Underline,
-        Link.configure({
-          openOnClick: false,
-          autolink: true,
-        }),
-        Image,
-        TaskList,
-        TaskItem.configure({
-          nested: true,
-        }),
-        Table.configure({
-          resizable: true,
-        }),
-        TableRow,
-        TableHeader,
-        TableCell,
-        Pagination.configure({
-          paperSize,
-        }),
-        GhostText,
-        SuggestionInsert,
-        SuggestionDelete,
-      ],
-      content: content ?? {
-        type: "doc",
-        content: [{ type: "paragraph" }],
-      },
+      extensions: create_editor_extensions({
+        paper_size: paperSize,
+        collaboration_document: collaborationDocument,
+      }),
+      content: collaborationDocument
+        ? undefined
+        : (content ?? {
+            type: "doc",
+            content: [{ type: "paragraph" }],
+          }),
       editable,
       editorProps: {
         attributes: {

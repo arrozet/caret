@@ -3,4 +3,12 @@
  * Domain/Infrastructure layer: pure TS functions, framework-agnostic.
  * Examples: document parsers, serializers, content transformers.
  */
-export {};
+export {
+  bootstrap_collaboration_document,
+  COLLABORATION_FIELD,
+  create_document_schema_extensions,
+  create_editor_extensions,
+  has_bootstrap_content,
+  is_collaboration_document_empty,
+  replace_collaboration_document_content,
+} from "./editorExtensions";

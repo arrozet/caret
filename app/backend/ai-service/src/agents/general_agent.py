@@ -16,6 +16,7 @@ Architecture (BACKEND.md):
 """
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
@@ -33,12 +34,16 @@ class GeneralAgentDeps:
     Attributes:
         document_content: Plain-text snapshot of the current document.
                           None if no document context is available.
+        document_context: Raw structured document payload, preserved for
+                          editor-aware tool logic.
         proposed_changes: Mutable list that agent tools append proposed edits to.
                           The service layer reads this list after the agent run
                           completes to emit document_change SSE events.
     """
 
     document_content: str | None = None
+    document_context: dict[str, Any] | str | None = None
+    selection: dict[str, Any] | None = None
     proposed_changes: list[dict[str, str]] = field(default_factory=list)
 
 
@@ -65,6 +70,20 @@ def get_document_content(ctx: RunContext[GeneralAgentDeps]) -> str:
     return ctx.deps.document_content
 
 
+def get_selection_content(ctx: RunContext[GeneralAgentDeps]) -> str:
+    """
+    Read the currently active selection when one exists.
+
+    Returns the selection text so the model can focus edits on the user's
+    highlighted span instead of the entire document.
+    """
+    selection = ctx.deps.selection or {}
+    selected_text = selection.get("text")
+    if isinstance(selected_text, str) and selected_text:
+        return selected_text
+    return "(No selection available)"
+
+
 def propose_document_replacement(
     ctx: RunContext[GeneralAgentDeps],
     proposed_text: str,
@@ -78,7 +97,8 @@ def propose_document_replacement(
 
     Args:
         ctx: PydanticAI run context carrying the GeneralAgentDeps.
-        proposed_text: The complete replacement text for the document.
+        proposed_text: The complete replacement text for the document, even when
+            only the current selection is being edited.
 
     Returns:
         Confirmation string acknowledging that the proposal has been queued.
@@ -89,6 +109,8 @@ def propose_document_replacement(
             "operation": "replace_full",
             "proposed_text": proposed_text,
             "original_text": original_text,
+            "position_start": ctx.deps.selection.get("from") if ctx.deps.selection else None,
+            "position_end": ctx.deps.selection.get("to") if ctx.deps.selection else None,
         }
     )
     return "Document replacement proposed. The user will be asked to accept or reject the change."
@@ -101,17 +123,21 @@ def propose_document_replacement(
 _SYSTEM_PROMPT = (
     "You are Caret AI, an agentic writing assistant embedded in the Caret document editor.\n\n"
     "## CRITICAL: HOW TO USE YOUR TOOLS\n\n"
-    "You have two tools:\n"
+    "You have three tools:\n"
     "  1. get_document_content — reads the current document text\n"
-    "  2. propose_document_replacement — proposes a full document replacement\n\n"
+    "  2. get_selection_content — reads the active editor selection when present\n"
+    "  3. propose_document_replacement — proposes a full document replacement\n\n"
     "### MANDATORY RULES — NEVER BREAK THESE:\n\n"
     "RULE 1: Whenever the user asks you to WRITE, EDIT, IMPROVE, REWRITE, TRANSLATE, or "
     "MODIFY the document in ANY way — you MUST call propose_document_replacement with "
-    "the complete new document text. DO NOT write the document text in your chat reply.\n\n"
+    "the complete new document text, even if they selected only one sentence. "
+    "DO NOT write the document text in your chat reply.\n\n"
     "RULE 2: Before proposing changes, call get_document_content to read what is there.\n\n"
-    "RULE 3: After calling propose_document_replacement, write a SHORT explanation "
+    "RULE 3: If a selection exists, call get_selection_content and focus your edit on "
+    "that span.\n\n"
+    "RULE 4: After calling propose_document_replacement, write a SHORT explanation "
     "(1-3 sentences) of what you changed and why.\n\n"
-    "RULE 4: If the user says 'write it in the document', 'write it directly', "
+    "RULE 5: If the user says 'write it in the document', 'write it directly', "
     "'add to document', 'edit the document', or similar — this ALWAYS means you must "
     "call propose_document_replacement. Not write in chat.\n\n"
     "### General guidelines:\n"
@@ -141,7 +167,7 @@ def build_general_agent(model: Model) -> "Agent[GeneralAgentDeps, str]":
         deps_type=GeneralAgentDeps,
         output_type=str,
         system_prompt=_SYSTEM_PROMPT,
-        tools=[get_document_content, propose_document_replacement],
+        tools=[get_document_content, get_selection_content, propose_document_replacement],
     )
     return agent
 
@@ -173,7 +199,7 @@ def _make_sentinel_agent() -> "Agent[GeneralAgentDeps, str]":
         deps_type=GeneralAgentDeps,
         output_type=str,
         system_prompt=_SYSTEM_PROMPT,
-        tools=[get_document_content, propose_document_replacement],
+        tools=[get_document_content, get_selection_content, propose_document_replacement],
     )
 
 

@@ -82,6 +82,24 @@ export interface DocumentChangePayload {
   proposed_text: string;
   /** Document text at invocation time (for diffing). */
   original_text: string;
+  /** Optional start position for range-scoped edits. */
+  position_start?: number | null;
+  /** Optional end position for range-scoped edits. */
+  position_end?: number | null;
+}
+
+/** Structured snapshot of the live editor document context. */
+export interface DocumentContextSnapshot {
+  /** Serialized ProseMirror/Tiptap document JSON. */
+  content_json: unknown;
+  /** Plain-text rendering of the same document. */
+  content_text: string;
+  /** Optional live selection range, when the editor has an active selection. */
+  selection?: {
+    from: number;
+    to: number;
+    text: string;
+  };
 }
 
 /**
@@ -200,10 +218,12 @@ export function deleteConversation(conversation_id: string): Promise<void> {
 export interface StreamRequestOptions {
   /** Conversation UUID to stream into. */
   conversation_id: string;
+  /** Active document UUID, used for document-scoped retrieval/context. */
+  document_id: string;
   /** The user message text to send. */
   message: string;
-  /** Optional plain-text snapshot of the document for context. */
-  document_context?: string;
+  /** Optional document snapshot for context. */
+  document_context?: string | DocumentContextSnapshot;
   /** Optional OpenRouter model slug to use for this request. */
   model_id?: string;
   /**
@@ -231,7 +251,8 @@ export interface StreamRequestOptions {
 export async function* streamAiResponse(
   options: StreamRequestOptions,
 ): AsyncGenerator<StreamChunk> {
-  const { conversation_id, message, document_context, model_id, agent_type, signal } = options;
+  const { conversation_id, document_id, message, document_context, model_id, agent_type, signal } =
+    options;
 
   // Retrieve the current auth session to attach the Bearer token.
   const {
@@ -246,7 +267,7 @@ export async function* streamAiResponse(
       "Content-Type": "application/json",
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
     },
-    body: JSON.stringify({ message, document_context, model_id, agent_type }),
+    body: JSON.stringify({ message, document_context, model_id, document_id, agent_type }),
     signal,
   });
 

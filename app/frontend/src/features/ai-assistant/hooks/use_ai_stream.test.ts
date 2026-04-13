@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAiStream } from "./useAiStream";
@@ -17,6 +18,14 @@ vi.mock("../api/aiApi", () => ({
   streamAiResponse: vi.fn(),
 }));
 
+vi.mock("../../../lib/supabase", () => ({
+  supabase_client: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+    },
+  },
+}));
+
 /**
  * Mock the Zustand ai_store.
  * We provide a minimal implementation that tracks active_conversation_id.
@@ -30,6 +39,7 @@ vi.mock("../../../stores/aiStore", () => ({
     activeConversationId: mock_conversation_id,
     setConversation: mock_set_conversation,
     setPendingDocumentChange: mock_set_pending_document_change,
+    setActiveDocumentId: vi.fn(),
   }),
 }));
 
@@ -169,6 +179,7 @@ describe("use_ai_stream", () => {
     expect(streamAiResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         conversation_id: "convo-1",
+        document_id: "doc1",
         message: "Hi",
       }),
     );
@@ -179,6 +190,36 @@ describe("use_ai_stream", () => {
 
     // After streaming completes, loading should be false.
     expect(result.current.is_loading).toBe(false);
+  });
+
+  it("forwards a structured document context to streamAiResponse", async () => {
+    mock_conversation_id = "convo-structured";
+
+    vi.mocked(streamAiResponse).mockReturnValueOnce(
+      make_stream([{ type: "done", message_id: "m1" }]),
+    );
+
+    const { result } = renderHook(() => useAiStream());
+
+    await act(async () => {
+      await result.current.send_message("Hi", "doc1", {
+        content_json: { type: "doc", content: [] },
+        content_text: "Hello world",
+        selection: { from: 0, to: 5, text: "Hello" },
+      });
+    });
+
+    expect(streamAiResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversation_id: "convo-structured",
+        document_id: "doc1",
+        document_context: {
+          content_json: { type: "doc", content: [] },
+          content_text: "Hello world",
+          selection: { from: 0, to: 5, text: "Hello" },
+        },
+      }),
+    );
   });
 
   it("sets error state and removes placeholder on error chunk", async () => {

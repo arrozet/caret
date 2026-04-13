@@ -8,8 +8,12 @@ export type AiMode = "ask" | "agent";
 interface AiState {
   /** Whether the AI chat panel is currently visible. */
   isPanelOpen: boolean;
+  /** Document currently being edited in the main pane. */
+  activeDocumentId: string | null;
   /** The conversation ID currently shown in the panel (null = no active conversation). */
   activeConversationId: string | null;
+  /** Active conversation ID per document. */
+  conversationByDocumentId: Record<string, string | null>;
   /** Current AI interaction mode. */
   aiMode: AiMode;
   /** Agent type slug sent to the backend when ai_mode === "agent". */
@@ -25,8 +29,12 @@ interface AiState {
   openPanel: () => void;
   /** Close the AI panel. */
   closePanel: () => void;
+  /** Set the active document and restore its conversation if one exists. */
+  setActiveDocumentId: (documentId: string | null) => void;
   /** Set the active conversation being displayed. */
   setConversation: (id: string | null) => void;
+  /** Set the active conversation for one document. */
+  setConversationForDocument: (documentId: string, id: string | null) => void;
   /** Switch between Ask and Agent modes. */
   setAiMode: (mode: AiMode) => void;
   /** Set the selected LLM model. */
@@ -45,7 +53,9 @@ interface AiState {
  */
 export const useAiStore = create<AiState>((set) => ({
   isPanelOpen: true,
+  activeDocumentId: null,
   activeConversationId: null,
+  conversationByDocumentId: {},
   aiMode: "agent",
   selectedAgentType: "general",
   selectedModelId: undefined,
@@ -63,8 +73,36 @@ export const useAiStore = create<AiState>((set) => ({
     set({ isPanelOpen: false });
   },
 
+  setActiveDocumentId(documentId: string | null) {
+    set((state) => ({
+      activeDocumentId: documentId,
+      activeConversationId:
+        documentId === null ? null : (state.conversationByDocumentId[documentId] ?? null),
+    }));
+  },
+
   setConversation(id: string | null) {
-    set({ activeConversationId: id });
+    set((state) => ({
+      activeConversationId: id,
+      ...(state.activeDocumentId
+        ? {
+            conversationByDocumentId: {
+              ...state.conversationByDocumentId,
+              [state.activeDocumentId]: id,
+            },
+          }
+        : {}),
+    }));
+  },
+
+  setConversationForDocument(documentId: string, id: string | null) {
+    set((state) => ({
+      conversationByDocumentId: {
+        ...state.conversationByDocumentId,
+        [documentId]: id,
+      },
+      activeConversationId: state.activeDocumentId === documentId ? id : state.activeConversationId,
+    }));
   },
 
   setAiMode(mode: AiMode) {

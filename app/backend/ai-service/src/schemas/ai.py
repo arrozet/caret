@@ -12,6 +12,7 @@ Naming convention:
 
 import uuid
 from datetime import datetime
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -122,6 +123,31 @@ class MessageListResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# ai_document_context
+# ---------------------------------------------------------------------------
+
+
+class DocumentContextPayload(BaseModel):
+    """Structured snapshot of the current document.
+
+    The payload is intentionally open-ended so the frontend can send editor-
+    aware metadata during the transition to structured document context.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    content_text: str | None = Field(
+        default=None,
+        max_length=64_000,
+        description="Plain-text snapshot of the document, when available.",
+    )
+    content_json: Any | None = Field(
+        default=None,
+        description="Structured JSON snapshot of the document, when available.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # ai_suggestions
 # ---------------------------------------------------------------------------
 
@@ -207,13 +233,14 @@ class StreamRequest(BaseModel):
     """
 
     message: str = Field(..., min_length=1, max_length=32_000, description="User prompt.")
-    document_context: str | None = Field(
-        default=None,
-        max_length=64_000,
-        description=(
-            "Plain-text snapshot of the current document, injected into the "
-            "system prompt so the AI can reference it."
-        ),
+    document_context: DocumentContextPayload | Annotated[str, Field(max_length=64_000)] | None = (
+        Field(
+            default=None,
+            description=(
+                "Structured snapshot of the current document or plain text for backward "
+                "compatibility. Structured payloads are preferred and normalized by the backend."
+            ),
+        )
     )
     model_id: str | None = Field(
         default=None,
@@ -267,6 +294,14 @@ class DocumentChangePayload(BaseModel):
     )
     original_text: str = Field(
         ..., description="The document text at the time the agent was invoked (for diffing)."
+    )
+    position_start: int | None = Field(
+        default=None,
+        description="Optional start position for selection-scoped edits.",
+    )
+    position_end: int | None = Field(
+        default=None,
+        description="Optional end position for selection-scoped edits.",
     )
 
 

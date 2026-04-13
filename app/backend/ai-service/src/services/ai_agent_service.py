@@ -13,11 +13,30 @@ SSE event format (NDJSON over text/event-stream):
   data: {"type": "error", "content": "<message>"}
 """
 
+import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator
+from typing import Any
 
-from pydantic_ai import Agent
+from pydantic import BaseModel
+from pydantic_ai import (
+    Agent,
+    AgentRunResultEvent,
+    FunctionToolCallEvent,
+    PartDeltaEvent,
+    PartStartEvent,
+    TextPartDelta,
+)
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    SystemPromptPart,
+    TextPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -59,6 +78,77 @@ Guidelines:
 - Respond in the same language as the user's message.
 - If document context is provided, ground your answer in it.
 """
+
+
+def _normalize_document_context(
+    document_context: BaseModel | dict[str, Any] | str | None,
+) -> str | None:
+    """Normalize structured or plain-text document context into agent-ready text."""
+    if document_context is None:
+        return None
+    if isinstance(document_context, str):
+        return document_context
+    if isinstance(document_context, BaseModel):
+        payload = document_context.model_dump(mode="json", exclude_none=True)
+        content_text = payload.get("content_text")
+        if isinstance(content_text, str) and content_text.strip():
+            return content_text
+        content_json = payload.get("content_json")
+        if content_json is not None:
+            return json.dumps(content_json, ensure_ascii=False)
+        selection = payload.get("selection")
+        if isinstance(selection, dict):
+            selected_text = selection.get("text")
+            if isinstance(selected_text, str) and selected_text.strip():
+                return selected_text
+        return json.dumps(payload, ensure_ascii=False)
+    content_text = document_context.get("content_text")
+    if isinstance(content_text, str) and content_text.strip():
+        return content_text
+    content_json = document_context.get("content_json")
+    if content_json is not None:
+        return json.dumps(content_json, ensure_ascii=False)
+    selection = document_context.get("selection")
+    if isinstance(selection, dict):
+        selected_text = selection.get("text")
+        if isinstance(selected_text, str) and selected_text.strip():
+            return selected_text
+    return json.dumps(document_context, ensure_ascii=False)
+
+
+def _build_message_history(history_messages: list) -> list[ModelMessage]:
+    """Convert persisted chat rows into structured PydanticAI message history."""
+    history: list[ModelMessage] = []
+    for message in history_messages:
+        if message.role == AiMessageRole.user:
+            history.append(
+                ModelRequest(
+                    parts=[UserPromptPart(content=message.content)],
+                    timestamp=message.created_at,
+                )
+            )
+        elif message.role == AiMessageRole.assistant:
+            history.append(
+                ModelResponse(
+                    parts=[TextPart(content=message.content)],
+                    timestamp=message.created_at,
+                )
+            )
+        elif message.role == AiMessageRole.system:
+            history.append(
+                ModelRequest(
+                    parts=[SystemPromptPart(content=message.content)],
+                    timestamp=message.created_at,
+                )
+            )
+        elif message.role == AiMessageRole.tool:
+            history.append(
+                ModelResponse(
+                    parts=[ToolReturnPart(tool_name="tool", content=message.content)],
+                    timestamp=message.created_at,
+                )
+            )
+    return history
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +407,7 @@ class AiAgentService:
         self,
         conversation_id: uuid.UUID,
         user_message: str,
-        document_context: str | None = None,
+        document_context: BaseModel | dict[str, Any] | str | None = None,
         model_id: str | None = None,
         document_id: uuid.UUID | None = None,
         agent_type: str | None = None,
@@ -349,7 +439,7 @@ class AiAgentService:
         Args:
             conversation_id: The conversation to append messages to.
             user_message: Text submitted by the user.
-            document_context: Optional plain-text document snapshot for context.
+            document_context: Optional structured or plain-text document snapshot for context.
             model_id: Optional LLM model slug to override the server default.
             document_id: Optional document UUID for RAG chunk retrieval.
             agent_type: Optional agent type; ``"general"`` activates the agentic
@@ -368,11 +458,22 @@ class AiAgentService:
 
         # 2. Build history for the agent's context window ----------------------
         history_messages = await self._msg_repo.list_for_conversation(conversation_id)
+        if (
+            history_messages
+            and history_messages[-1].role == AiMessageRole.user
+            and history_messages[-1].content == user_message
+        ):
+            history_messages = history_messages[:-1]
+        message_history = _build_message_history(history_messages)
+
+        normalized_document_context = _normalize_document_context(document_context)
 
         # Build the PydanticAI message list (system + history + new user msg)
         system_prompt = _SYSTEM_PROMPT
-        if document_context:
-            system_prompt += f"\n\n--- Current document context ---\n{document_context}\n---"
+        if normalized_document_context:
+            system_prompt += (
+                f"\n\n--- Current document context ---\n{normalized_document_context}\n---"
+            )
 
         # 2b. Optionally inject RAG context from document embeddings -----------
         # This runs only when a document_id is supplied.  Failure is silently
@@ -384,16 +485,6 @@ class AiAgentService:
             )
             if rag_context:
                 system_prompt += f"\n\n{rag_context}"
-
-        # Format history as a single string prompt (simplified for initial version)
-        # A full implementation would use pydantic_ai.messages for structured history
-        history_text = "\n".join(
-            f"{msg.role.value.upper()}: {msg.content}"
-            for msg in history_messages
-            if msg.role != AiMessageRole.system
-        )
-
-        full_prompt = f"{history_text}\nASSISTANT:"
 
         # 3. Build and run the agent with streaming ----------------------------
         try:
@@ -412,50 +503,78 @@ class AiAgentService:
                 build_general_agent,
             )
 
-            deps = GeneralAgentDeps(document_content=document_context)
+            selection_payload: dict[str, Any] | None = None
+            if isinstance(document_context, BaseModel):
+                selection_payload = document_context.model_dump(mode="json", exclude_none=True).get(
+                    "selection"
+                )
+            elif isinstance(document_context, dict):
+                raw_sel = document_context.get("selection")
+                selection_payload = raw_sel if isinstance(raw_sel, dict) else None
+
+            deps = GeneralAgentDeps(
+                document_content=normalized_document_context,
+                document_context=document_context,
+                selection=selection_payload,
+            )
             agent_instance = build_general_agent(model)
             fallback_proposed_texts: list[str] = []
 
             try:
-                async with agent_instance.run_stream(full_prompt, deps=deps) as result:
-                    async for delta in result.stream_text(delta=True):
+                async for event in agent_instance.run_stream_events(
+                    user_message,
+                    message_history=message_history,
+                    deps=deps,
+                ):
+                    if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                        initial_text = event.part.content
+                        if initial_text:
+                            full_text += initial_text
+                            token_count += len(initial_text.split())
+                            delta_chunk = StreamChunk(type="delta", content=initial_text)
+                            yield f"data: {delta_chunk.model_dump_json()}\n\n"
+                        continue
+
+                    if isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                        delta = event.delta.content_delta
                         if delta:
                             full_text += delta
                             token_count += len(delta.split())
                             delta_chunk = StreamChunk(type="delta", content=delta)
                             yield f"data: {delta_chunk.model_dump_json()}\n\n"
+                        continue
 
-                    from pydantic_ai.messages import ToolCallPart  # noqa: PLC0415
+                    if isinstance(event, FunctionToolCallEvent):
+                        tool_chunk = StreamChunk(
+                            type="tool_call",
+                            content="",
+                            tool_name=event.part.tool_name,
+                        )
+                        yield f"data: {tool_chunk.model_dump_json()}\n\n"
 
-                    for msg in result.all_messages():
-                        if hasattr(msg, "parts"):
-                            for part in msg.parts:
-                                if isinstance(part, ToolCallPart):
-                                    tool_chunk = StreamChunk(
-                                        type="tool_call",
-                                        content="",
-                                        tool_name=part.tool_name,
-                                    )
-                                    yield f"data: {tool_chunk.model_dump_json()}\n\n"
+                        if event.part.tool_name != "propose_document_replacement":
+                            continue
 
-                                    if part.tool_name == "propose_document_replacement":
-                                        args_dict: dict[str, object] = {}
-                                        try:
-                                            args_dict = part.args_as_dict()
-                                        except Exception:
-                                            args = getattr(part, "args", None)
-                                            if isinstance(args, dict):
-                                                args_dict = args
+                        args_dict: dict[str, object] = {}
+                        try:
+                            args_dict = event.part.args_as_dict()
+                        except Exception:
+                            args = getattr(event.part, "args", None)
+                            if isinstance(args, dict):
+                                args_dict = args
 
-                                        proposed_text = args_dict.get("proposed_text")
-                                        replacement_text = args_dict.get("replacement_text")
-                                        candidate_text = proposed_text or replacement_text
+                        proposed_text = args_dict.get("proposed_text")
+                        replacement_text = args_dict.get("replacement_text")
+                        candidate_text = proposed_text or replacement_text
 
-                                        if (
-                                            isinstance(candidate_text, str)
-                                            and candidate_text.strip()
-                                        ):
-                                            fallback_proposed_texts.append(candidate_text)
+                        if isinstance(candidate_text, str) and candidate_text.strip():
+                            fallback_proposed_texts.append(candidate_text)
+                        continue
+
+                    if isinstance(event, AgentRunResultEvent) and isinstance(
+                        event.result.output, str
+                    ):
+                        full_text = event.result.output
 
             except Exception as exc:
                 logger.exception("General agent streaming error: %s", exc)
@@ -476,7 +595,7 @@ class AiAgentService:
                         {
                             "operation": "replace_full",
                             "proposed_text": proposed_text,
-                            "original_text": document_context or "",
+                            "original_text": normalized_document_context or "",
                         }
                     )
 
@@ -485,6 +604,8 @@ class AiAgentService:
                     operation=change["operation"],
                     proposed_text=change["proposed_text"],
                     original_text=change["original_text"],
+                    position_start=change.get("position_start"),
+                    position_end=change.get("position_end"),
                 )
                 change_chunk = StreamChunk(
                     type="document_change",
@@ -501,7 +622,10 @@ class AiAgentService:
             )
 
             try:
-                async with agent.run_stream(full_prompt) as result:
+                async with agent.run_stream(
+                    user_message,
+                    message_history=message_history,
+                ) as result:
                     async for delta in result.stream_text(delta=True):
                         if delta:
                             full_text += delta
