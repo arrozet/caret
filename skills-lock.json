@@ -36,6 +36,11 @@
       "sourceType": "github",
       "computedHash": "639f5368be13c18a246661758ab1df4ffae9cd9123f6dd4bd50209f20ebdce16"
     },
+    "building-pydantic-ai-agents": {
+      "source": "pydantic/skills",
+      "sourceType": "github",
+      "computedHash": "8f2e7d4ad587bb9ff6d41391aecff6300508020dcb4f37ed2acb00d0cf5a44f9"
+    },
     "clarify": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
@@ -86,6 +91,11 @@
       "sourceType": "github",
       "computedHash": "47273e366f900b19ae795460bc7f565bccd8c6c40659a33f24630fa29c7f2251"
     },
+    "instrumentation": {
+      "source": "pydantic/skills",
+      "sourceType": "github",
+      "computedHash": "4279f68d941fcfe1a8ec72a406a2345d8b271b7eeb1d0bf6dcf4054ab2e779af"
+    },
     "normalize": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
@@ -111,15 +121,15 @@
       "sourceType": "github",
       "computedHash": "9e0e29b7919bacfd2d0caae0f841fa53ae3d7b7427d27f4fdbacc76643d7d138"
     },
-    "polish": {
-      "source": "pbakaus/impeccable",
-      "sourceType": "github",
-      "computedHash": "8c5a862f8eef92a12b5e38a81e10f1c0998adf6559beb5b9b91e7bbbe54e3fef"
-    },
     "playwright-dev": {
       "source": "microsoft/playwright",
       "sourceType": "github",
       "computedHash": "f2ca97eb35510a6932e66c17381398f0dd6028cdbc8c09d16db9d3e6de1b93db"
+    },
+    "polish": {
+      "source": "pbakaus/impeccable",
+      "sourceType": "github",
+      "computedHash": "8c5a862f8eef92a12b5e38a81e10f1c0998adf6559beb5b9b91e7bbbe54e3fef"
     },
     "quieter": {
       "source": "pbakaus/impeccable",
@@ -135,6 +145,11 @@
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "e95d2bb071e0d1877d291a421ce93165e3c75ebc010a46e8070eab53a9f90fd9"
+    },
+    "tiptap": {
+      "source": "ueberdosis/tiptap",
+      "sourceType": "github",
+      "computedHash": "60765ba8cb8a71503e6f14bb3a7a6ee77b34b1d98cd04b60b1bfcbb7c41ba9c7"
     },
     "typeset": {
       "source": "pbakaus/impeccable",
