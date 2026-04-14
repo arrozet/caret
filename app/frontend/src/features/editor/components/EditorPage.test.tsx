@@ -16,6 +16,16 @@ const mock_update_tab_title = vi.fn();
 const mock_index_document_embeddings = vi.fn();
 const mock_mutate_async = vi.fn();
 const mock_invite_mutate_async = vi.fn();
+const mock_convert_ai_content_to_tiptap_json = vi.fn((content: string) => ({
+  type: "doc",
+  content: [
+    {
+      type: content.includes("# ") ? "heading" : "paragraph",
+      attrs: content.includes("# ") ? { level: 1 } : undefined,
+      content: [{ type: "text", text: content.includes("# ") ? "Title" : content }],
+    },
+  ],
+}));
 const mock_replace_collaboration_document_content = vi.fn(
   (_ydoc: unknown, content: JSONContent) => {
     current_json = content;
@@ -237,13 +247,21 @@ vi.mock("../hooks/useGhostText", () => ({
 }));
 
 vi.mock("../../ai-assistant/api/aiApi", () => ({
-  indexDocumentEmbeddings: (...args: unknown[]) => mock_index_document_embeddings(...args),
+  indexDocumentEmbeddings: (...args: [unknown, ...unknown[]]) =>
+    mock_index_document_embeddings(...args),
 }));
 
-vi.mock("../utils", () => ({
-  replace_collaboration_document_content: (...args: unknown[]) =>
-    mock_replace_collaboration_document_content(...args),
-}));
+vi.mock("../utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils")>();
+
+  return {
+    ...actual,
+    convert_ai_content_to_tiptap_json: (...args: [string]) =>
+      mock_convert_ai_content_to_tiptap_json(...args),
+    replace_collaboration_document_content: (...args: [unknown, JSONContent]) =>
+      mock_replace_collaboration_document_content(...args),
+  };
+});
 
 vi.mock("../../ai-assistant", () => ({
   ChatPanel: (props: Record<string, unknown>) => {
@@ -292,6 +310,7 @@ describe("EditorPage", () => {
     should_report_editor_ready = true;
     current_collaboration_document = { id: "collab-doc" };
     mock_set_content.mockClear();
+    mock_convert_ai_content_to_tiptap_json.mockClear();
     mock_replace_collaboration_document_content.mockClear();
 
     mock_mutate_async.mockResolvedValue({
@@ -343,25 +362,23 @@ describe("EditorPage", () => {
     expect(last_call?.content_text).toBe("Hola.");
   });
 
-  it("accept converts multi-line proposed text into paragraph nodes", () => {
+  it("accept converts AI content through the schema-aware helper", () => {
     current_pending_change = {
       operation: "replace_full",
       original_text: "Texto original",
-      proposed_text: "Linea uno\nLinea dos\n\nLinea tres",
+      proposed_text: "# Title\n\n**Bold** and [link](https://example.com)",
     };
 
     render(<EditorPage />);
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
 
+    expect(mock_convert_ai_content_to_tiptap_json).toHaveBeenCalledWith(
+      "# Title\n\n**Bold** and [link](https://example.com)",
+    );
     expect(mock_replace_collaboration_document_content).toHaveBeenCalledTimes(1);
     const content = mock_replace_collaboration_document_content.mock.calls[0][1] as JSONContent;
     expect(content.type).toBe("doc");
-    expect(content.content).toHaveLength(4);
-    expect(content.content?.[0]).toEqual({
-      type: "paragraph",
-      content: [{ type: "text", text: "Linea uno" }],
-    });
-    expect(content.content?.[2]).toEqual({ type: "paragraph" });
+    expect(content.content?.[0]).toMatchObject({ type: "heading", attrs: { level: 1 } });
   });
 
   it("accept falls back to editor setContent when collaboration is unavailable", () => {

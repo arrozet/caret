@@ -12,3 +12,5 @@ export {
   is_collaboration_document_empty,
   replace_collaboration_document_content,
 } from "./editorExtensions";
+
+export { convert_ai_content_to_tiptap_json } from "./aiContentConverter";

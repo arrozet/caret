@@ -11,7 +11,10 @@ import { useInviteDocumentCollaborator } from "../hooks/useInviteDocumentCollabo
 import { useFocusMode } from "../../../hooks/useFocusMode";
 import { useTabsStore, useAiStore, useAuthStore } from "../../../stores";
 import { useGhostText } from "../hooks/useGhostText";
-import { replace_collaboration_document_content } from "../utils";
+import {
+  convert_ai_content_to_tiptap_json,
+  replace_collaboration_document_content,
+} from "../utils";
 import { indexDocumentEmbeddings } from "../../ai-assistant/api/aiApi";
 import type { DocumentChangePayload, DocumentContextSnapshot } from "../../ai-assistant/api/aiApi";
 import {
@@ -78,24 +81,6 @@ function compute_line_diff(original: string, proposed: string): DiffLine[] {
   }
 
   return result;
-}
-
-/**
- * Convert plain text into Tiptap-compatible JSON with proper paragraph structure.
- * Each line becomes a paragraph node; empty lines become empty paragraphs.
- */
-function plain_text_to_tiptap_json(text: string): JSONContent {
-  const lines = text.split("\n");
-  const content: JSONContent[] = lines.map((line) =>
-    line.trim()
-      ? { type: "paragraph", content: [{ type: "text", text: line }] }
-      : { type: "paragraph" },
-  );
-
-  return {
-    type: "doc",
-    content: content.length > 0 ? content : [{ type: "paragraph" }],
-  };
 }
 
 interface DocumentChangeReviewOverlayProps {
@@ -495,7 +480,7 @@ export function EditorPage() {
 
     if (pending_change !== null && (active_editor || collaboration_document !== null)) {
       const proposed_text = pending_change.proposed_text.replace(/\r\n/g, "\n").trim();
-      const proposed_json = plain_text_to_tiptap_json(proposed_text);
+      const proposed_json = convert_ai_content_to_tiptap_json(proposed_text);
 
       debug_log("handle_accept_pending_change.applying", {
         text_length: proposed_text.length,
