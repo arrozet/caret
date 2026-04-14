@@ -13,6 +13,7 @@ import logging
 import uuid
 
 import httpx
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
@@ -79,6 +80,8 @@ class EmbeddingService:
         chunks = _split_into_chunks(content)
         if not chunks:
             return 0
+
+        await self._lock_document_indexing(document_id)
 
         texts = [text for _, text in chunks]
         vectors = await self._embed_texts(texts)
@@ -186,6 +189,14 @@ class EmbeddingService:
         # OpenAI returns {"data": [{"index": i, "embedding": [...]}]}
         sorted_items = sorted(data["data"], key=lambda x: x["index"])
         return [item["embedding"] for item in sorted_items]
+
+    async def _lock_document_indexing(self, document_id: uuid.UUID) -> None:
+        """Serialize embedding refreshes for the same document inside one transaction."""
+        lock_key = document_id.int % 2_147_483_647
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_key)"),
+            {"lock_key": lock_key},
+        )
 
 
 # ---------------------------------------------------------------------------
