@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   X,
   Send,
@@ -63,13 +65,130 @@ const FALLBACK_MODELS: ModelInfo[] = [
 interface MessageBubbleProps {
   /** The message to render. */
   message: ChatMessage;
+  /** Whether the panel is currently in Agent mode. */
+  is_agent_mode: boolean;
+  /** Translated label for the thought block. */
+  think_label: string;
+}
+
+/**
+ * Props for a markdown-rendered message body.
+ */
+interface MarkdownContentProps {
+  /** Markdown source to render. */
+  content: string;
+  /** Additional wrapper classes. */
+  className?: string;
+}
+
+/**
+ * Renders markdown with the panel's visual styling.
+ */
+function MarkdownContent({ content, className }: MarkdownContentProps) {
+  return (
+    <div className={className}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        skipHtml
+        components={{
+          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+          em: ({ children }) => <em className="italic">{children}</em>,
+          a: ({ children, href }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent-main underline decoration-current underline-offset-2 hover:opacity-80"
+            >
+              {children}
+            </a>
+          ),
+          ul: ({ children }) => (
+            <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>
+          ),
+          li: ({ children }) => <li className="break-words">{children}</li>,
+          blockquote: ({ children }) => (
+            <blockquote className="border-l-2 border-border-subtle/80 pl-3 italic text-text-secondary">
+              {children}
+            </blockquote>
+          ),
+          code: ({ children, className }) => {
+            const is_block_code = className?.includes("language-");
+
+            if (is_block_code) {
+              return <code className="font-mono text-ui-xs">{children}</code>;
+            }
+
+            return (
+              <code className="rounded bg-ai-highlight px-1 py-0.5 font-mono text-[0.92em]">
+                {children}
+              </code>
+            );
+          },
+          pre: ({ children }) => (
+            <pre className="overflow-x-auto rounded-lg border border-border-subtle bg-ai-highlight p-3 font-mono text-ui-xs leading-relaxed">
+              {children}
+            </pre>
+          ),
+          hr: () => <hr className="my-3 border-border-subtle" />,
+          h1: ({ children }) => <h1 className="mb-2 text-ui-base font-semibold">{children}</h1>,
+          h2: ({ children }) => <h2 className="mb-2 text-ui-sm font-semibold">{children}</h2>,
+          h3: ({ children }) => <h3 className="mb-1.5 text-ui-sm font-medium">{children}</h3>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+/**
+ * Collapsible block that displays model reasoning / thought content.
+ */
+function ThinkBlock({
+  content,
+  label,
+  default_open = false,
+}: {
+  content: string;
+  label: string;
+  default_open?: boolean;
+}) {
+  const [is_open, set_is_open] = useState(default_open);
+
+  useEffect(() => {
+    set_is_open(default_open);
+  }, [default_open]);
+
+  return (
+    <details
+      open={is_open}
+      onToggle={(event) => set_is_open(event.currentTarget.open)}
+      className="rounded-xl border border-border-subtle/80 bg-ai-highlight/60 px-3 py-2 text-text-secondary"
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-ui-xs font-medium text-text-secondary transition-colors hover:text-text-primary [&::-webkit-details-marker]:hidden">
+        <ChevronsUpDown className="h-3 w-3 shrink-0" aria-hidden="true" strokeWidth={2} />
+        <span>{label}</span>
+      </summary>
+      <div className="mt-2 text-ui-xs leading-relaxed">
+        <MarkdownContent
+          content={content}
+          className="break-words text-text-secondary [&_a]:text-text-secondary"
+        />
+      </div>
+    </details>
+  );
 }
 
 /**
  * Renders a single chat message bubble.
  * User messages are right-aligned; assistant messages are left-aligned.
  */
-function MessageBubble({ message }: MessageBubbleProps) {
+function MessageBubble({ message, is_agent_mode, think_label }: MessageBubbleProps) {
   const is_user = message.role === "user";
 
   // Parse <think>...</think> if present (common in models like DeepSeek-R1)
@@ -96,22 +215,31 @@ function MessageBubble({ message }: MessageBubbleProps) {
           .filter(Boolean)
           .join(" ")}
       >
-        {/* Render AI thoughts if present */}
         {think_content && (
-          <div className="pl-3 py-0.5 border-l-[3px] border-border-subtle/70 text-text-secondary/80 text-ui-xs">
-            {think_content || "Pensando..."}
-          </div>
+          <ThinkBlock
+            content={think_content || "Pensando..."}
+            label={think_label}
+            default_open={is_agent_mode}
+          />
         )}
 
-        {/* Render main content */}
-        <div className="whitespace-pre-wrap break-words">
-          {main_content}
+        <div className={is_user ? "whitespace-pre-wrap break-words" : "break-words"}>
+          {is_user ? (
+            main_content
+          ) : (
+            <MarkdownContent
+              content={main_content || ""}
+              className="break-words text-text-primary"
+            />
+          )}
           {/* Animated typing cursor */}
           {is_animating && (
-            <span
-              className="ml-1.5 inline-block h-2 w-2 rounded-full bg-current opacity-60 animate-[pulse_1s_cubic-bezier(0.4,0,0.6,1)_infinite] align-middle shadow-sm"
-              aria-hidden="true"
-            />
+            <div className="mt-1">
+              <span
+                className="ml-1.5 inline-block h-2 w-2 rounded-full bg-current opacity-60 animate-[pulse_1s_cubic-bezier(0.4,0,0.6,1)_infinite] align-middle shadow-sm"
+                aria-hidden="true"
+              />
+            </div>
           )}
         </div>
       </div>
@@ -471,6 +599,8 @@ export function ChatPanel({
   }, [resolve_pending_change_token, clear_pending_change]);
 
   const has_messages = messages.length > 0;
+  const is_agent_mode = aiMode === "agent";
+  const think_label = t("thought_briefly");
 
   return (
     <aside
@@ -604,7 +734,12 @@ export function ChatPanel({
         {has_messages && (
           <div className="flex flex-col">
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                is_agent_mode={is_agent_mode}
+                think_label={think_label}
+              />
             ))}
             {/* Tool call trace — shown in agent mode during/after an agentic run */}
             {aiMode === "agent" && tool_calls.length > 0 && (

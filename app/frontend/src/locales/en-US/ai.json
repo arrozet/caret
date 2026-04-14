@@ -9,6 +9,7 @@
   "messages_region": "AI conversation messages",
   "empty_state": "Ask anything about your document.",
   "keyboard_hint": "Enter to send · Shift+Enter for newline",
+  "thought_briefly": "Thought briefly",
   "model_selector": "Model",
   "history_selector": "Recent",
   "history_search_placeholder": "Search conversations",

@@ -9,6 +9,7 @@
   "messages_region": "Mensajes de la conversación de IA",
   "empty_state": "Pregunta lo que quieras sobre tu documento.",
   "keyboard_hint": "Enter para enviar · Shift+Enter para nueva línea",
+  "thought_briefly": "Pensamiento breve",
   "model_selector": "Modelo",
   "history_selector": "Recientes",
   "history_search_placeholder": "Buscar conversaciones",
