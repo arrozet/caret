@@ -1077,7 +1077,6 @@ class TestBuildModel:
         """_build_model should raise RuntimeError when no API keys are set."""
         # Arrange
         with patch("services.ai_agent_service.settings") as mock_settings:
-            mock_settings.xai_api_key = ""
             mock_settings.openrouter_api_key = ""
             mock_settings.openai_api_key = ""
             mock_settings.anthropic_api_key = ""
@@ -1087,18 +1086,17 @@ class TestBuildModel:
             with pytest.raises(RuntimeError, match="No LLM API key configured"):
                 _build_model()
 
-    def test_build_model_raises_for_grok_without_xai_key(self) -> None:
-        """_build_model should raise RuntimeError for grok- model when XAI_API_KEY is missing."""
+    def test_build_model_raises_for_catalog_model_without_openrouter_key(self) -> None:
+        """_build_model raises if a catalog model is requested without OPENROUTER_API_KEY."""
         # Arrange
         with patch("services.ai_agent_service.settings") as mock_settings:
-            mock_settings.xai_api_key = ""
             mock_settings.openrouter_api_key = ""
             mock_settings.openai_api_key = ""
             mock_settings.anthropic_api_key = ""
 
             # Act / Assert
-            with pytest.raises(RuntimeError, match="XAI_API_KEY"):
-                _build_model("grok-4-fast")
+            with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+                _build_model("x-ai/grok-4.1-fast")
 
     def test_build_model_prefers_openrouter_when_key_set(self) -> None:
         """_build_model should select OpenRouter when OPENROUTER_API_KEY is configured."""
@@ -1108,7 +1106,6 @@ class TestBuildModel:
             patch("services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
             patch("services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
         ):
-            mock_settings.xai_api_key = ""
             mock_settings.openrouter_api_key = "or-key-123"
             mock_settings.openai_api_key = ""
             mock_settings.anthropic_api_key = ""
@@ -1129,14 +1126,13 @@ class TestBuildModel:
     def test_build_model_uses_custom_model_id_on_openrouter(self) -> None:
         """_build_model should use the provided model_id when OPENROUTER_API_KEY is set."""
         # Arrange
-        custom_model_id = "qwen/qwen3-coder:free"
+        custom_model_id = "google/gemma-4-31b-it:free"
 
         with (
             patch("services.ai_agent_service.settings") as mock_settings,
             patch("services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
             patch("services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
         ):
-            mock_settings.xai_api_key = ""
             mock_settings.openrouter_api_key = "or-key-123"
             mock_settings.openai_api_key = ""
             mock_settings.anthropic_api_key = ""
@@ -1158,7 +1154,6 @@ class TestBuildModel:
             patch("services.ai_agent_service.OpenAIProvider") as mock_provider_cls,
             patch("services.ai_agent_service.OpenAIChatModel") as mock_model_cls,
         ):
-            mock_settings.xai_api_key = ""
             mock_settings.openrouter_api_key = ""
             mock_settings.openai_api_key = "sk-openai-key"
             mock_settings.anthropic_api_key = ""

@@ -196,7 +196,9 @@ class ModelInfo(BaseModel):
     provider: str = Field(..., description="Upstream provider name.")
     gateway: str = Field(
         ...,
-        description="Which upstream API endpoint handles this model: 'openrouter' or 'xai'.",
+        description=(
+            "Which upstream API endpoint handles this model (catalog models use 'openrouter')."
+        ),
     )
     is_free: bool = Field(..., description="True when the model has no API cost.")
     is_stealth: bool = Field(

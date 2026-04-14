@@ -129,8 +129,8 @@ export interface ModelInfo {
   name: string;
   /** Upstream provider name. */
   provider: string;
-  /** Which upstream API endpoint handles this model: 'openrouter' | 'xai'. */
-  gateway: "openrouter" | "xai";
+  /** Which upstream API endpoint handles this model (catalog uses OpenRouter). */
+  gateway: "openrouter";
   /** True when the model has no API cost. */
   is_free: boolean;
   /**

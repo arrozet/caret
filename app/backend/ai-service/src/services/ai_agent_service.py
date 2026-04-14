@@ -43,7 +43,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from core.models_catalog import DEFAULT_MODEL_ID, MODELS_BY_ID
+from core.models_catalog import MODELS_BY_ID
 from models.ai import AiMessageRole
 from repositories.ai_repository import (
     AiConversationRepository,
@@ -169,29 +169,20 @@ def _build_model(model_id: str | None = None) -> OpenAIChatModel | AnthropicMode
       2. OpenAI      if OPENAI_API_KEY is set
       3. Anthropic   if ANTHROPIC_API_KEY is set
 
+    All curated catalog models use the OpenRouter gateway.
+
     Args:
         model_id: Optional model slug from the catalog.  When omitted the
-                  server default (OPENROUTER_MODEL / DEFAULT_MODEL_ID) is used.
+                  server uses ``settings.openrouter_model`` (``OPENROUTER_MODEL``).
 
     Raises:
         RuntimeError: If the required API key for the requested model is missing,
                       or if no API key at all is configured.
     """
-    entry = MODELS_BY_ID.get(model_id or DEFAULT_MODEL_ID) if model_id else None
+    entry = MODELS_BY_ID.get(model_id or settings.openrouter_model) if model_id else None
 
     # Route to the gateway declared in the catalog entry.
     if entry is not None:
-        if entry.gateway == "xai":
-            if not settings.xai_api_key:
-                raise RuntimeError(
-                    f"XAI_API_KEY is required for model '{entry.name}' but is not configured."
-                )
-            provider = OpenAIProvider(
-                base_url="https://api.x.ai/v1",
-                api_key=settings.xai_api_key,
-            )
-            return OpenAIChatModel(entry.id, provider=provider)
-
         if entry.gateway == "openrouter":
             if not settings.openrouter_api_key:
                 raise RuntimeError(
@@ -218,8 +209,7 @@ def _build_model(model_id: str | None = None) -> OpenAIChatModel | AnthropicMode
     if settings.anthropic_api_key:
         return AnthropicModel("claude-3-5-sonnet-latest")
     raise RuntimeError(
-        "No LLM API key configured. "
-        "Set OPENROUTER_API_KEY, OPENAI_API_KEY, XAI_API_KEY or ANTHROPIC_API_KEY."
+        "No LLM API key configured. Set OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY."
     )
 
 

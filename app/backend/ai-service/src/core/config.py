@@ -20,9 +20,9 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     openrouter_api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
-    xai_api_key: str = Field(default="", validation_alias="XAI_API_KEY")
+    # Single source of truth for default LLM when the client omits model_id or for GET /ai/models.
     openrouter_model: str = Field(
-        default="grok-4-1-fast-reasoning",
+        default="x-ai/grok-4.1-fast",
         validation_alias="OPENROUTER_MODEL",
     )
 

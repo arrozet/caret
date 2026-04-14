@@ -2,17 +2,13 @@
 Unit tests for the models catalog module.
 
 Verifies that the static curated model list is correctly defined and that
-the MODELS_BY_ID index and DEFAULT_MODEL_ID are consistent with the list.
+the MODELS_BY_ID index matches the list, and that ``OPENROUTER_MODEL`` points at a catalog entry.
 """
 
 import pytest
 
-from core.models_catalog import (
-    DEFAULT_MODEL_ID,
-    MODELS_BY_ID,
-    OPENROUTER_MODELS,
-    ModelEntry,
-)
+from core.config import settings
+from core.models_catalog import MODELS_BY_ID, OPENROUTER_MODELS, ModelEntry
 
 
 class TestModelEntry:
@@ -146,17 +142,13 @@ class TestModelsByIdIndex:
 
 
 class TestDefaultModelId:
-    """Validate DEFAULT_MODEL_ID consistency."""
+    """Validate configured default model id is present in the catalog."""
 
-    def test_default_model_id_is_in_list(self) -> None:
-        """DEFAULT_MODEL_ID must correspond to an entry in OPENROUTER_MODELS."""
-        # Arrange
+    def test_openrouter_model_is_in_list(self) -> None:
+        """OPENROUTER_MODEL must correspond to an entry in OPENROUTER_MODELS."""
         all_ids = {m.id for m in OPENROUTER_MODELS}
+        assert settings.openrouter_model in all_ids
 
-        # Act / Assert
-        assert DEFAULT_MODEL_ID in all_ids
-
-    def test_default_model_id_in_models_by_id(self) -> None:
-        """DEFAULT_MODEL_ID must be a key in MODELS_BY_ID."""
-        # Arrange / Act / Assert
-        assert DEFAULT_MODEL_ID in MODELS_BY_ID
+    def test_openrouter_model_in_models_by_id(self) -> None:
+        """OPENROUTER_MODEL must be a key in MODELS_BY_ID."""
+        assert settings.openrouter_model in MODELS_BY_ID

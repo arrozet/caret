@@ -18,26 +18,38 @@ import type { ChatMessage } from "../hooks/useAiStream";
 import { deleteConversation, getModels, listConversations } from "../api/aiApi";
 import type { DocumentContextSnapshot, ModelInfo } from "../api/aiApi";
 
+/** Offline / error fallback only — order is arbitrary; server `default_model_id` wins after fetch. */
 const FALLBACK_MODELS: ModelInfo[] = [
   {
-    id: "grok-4-1-fast-reasoning",
-    name: "Grok 4.1 Fast Reasoning",
+    id: "google/gemma-4-31b-it:free",
+    name: "Gemma 4 31B",
+    provider: "Google",
+    gateway: "openrouter",
+    is_free: true,
+    is_stealth: false,
+    context_window: 262_144,
+    description: "Instruction-tuned Gemma with native function calling and long context.",
+  },
+  {
+    id: "z-ai/glm-4.5-air:free",
+    name: "GLM-4.5 Air",
+    provider: "Z.AI",
+    gateway: "openrouter",
+    is_free: true,
+    is_stealth: false,
+    context_window: 128_000,
+    description: "Lightweight, fast general-purpose model from Z.AI.",
+  },
+  {
+    id: "x-ai/grok-4.1-fast",
+    name: "Grok 4.1 Fast",
     provider: "xAI",
-    gateway: "xai",
+    gateway: "openrouter",
     is_free: false,
     is_stealth: false,
     context_window: 2_000_000,
-    description: "Reasoning-enabled Grok model optimised for agentic tasks.",
-  },
-  {
-    id: "openrouter/healer-alpha",
-    name: "Healer Alpha",
-    provider: "OpenRouter",
-    gateway: "openrouter",
-    is_free: true,
-    is_stealth: true,
-    context_window: 262_144,
-    description: "Frontier omni-modal model with strong general capabilities.",
+    description:
+      "Agentic tool-calling model for support, research, and long context (via OpenRouter).",
   },
 ];
 
@@ -244,38 +256,33 @@ export function ChatPanel({
   const historyPanelRef = useRef<HTMLDivElement>(null);
   const modelPanelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!selectedModelId) {
-      setSelectedModelId("grok-4-1-fast-reasoning");
-    }
-  }, [selectedModelId, setSelectedModelId]);
-
-  // Fetch available models on mount and pre-select the server default.
+  // Fetch catalog; `default_model_id` comes from server OPENROUTER_MODEL (single backend source of truth).
   useEffect(() => {
     getModels()
       .then((res) => {
         setModels(res.models);
-        const fallbackDefaultId =
-          res.models.find((model) => model.id === "grok-4-1-fast-reasoning")?.id ??
-          res.models[0]?.id;
-        const defaultId = res.default_model_id ?? fallbackDefaultId;
+        const defaultId = res.default_model_id ?? res.models[0]?.id;
 
         if (!defaultId) {
           return;
         }
 
-        // If current selection is missing from the catalog (e.g. stale store),
-        // force it back to a valid option so the selector is always usable.
         const isCurrentSelectionValid =
           selectedModelId !== undefined && res.models.some((model) => model.id === selectedModelId);
 
-        if (!isCurrentSelectionValid) {
+        if (selectedModelId === undefined || !isCurrentSelectionValid) {
           setSelectedModelId(defaultId);
         }
       })
       .catch(() => {
-        // Keep fallback selector options available when catalog fetch fails.
-        setModels([]);
+        setModels(FALLBACK_MODELS);
+        const fallbackId = FALLBACK_MODELS[0]?.id;
+        if (
+          fallbackId &&
+          (selectedModelId === undefined || !FALLBACK_MODELS.some((m) => m.id === selectedModelId))
+        ) {
+          setSelectedModelId(fallbackId);
+        }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

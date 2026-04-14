@@ -93,11 +93,11 @@ class TestStreamRequestDocumentId:
         req = StreamRequest(
             message="Summarise this.",
             document_context="Some document text.",
-            model_id="qwen/qwen3-coder:free",
+            model_id="google/gemma-4-31b-it:free",
             document_id=doc_id,
         )
         assert req.document_id == doc_id
-        assert req.model_id == "qwen/qwen3-coder:free"
+        assert req.model_id == "google/gemma-4-31b-it:free"
         assert req.document_context == "Some document text."
 
     def test_stream_request_without_document_id_still_valid(self) -> None:

@@ -20,8 +20,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import AuthUser, get_current_user
+from core.config import settings
 from core.dependencies import get_db_session
-from core.models_catalog import DEFAULT_MODEL_ID, OPENROUTER_MODELS, ModelEntry
+from core.models_catalog import OPENROUTER_MODELS, ModelEntry
 from schemas.ai import (
     ConversationCreate,
     ConversationListByDocumentResponse,
@@ -88,7 +89,7 @@ async def list_models() -> ModelsResponse:
 
     return ModelsResponse(
         models=[_to_schema(m) for m in OPENROUTER_MODELS],
-        default_model_id=DEFAULT_MODEL_ID,
+        default_model_id=settings.openrouter_model,
     )
 
 

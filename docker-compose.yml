@@ -104,8 +104,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      XAI_API_KEY: ${XAI_API_KEY:-}
-      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openrouter/healer-alpha}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-x-ai/grok-4.1-fast}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
