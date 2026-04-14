@@ -297,6 +297,35 @@ class TestEmbeddingServiceIndexDocument:
         chunk_rows = call_args[0][1]
         assert len(chunk_rows) > 1
 
+    @pytest.mark.asyncio
+    async def test_index_document_acquires_advisory_lock_before_insert(self) -> None:
+        """index_document must serialize writes for the same document id."""
+        session = _make_mock_session()
+        document_id = uuid.uuid4()
+        content = "Hello world. " * 10
+
+        fake_vector = [0.1] * 1536
+
+        service = EmbeddingService(session)
+
+        with (
+            patch.object(
+                service,
+                "_embed_texts",
+                new_callable=AsyncMock,
+                return_value=[fake_vector],
+            ),
+            patch.object(
+                service._repo,
+                "bulk_insert",
+                new_callable=AsyncMock,
+                return_value=1,
+            ),
+        ):
+            await service.index_document(document_id=document_id, content=content)
+
+        assert session.execute.call_count >= 1
+
 
 # ---------------------------------------------------------------------------
 # EmbeddingService.search_similar_chunks

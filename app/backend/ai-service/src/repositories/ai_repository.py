@@ -382,7 +382,6 @@ class DocumentEmbeddingRepository:
         Returns:
             Number of chunks inserted.
         """
-        # Delete existing chunks for idempotent re-indexing
         await self.delete_for_document(document_id)
 
         rows = [

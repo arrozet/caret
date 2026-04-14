@@ -5,6 +5,7 @@ import FontFamily from "@tiptap/extension-font-family";
 import Highlight from "@tiptap/extension-highlight";
 import { Image } from "@tiptap/extension-image";
 import { Link } from "@tiptap/extension-link";
+import { Markdown } from "@tiptap/markdown";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Table } from "@tiptap/extension-table";
 import { TableCell } from "@tiptap/extension-table-cell";
@@ -60,6 +61,11 @@ export function create_document_schema_extensions() {
       openOnClick: false,
       autolink: true,
     }),
+    Markdown.configure({
+      markedOptions: {
+        gfm: true,
+      },
+    }),
     Image,
     TaskList,
     TaskItem.configure({
@@ -111,6 +117,11 @@ export function create_editor_extensions(params: {
     Link.configure({
       openOnClick: false,
       autolink: true,
+    }),
+    Markdown.configure({
+      markedOptions: {
+        gfm: true,
+      },
     }),
     Image,
     TaskList,

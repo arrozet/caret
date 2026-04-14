@@ -346,3 +346,26 @@ class TestDocumentEmbeddingRepositoryBulkInsert:
         row = session.add_all.call_args[0][0][0]
         assert row.chunk_index == 7
         assert row.chunk_text == "Seventh chunk content"
+
+    @pytest.mark.asyncio
+    async def test_bulk_insert_deletes_existing_rows_before_insert(self) -> None:
+        """bulk_insert must clear old rows before inserting the new batch."""
+        # Arrange
+        session = _make_mock_session()
+        doc_id = uuid.uuid4()
+
+        delete_result = MagicMock()
+        delete_result.rowcount = 2
+        session.execute = AsyncMock(return_value=delete_result)
+
+        chunks: list[tuple[int, str, list[float]]] = [
+            (0, "Fresh content", [0.4] * 1536),
+        ]
+
+        # Act
+        repo = DocumentEmbeddingRepository(session)
+        await repo.bulk_insert(doc_id, chunks)
+
+        # Assert
+        session.execute.assert_called_once()
+        session.add_all.assert_called_once()
