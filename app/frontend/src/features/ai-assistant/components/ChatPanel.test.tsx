@@ -1,21 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ChatPanel } from "./ChatPanel";
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
-
-/**
- * Mock react-i18next so component text is predictable in tests.
- * Returns the key path as-is (e.g. "panel_title" → "panel_title").
- */
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: "en-US" },
-  }),
-}));
 
 /**
  * Mock the useAiStream hook with a controllable implementation.
@@ -41,6 +29,7 @@ let mock_messages: Array<{
 }> = [];
 let mock_is_loading = false;
 let mock_error: string | null = null;
+let mock_ai_mode: "ask" | "agent" = "ask";
 
 vi.mock("../hooks/useAiStream", () => ({
   useAiStream: () => ({
@@ -73,13 +62,28 @@ vi.mock("../../../stores/aiStore", () => ({
   useAiStore: () => ({
     isPanelOpen: true,
     activeConversationId: null,
-    aiMode: "ask",
+    aiMode: mock_ai_mode,
     selectedAgentType: "general",
     selectedModelId: undefined,
     closePanel: mock_close_panel,
     setConversation: mock_set_conversation,
     setAiMode: vi.fn(),
     setSelectedModelId: vi.fn(),
+  }),
+}));
+
+vi.mock("../../../lib/supabase", () => ({
+  supabase_client: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+    },
+  },
+}));
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: "en-US" },
   }),
 }));
 
@@ -96,6 +100,9 @@ vi.mock("../api/aiApi", () => ({
   getModels: mock_get_models,
 }));
 
+// Import after mocking so the component sees the test doubles.
+import { ChatPanel } from "./ChatPanel";
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -106,6 +113,7 @@ describe("ChatPanel", () => {
     mock_messages = [];
     mock_is_loading = false;
     mock_error = null;
+    mock_ai_mode = "ask";
   });
 
   it("renders the panel title", () => {
@@ -152,6 +160,38 @@ describe("ChatPanel", () => {
     render(<ChatPanel document_id="doc-1" />);
     expect(screen.getByText("My question")).toBeInTheDocument();
     expect(screen.getByText("My answer")).toBeInTheDocument();
+  });
+
+  it("renders assistant markdown content", () => {
+    mock_messages = [
+      { id: "m1", role: "assistant", content: "**Bold** and [link](https://example.com)" },
+    ];
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    expect(screen.getByText("Bold")).toHaveClass("font-semibold");
+    expect(screen.getByRole("link", { name: "link" })).toHaveAttribute(
+      "href",
+      "https://example.com",
+    );
+  });
+
+  it("renders think content in a collapsible block", () => {
+    mock_ai_mode = "agent";
+    mock_messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: "<think>Internal note</think>Final answer",
+      },
+    ];
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    const details = screen.getByText("thought_briefly").closest("details");
+    expect(details).toHaveAttribute("open");
+    expect(screen.getByText("Internal note")).toBeInTheDocument();
+    expect(screen.getByText("Final answer")).toBeInTheDocument();
   });
 
   it("sends a message on Enter key", () => {
