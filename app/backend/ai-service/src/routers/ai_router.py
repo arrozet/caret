@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from agents.registry import AGENT_REGISTRY
 from core.auth import AuthUser, get_current_user
 from core.config import settings
 from core.dependencies import get_db_session
@@ -91,6 +92,18 @@ async def list_models() -> ModelsResponse:
         models=[_to_schema(m) for m in OPENROUTER_MODELS],
         default_model_id=settings.openrouter_model,
     )
+
+
+@meta_router.get(
+    "/agents",
+    summary="List available AI agents",
+    description="Returns the curated set of predefined agent slugs exposed in the editor UI.",
+)
+async def list_agents() -> list[dict[str, str]]:
+    """Return the predefined agent registry for the frontend selector."""
+    return [
+        {"slug": entry.slug, "description": entry.description} for entry in AGENT_REGISTRY.values()
+    ]
 
 
 # ---------------------------------------------------------------------------

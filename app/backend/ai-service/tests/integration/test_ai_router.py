@@ -205,6 +205,23 @@ class TestListModels:
         assert response.status_code == 200
 
 
+class TestListAgents:
+    """Test the predefined agent catalog endpoint."""
+
+    async def test_list_agents_returns_registry(self, client) -> None:
+        """GET /ai/agents should expose the predefined agent slugs."""
+        # Arrange — no setup needed
+
+        # Act
+        response = await client.get("/ai/agents")
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        slugs = {item["slug"] for item in data}
+        assert {"general", "translation", "summary", "research"}.issubset(slugs)
+
+
 # ---------------------------------------------------------------------------
 # GET /ai/conversations
 # ---------------------------------------------------------------------------

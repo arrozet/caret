@@ -193,6 +193,9 @@ export function EditorPage() {
   const invite_collaborator_mutation = useInviteDocumentCollaborator(document_id ?? "");
 
   const [save_status, set_save_status] = useState<SaveStatus>("idle");
+  const [document_character_count, set_document_character_count] = useState(
+    document?.content_text?.length ?? 0,
+  );
   const [title, set_title] = useState("");
   const [is_title_focused, set_is_title_focused] = useState(false);
   const [is_invite_dialog_open, set_is_invite_dialog_open] = useState(false);
@@ -277,6 +280,12 @@ export function EditorPage() {
     if (persisted) remember_document_context(persisted);
   }, [build_persisted_document_context, remember_document_context]);
 
+  useEffect(() => {
+    // Keep the displayed counter aligned with the loaded document snapshot.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    set_document_character_count(document?.content_text?.length ?? 0);
+  }, [document?.content_text]);
+
   const get_active_editor = useCallback((): Editor | null => {
     if (editor_ref.current && !editor_ref.current.isDestroyed) {
       return editor_ref.current;
@@ -344,7 +353,11 @@ export function EditorPage() {
     }
   }, [editor_instance]);
 
-  useGhostText({ editor: editor_instance, conversationId: activeConversationId });
+  useGhostText({
+    editor: editor_instance,
+    conversationId: activeConversationId,
+    documentId: document_id ?? null,
+  });
   useFocusMode(true);
 
   useEffect(() => {
@@ -394,6 +407,7 @@ export function EditorPage() {
       }
 
       remember_document_context({ content_json: json, content_text: text });
+      set_document_character_count(text.length);
 
       if (debounce_timer_ref.current) clearTimeout(debounce_timer_ref.current);
 
@@ -618,6 +632,9 @@ export function EditorPage() {
               class_name="hidden md:block"
             />
           )}
+          <span className="rounded-full border border-border-subtle bg-app px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-text-secondary">
+            {document_character_count} chars
+          </span>
           <SaveStatusIndicator status={save_status} />
         </div>
       </div>

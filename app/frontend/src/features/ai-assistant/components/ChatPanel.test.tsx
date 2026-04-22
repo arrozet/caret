@@ -15,6 +15,7 @@ const mock_stop_generating = vi.fn();
 const mock_load_messages = vi.fn();
 const mock_clear = vi.fn();
 const mock_clear_pending_change = vi.fn();
+const mock_set_selected_agent_type = vi.fn();
 
 const { mock_get_models, mock_list_conversations } = vi.hoisted(() => ({
   mock_get_models: vi.fn(() => new Promise<never>(() => {})),
@@ -30,6 +31,7 @@ let mock_messages: Array<{
 let mock_is_loading = false;
 let mock_error: string | null = null;
 let mock_ai_mode: "ask" | "agent" = "ask";
+let mock_selected_agent_type = "general";
 
 vi.mock("../hooks/useAiStream", () => ({
   useAiStream: () => ({
@@ -63,12 +65,13 @@ vi.mock("../../../stores/aiStore", () => ({
     isPanelOpen: true,
     activeConversationId: null,
     aiMode: mock_ai_mode,
-    selectedAgentType: "general",
+    selectedAgentType: mock_selected_agent_type,
     selectedModelId: undefined,
     closePanel: mock_close_panel,
     setConversation: mock_set_conversation,
     setAiMode: vi.fn(),
     setSelectedModelId: vi.fn(),
+    setSelectedAgentType: mock_set_selected_agent_type,
   }),
 }));
 
@@ -114,6 +117,7 @@ describe("ChatPanel", () => {
     mock_is_loading = false;
     mock_error = null;
     mock_ai_mode = "ask";
+    mock_selected_agent_type = "general";
   });
 
   it("renders the panel title", () => {
@@ -250,5 +254,26 @@ describe("ChatPanel", () => {
     render(<ChatPanel document_id="doc-1" />);
     const log = screen.getByRole("log");
     expect(log).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("renders agent presets when agent mode is enabled", () => {
+    mock_ai_mode = "agent";
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    expect(screen.getByRole("button", { name: "agent_general" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "agent_translation" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "agent_summary" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "agent_research" })).toBeInTheDocument();
+  });
+
+  it("updates the selected agent type when a preset is clicked", () => {
+    mock_ai_mode = "agent";
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "agent_translation" }));
+
+    expect(mock_set_selected_agent_type).toHaveBeenCalledWith("translation");
   });
 });

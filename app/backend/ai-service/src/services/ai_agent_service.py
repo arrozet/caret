@@ -42,6 +42,9 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import agents.registry as agent_registry
+from agents.prompt_utils import prepend_context
+from agents.types import AgentType
 from core.config import settings
 from core.models_catalog import MODELS_BY_ID
 from models.ai import AiMessageRole
@@ -62,6 +65,7 @@ from schemas.ai import (
 
 logger = logging.getLogger(__name__)
 
+
 # ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
@@ -78,6 +82,23 @@ Guidelines:
 - Respond in the same language as the user's message.
 - If document context is provided, ground your answer in it.
 """
+
+
+def _build_runtime_context_prompt(
+    document_context: str | None,
+    rag_context: str | None,
+) -> str | None:
+    """Build the per-request context block passed to the selected agent."""
+    sections: list[str] = []
+    if document_context and document_context.strip():
+        sections.append(
+            f"--- Current document context ---\n{document_context.strip()}\n--- End of context ---"
+        )
+    if rag_context and rag_context.strip():
+        sections.append(rag_context.strip())
+    if not sections:
+        return None
+    return "\n\n".join(sections)
 
 
 def _normalize_document_context(
@@ -400,7 +421,7 @@ class AiAgentService:
         document_context: BaseModel | dict[str, Any] | str | None = None,
         model_id: str | None = None,
         document_id: uuid.UUID | None = None,
-        agent_type: str | None = None,
+        agent_type: AgentType | None = None,
     ) -> AsyncGenerator[str, None]:
         """
         Persist the user message, run the PydanticAI agent with streaming,
@@ -416,10 +437,9 @@ class AiAgentService:
             - document_change : agent-proposed document edit (agentic mode only)
             - tool_call       : agent tool usage marker (agentic mode only)
 
-        When `agent_type` is ``"general"``, the general PydanticAI agent is used
-        instead of the plain chat agent. After text streaming completes, any
-        proposed document changes accumulated in the agent's deps are emitted as
-        ``document_change`` SSE events before the ``done`` event.
+        When `agent_type` matches one of the registered predefined agents, the
+        matching PydanticAI factory is used. Only the general agent can emit
+        ``document_change`` SSE events.
 
         When `document_id` is provided the method calls `_retrieve_rag_context`
         to fetch semantically similar document chunks and appends them to the
@@ -459,22 +479,17 @@ class AiAgentService:
         normalized_document_context = _normalize_document_context(document_context)
 
         # Build the PydanticAI message list (system + history + new user msg)
-        system_prompt = _SYSTEM_PROMPT
-        if normalized_document_context:
-            system_prompt += (
-                f"\n\n--- Current document context ---\n{normalized_document_context}\n---"
-            )
-
         # 2b. Optionally inject RAG context from document embeddings -----------
         # This runs only when a document_id is supplied.  Failure is silently
         # swallowed by _retrieve_rag_context so streaming is never blocked.
+        rag_context = None
         if document_id is not None:
             rag_context = await self._retrieve_rag_context(
                 document_id=document_id,
                 query=user_message,
             )
-            if rag_context:
-                system_prompt += f"\n\n{rag_context}"
+
+        runtime_context = _build_runtime_context_prompt(normalized_document_context, rag_context)
 
         # 3. Build and run the agent with streaming ----------------------------
         try:
@@ -487,127 +502,10 @@ class AiAgentService:
         full_text = ""
         token_count = 0
 
-        if agent_type == "general":
-            from agents.general_agent import (  # noqa: PLC0415
-                GeneralAgentDeps,
-                build_general_agent,
-            )
-
-            selection_payload: dict[str, Any] | None = None
-            if isinstance(document_context, BaseModel):
-                selection_payload = document_context.model_dump(mode="json", exclude_none=True).get(
-                    "selection"
-                )
-            elif isinstance(document_context, dict):
-                raw_sel = document_context.get("selection")
-                selection_payload = raw_sel if isinstance(raw_sel, dict) else None
-
-            deps = GeneralAgentDeps(
-                document_content=normalized_document_context,
-                document_context=document_context,
-                selection=selection_payload,
-            )
-            agent_instance = build_general_agent(model)
-            fallback_proposed_texts: list[str] = []
-
-            try:
-                async for event in agent_instance.run_stream_events(
-                    user_message,
-                    message_history=message_history,
-                    deps=deps,
-                ):
-                    if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
-                        initial_text = event.part.content
-                        if initial_text:
-                            full_text += initial_text
-                            token_count += len(initial_text.split())
-                            delta_chunk = StreamChunk(type="delta", content=initial_text)
-                            yield f"data: {delta_chunk.model_dump_json()}\n\n"
-                        continue
-
-                    if isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
-                        delta = event.delta.content_delta
-                        if delta:
-                            full_text += delta
-                            token_count += len(delta.split())
-                            delta_chunk = StreamChunk(type="delta", content=delta)
-                            yield f"data: {delta_chunk.model_dump_json()}\n\n"
-                        continue
-
-                    if isinstance(event, FunctionToolCallEvent):
-                        tool_chunk = StreamChunk(
-                            type="tool_call",
-                            content="",
-                            tool_name=event.part.tool_name,
-                        )
-                        yield f"data: {tool_chunk.model_dump_json()}\n\n"
-
-                        if event.part.tool_name != "propose_document_replacement":
-                            continue
-
-                        args_dict: dict[str, object] = {}
-                        try:
-                            args_dict = event.part.args_as_dict()
-                        except Exception:
-                            args = getattr(event.part, "args", None)
-                            if isinstance(args, dict):
-                                args_dict = args
-
-                        proposed_text = args_dict.get("proposed_text")
-                        replacement_text = args_dict.get("replacement_text")
-                        candidate_text = proposed_text or replacement_text
-
-                        if isinstance(candidate_text, str) and candidate_text.strip():
-                            fallback_proposed_texts.append(candidate_text)
-                        continue
-
-                    if isinstance(event, AgentRunResultEvent) and isinstance(
-                        event.result.output, str
-                    ):
-                        full_text = event.result.output
-
-            except Exception as exc:
-                logger.exception("General agent streaming error: %s", exc)
-                error_chunk = StreamChunk(
-                    type="error", content="AI service error. Please try again."
-                )
-                yield f"data: {error_chunk.model_dump_json()}\n\n"
-                return
-
-            changes_to_emit = list(deps.proposed_changes)
-            if not changes_to_emit and fallback_proposed_texts:
-                seen_texts: set[str] = set()
-                for proposed_text in fallback_proposed_texts:
-                    if proposed_text in seen_texts:
-                        continue
-                    seen_texts.add(proposed_text)
-                    changes_to_emit.append(
-                        {
-                            "operation": "replace_full",
-                            "proposed_text": proposed_text,
-                            "original_text": normalized_document_context or "",
-                        }
-                    )
-
-            for change in changes_to_emit:
-                change_payload = DocumentChangePayload(
-                    operation=change["operation"],
-                    proposed_text=change["proposed_text"],
-                    original_text=change["original_text"],
-                    position_start=change.get("position_start"),
-                    position_end=change.get("position_end"),
-                )
-                change_chunk = StreamChunk(
-                    type="document_change",
-                    content="",
-                    document_change=change_payload,
-                )
-                yield f"data: {change_chunk.model_dump_json()}\n\n"
-
-        else:
-            agent: Agent[None, str] = Agent(
+        if agent_type is None:
+            agent = Agent(
                 model=model,
-                system_prompt=system_prompt,
+                system_prompt=prepend_context(_SYSTEM_PROMPT, runtime_context),
                 output_type=str,
             )
 
@@ -631,6 +529,142 @@ class AiAgentService:
                 )
                 yield f"data: {error_chunk.model_dump_json()}\n\n"
                 return
+
+        else:
+            agent_entry = agent_registry.get_agent_factory(agent_type)
+
+            if agent_entry.slug == "general":
+                deps = agent_entry.build_deps(
+                    document_context, normalized_document_context, user_message
+                )
+                agent_instance = agent_entry.build(model, system_prompt_prefix=runtime_context)
+                fallback_proposed_texts: list[str] = []
+
+                try:
+                    async for event in agent_instance.run_stream_events(
+                        user_message,
+                        message_history=message_history,
+                        deps=deps,
+                    ):
+                        if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                            initial_text = event.part.content
+                            if initial_text:
+                                full_text += initial_text
+                                token_count += len(initial_text.split())
+                                delta_chunk = StreamChunk(type="delta", content=initial_text)
+                                yield f"data: {delta_chunk.model_dump_json()}\n\n"
+                            continue
+
+                        if isinstance(event, PartDeltaEvent) and isinstance(
+                            event.delta, TextPartDelta
+                        ):
+                            delta = event.delta.content_delta
+                            if delta:
+                                full_text += delta
+                                token_count += len(delta.split())
+                                delta_chunk = StreamChunk(type="delta", content=delta)
+                                yield f"data: {delta_chunk.model_dump_json()}\n\n"
+                            continue
+
+                        if isinstance(event, FunctionToolCallEvent):
+                            tool_chunk = StreamChunk(
+                                type="tool_call",
+                                content="",
+                                tool_name=event.part.tool_name,
+                            )
+                            yield f"data: {tool_chunk.model_dump_json()}\n\n"
+
+                            if event.part.tool_name != "propose_document_replacement":
+                                continue
+
+                            args_dict: dict[str, object] = {}
+                            try:
+                                args_dict = event.part.args_as_dict()
+                            except Exception:
+                                args = getattr(event.part, "args", None)
+                                if isinstance(args, dict):
+                                    args_dict = args
+
+                            proposed_text = args_dict.get("proposed_text")
+                            replacement_text = args_dict.get("replacement_text")
+                            candidate_text = proposed_text or replacement_text
+
+                            if isinstance(candidate_text, str) and candidate_text.strip():
+                                fallback_proposed_texts.append(candidate_text)
+                            continue
+
+                        if isinstance(event, AgentRunResultEvent) and isinstance(
+                            event.result.output, str
+                        ):
+                            full_text = event.result.output
+
+                except Exception as exc:
+                    logger.exception("General agent streaming error: %s", exc)
+                    error_chunk = StreamChunk(
+                        type="error", content="AI service error. Please try again."
+                    )
+                    yield f"data: {error_chunk.model_dump_json()}\n\n"
+                    return
+
+                changes_to_emit = list(deps.proposed_changes)
+                if not changes_to_emit and fallback_proposed_texts:
+                    seen_texts: set[str] = set()
+                    for proposed_text in fallback_proposed_texts:
+                        if proposed_text in seen_texts:
+                            continue
+                        seen_texts.add(proposed_text)
+                        changes_to_emit.append(
+                            {
+                                "operation": "replace_full",
+                                "proposed_text": proposed_text,
+                                "original_text": normalized_document_context or "",
+                            }
+                        )
+
+                for change in changes_to_emit:
+                    change_payload = DocumentChangePayload(
+                        operation=change["operation"],
+                        proposed_text=change["proposed_text"],
+                        original_text=change["original_text"],
+                        position_start=change.get("position_start"),
+                        position_end=change.get("position_end"),
+                    )
+                    change_chunk = StreamChunk(
+                        type="document_change",
+                        content="",
+                        document_change=change_payload,
+                    )
+                    yield f"data: {change_chunk.model_dump_json()}\n\n"
+
+            else:
+                agent = agent_entry.build(model, system_prompt_prefix=runtime_context)
+                deps = agent_entry.build_deps(
+                    document_context, normalized_document_context, user_message
+                )
+
+                try:
+                    async with agent.run_stream(
+                        user_message,
+                        message_history=message_history,
+                        deps=deps,
+                    ) as result:
+                        async for delta in result.stream_text(delta=True):
+                            if delta:
+                                full_text += delta
+                                token_count += len(
+                                    delta.split()
+                                )  # approximate; LLM usage may override
+
+                                delta_chunk = StreamChunk(type="delta", content=delta)
+                                yield f"data: {delta_chunk.model_dump_json()}\n\n"
+
+                except Exception as exc:
+                    logger.exception("PydanticAI streaming error: %s", exc)
+                    error_chunk = StreamChunk(
+                        type="error", content="AI service error. Please try again."
+                    )
+                    yield f"data: {error_chunk.model_dump_json()}\n\n"
+                    return
 
         # 4. Persist the completed assistant message ---------------------------
         assistant_msg = await self._msg_repo.create(

@@ -3,6 +3,7 @@ import {
   streamAiResponse,
   createConversation,
   listMessages,
+  type DocumentContextSnapshot,
   type MessageResponse,
   type DocumentChangePayload,
 } from "../api/aiApi";

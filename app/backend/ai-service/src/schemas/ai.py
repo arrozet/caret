@@ -16,6 +16,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from agents.types import AgentType
 from models.ai import AiMessageRole, AiSuggestionStatus
 
 # ---------------------------------------------------------------------------
@@ -259,13 +260,13 @@ class StreamRequest(BaseModel):
             "and injects them into the system prompt for RAG-enhanced responses."
         ),
     )
-    agent_type: str | None = Field(
+    agent_type: AgentType | None = Field(
         default=None,
         description=(
             "Optional agent type to use for this request. "
             "When set to 'general', the agentic general agent is used instead of "
-            "the plain chat agent. The general agent has tools to read and propose "
-            "edits to the current document."
+            "the plain chat agent. Translation, summary, and research are "
+            "specialist agents that do not propose document edits."
         ),
     )
 

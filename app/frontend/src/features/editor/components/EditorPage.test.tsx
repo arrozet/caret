@@ -405,6 +405,14 @@ describe("EditorPage", () => {
     expect(screen.getByText("-1")).toBeInTheDocument();
   });
 
+  it("shows the current character count in the editor header", () => {
+    current_pending_change = null;
+
+    render(<EditorPage />);
+
+    expect(screen.getByText("14 chars")).toBeInTheDocument();
+  });
+
   it("reject clears the pending change without modifying editor content", () => {
     render(<EditorPage />);
 

@@ -191,6 +191,21 @@ class TestStreamRequest:
         assert schema.document_context == "The quick brown fox."
         assert schema.model_id == "z-ai/glm-4.5-air:free"
 
+    def test_valid_with_predefined_agent_type(self) -> None:
+        """StreamRequest should accept a predefined agent slug."""
+        # Arrange
+        # Act
+        schema = StreamRequest(message="Summarise", agent_type="summary")
+
+        # Assert
+        assert schema.agent_type == "summary"
+
+    def test_invalid_agent_type_raises(self) -> None:
+        """StreamRequest must reject unknown agent slugs."""
+        # Arrange / Act / Assert
+        with pytest.raises(ValidationError):
+            StreamRequest(message="Test", agent_type="unknown")  # type: ignore[arg-type]
+
     def test_valid_with_structured_document_context(self) -> None:
         """StreamRequest should accept structured JSON-compatible document context."""
         # Arrange

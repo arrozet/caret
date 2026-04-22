@@ -18,8 +18,12 @@ Architecture (BACKEND.md):
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
+from pydantic_ai.models.test import TestModel
+
+from agents.prompt_utils import prepend_context
 
 # ---------------------------------------------------------------------------
 # Dependency injection container
@@ -45,6 +49,28 @@ class GeneralAgentDeps:
     document_context: dict[str, Any] | str | None = None
     selection: dict[str, Any] | None = None
     proposed_changes: list[dict[str, str]] = field(default_factory=list)
+
+
+def build_general_deps(
+    document_context: BaseModel | dict[str, Any] | str | None,
+    document_content: str | None,
+    user_message: str,
+) -> GeneralAgentDeps:
+    """Build the dependency container for one general-agent run."""
+    selection: dict[str, Any] | None = None
+    if isinstance(document_context, BaseModel):
+        payload = document_context.model_dump(mode="json", exclude_none=True)
+        raw_selection = payload.get("selection")
+        selection = raw_selection if isinstance(raw_selection, dict) else None
+    elif isinstance(document_context, dict):
+        raw_selection = document_context.get("selection")
+        selection = raw_selection if isinstance(raw_selection, dict) else None
+
+    return GeneralAgentDeps(
+        document_content=document_content,
+        document_context=document_context,
+        selection=selection,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +177,10 @@ _SYSTEM_PROMPT = (
 )
 
 
-def build_general_agent(model: Model) -> "Agent[GeneralAgentDeps, str]":
+def build_general_agent(
+    model: Model,
+    system_prompt_prefix: str | None = None,
+) -> "Agent[GeneralAgentDeps, str]":
     """
     Build a fresh GeneralAgent instance for a single request.
 
@@ -170,7 +199,7 @@ def build_general_agent(model: Model) -> "Agent[GeneralAgentDeps, str]":
         model=model,
         deps_type=GeneralAgentDeps,
         output_type=str,
-        system_prompt=_SYSTEM_PROMPT,
+        system_prompt=prepend_context(_SYSTEM_PROMPT, system_prompt_prefix),
         tools=[get_document_content, get_selection_content, propose_document_replacement],
     )
     return agent
@@ -199,7 +228,7 @@ def _make_sentinel_agent() -> "Agent[GeneralAgentDeps, str]":
         A GeneralAgentDeps-typed Agent that satisfies isinstance checks.
     """
     return Agent(
-        model="openai:gpt-4o",
+        model=TestModel(),
         deps_type=GeneralAgentDeps,
         output_type=str,
         system_prompt=_SYSTEM_PROMPT,

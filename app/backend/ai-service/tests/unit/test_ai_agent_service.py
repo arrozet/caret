@@ -446,10 +446,7 @@ class TestAiAgentServiceStreaming:
             ),
             patch("services.ai_agent_service._build_model", return_value=MagicMock()),
             # Patch the Agent class itself to return our fully-controlled mock instance
-            patch(
-                "services.ai_agent_service.Agent",
-                return_value=mock_agent_instance,
-            ),
+            patch("services.ai_agent_service.Agent", return_value=mock_agent_instance),
         ):
             # Act
             service = AiAgentService(session)
@@ -576,7 +573,7 @@ class TestAiAgentServiceStreaming:
 
         captured_deps: dict[str, Any] = {}
 
-        def fake_build_general_agent(model):
+        def fake_build_general_agent(model, system_prompt_prefix=None):
             return mock_agent_instance
 
         def fake_general_deps(**kwargs):
@@ -694,6 +691,84 @@ class TestAiAgentServiceStreaming:
         assert captured_deps["selection"]["text"] == "texto"
         assert document_change_chunks[0]["document_change"]["position_start"] == 3
         assert document_change_chunks[0]["document_change"]["position_end"] == 8
+
+    @pytest.mark.asyncio
+    async def test_stream_response_translation_uses_registered_agent(self) -> None:
+        """translation agent requests should dispatch to the translation factory and skip edits."""
+        # Arrange
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Bonjour",
+        )
+
+        captured: dict[str, Any] = {}
+
+        mock_agent_instance = MagicMock()
+
+        async def fake_stream_text(delta: bool = False) -> AsyncGenerator[str, None]:
+            yield "Bonjour"
+
+        mock_result = MagicMock()
+        mock_result.stream_text = fake_stream_text
+        mock_agent_ctx = MagicMock()
+        mock_agent_ctx.__aenter__ = AsyncMock(return_value=mock_result)
+        mock_agent_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_agent_instance.run_stream = MagicMock(return_value=mock_agent_ctx)
+
+        def fake_builder(model, system_prompt_prefix=None):
+            captured["model"] = model
+            captured["system_prompt_prefix"] = system_prompt_prefix
+            return mock_agent_instance
+
+        def fake_build_deps(document_context, document_content, user_message):
+            captured["deps_args"] = {
+                "document_context": document_context,
+                "document_content": document_content,
+                "user_message": user_message,
+            }
+            return MagicMock(document_content=document_content, document_context=document_context)
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("agents.registry.get_agent_factory") as mock_get_agent_factory,
+        ):
+            mock_get_agent_factory.return_value = MagicMock(
+                slug="translation",
+                build=fake_builder,
+                build_deps=fake_build_deps,
+            )
+
+            # Act
+            service = AiAgentService(session)
+            chunks = []
+            async for chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Translate this",
+                document_context="Hello world",
+                agent_type="translation",
+            ):
+                chunks.append(json.loads(chunk.removeprefix("data: ").strip()))
+
+        # Assert
+        assert captured["model"] is not None
+        assert "Current document context" in (captured["system_prompt_prefix"] or "")
+        assert captured["deps_args"]["user_message"] == "Translate this"
+        assert all(c.get("type") != "document_change" for c in chunks)
 
     def test_normalize_document_context_prefers_content_text(self) -> None:
         """_normalize_document_context should prefer a structured text snapshot when present."""

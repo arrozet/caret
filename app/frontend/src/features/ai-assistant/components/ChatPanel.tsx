@@ -14,7 +14,7 @@ import {
   ChevronsUpDown,
 } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
-import { useAiStore } from "../../../stores/aiStore";
+import { useAiStore, type AgentType } from "../../../stores/aiStore";
 import { useAiStream } from "../hooks/useAiStream";
 import type { ChatMessage } from "../hooks/useAiStream";
 import { deleteConversation, getModels, listConversations } from "../api/aiApi";
@@ -53,6 +53,13 @@ const FALLBACK_MODELS: ModelInfo[] = [
     description:
       "Agentic tool-calling model for support, research, and long context (via OpenRouter).",
   },
+];
+
+const AGENT_PRESETS: Array<{ type: AgentType; labelKey: string }> = [
+  { type: "general", labelKey: "agent_general" },
+  { type: "translation", labelKey: "agent_translation" },
+  { type: "summary", labelKey: "agent_summary" },
+  { type: "research", labelKey: "agent_research" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -351,6 +358,7 @@ export function ChatPanel({
     selectedAgentType,
     selectedModelId,
     setAiMode,
+    setSelectedAgentType,
     setSelectedModelId,
   } = useAiStore();
 
@@ -878,6 +886,31 @@ export function ChatPanel({
             </button>
           </div>
         </div>
+
+        {aiMode === "agent" && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {AGENT_PRESETS.map((preset) => {
+              const isSelected = selectedAgentType === preset.type;
+
+              return (
+                <button
+                  key={preset.type}
+                  type="button"
+                  onClick={() => setSelectedAgentType(preset.type)}
+                  aria-pressed={isSelected}
+                  className={[
+                    "rounded-[4px] border px-3 py-1.5 text-ui-xs font-medium transition-colors",
+                    isSelected
+                      ? "border-transparent bg-surface text-text-primary shadow-sm"
+                      : "border-border-subtle bg-app text-text-secondary hover:text-text-primary",
+                  ].join(" ")}
+                >
+                  {t(preset.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-app px-3 py-2.5 transition-all duration-200 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20 shadow-sm">
           <textarea

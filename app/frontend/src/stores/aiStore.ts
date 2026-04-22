@@ -4,6 +4,9 @@ import type { DocumentChangePayload } from "../features/ai-assistant/api/aiApi";
 /** AI interaction mode: plain Q&A vs. agentic document editing. */
 export type AiMode = "ask" | "agent";
 
+/** Supported agent presets exposed in the AI panel. */
+export type AgentType = "general" | "translation" | "summary" | "research";
+
 /** Shape of the AI panel store managed by Zustand. */
 interface AiState {
   /** Whether the AI chat panel is currently visible. */
@@ -17,7 +20,7 @@ interface AiState {
   /** Current AI interaction mode. */
   aiMode: AiMode;
   /** Agent type slug sent to the backend when ai_mode === "agent". */
-  selectedAgentType: string;
+  selectedAgentType: AgentType;
   /** Currently selected LLM model ID (undefined = server default). */
   selectedModelId: string | undefined;
   /** Latest pending document change proposed by the agent. */
@@ -37,6 +40,8 @@ interface AiState {
   setConversationForDocument: (documentId: string, id: string | null) => void;
   /** Switch between Ask and Agent modes. */
   setAiMode: (mode: AiMode) => void;
+  /** Set the selected agent preset. */
+  setSelectedAgentType: (agentType: AgentType) => void;
   /** Set the selected LLM model. */
   setSelectedModelId: (id: string | undefined) => void;
   /** Update (or clear) the globally pending document change. */
@@ -107,6 +112,10 @@ export const useAiStore = create<AiState>((set) => ({
 
   setAiMode(mode: AiMode) {
     set({ aiMode: mode });
+  },
+
+  setSelectedAgentType(agentType: AgentType) {
+    set({ selectedAgentType: agentType });
   },
 
   setSelectedModelId(id: string | undefined) {
