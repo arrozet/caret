@@ -323,5 +323,20 @@ describe("RoomManager", () => {
       expect(room_manager.getParticipants(document_id)).toContain("user-1");
       expect(room_manager.getParticipantCount(document_id)).toBe(1);
     });
+
+    /** Verifies matching socket_id removes the active participant entry. */
+    it("should_remove_user_when_socket_id_matches_active_session", () => {
+      // Arrange
+      const document_id = "active-socket-doc";
+      room_manager.joinRoom(document_id, "user-1", "sock-active");
+
+      // Act
+      const result = room_manager.leaveRoom(document_id, "user-1", "sock-active");
+
+      // Assert
+      expect(result).toBe(true);
+      expect(room_manager.getParticipants(document_id)).not.toContain("user-1");
+      expect(room_manager.getParticipantCount(document_id)).toBe(0);
+    });
   });
 });

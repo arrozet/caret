@@ -640,6 +640,34 @@ describe("ConnectionHandler", () => {
       expect(server_doc?.getText("content").toString()).toBe("");
       expect(second_ws.send).not.toHaveBeenCalled();
     });
+
+    /** Verifies the active socket still works after a stale close was ignored. */
+    it("should_keep_active_socket_operational_after_stale_close", () => {
+      // Arrange
+      const first_ws = make_mock_ws();
+      const second_ws = make_mock_ws();
+      const auth = make_auth("user-1", "doc-active-after-stale-close");
+
+      handler.handle_connection({ ws: first_ws, auth, room_manager });
+      handler.handle_connection({ ws: second_ws, auth, room_manager });
+
+      // Stale close first
+      first_ws.trigger("close", 1000, Buffer.from(""));
+
+      const client_doc = new Y.Doc();
+      client_doc.getText("content").insert(0, "active update");
+      const update = Y.encodeStateAsUpdate(client_doc);
+      const message = create_update_message(update);
+
+      // Act
+      second_ws.trigger("message", Buffer.from(message));
+
+      // Assert
+      const server_doc = room_manager.get_doc("doc-active-after-stale-close");
+      expect(server_doc?.getText("content").toString()).toBe("active update");
+      expect(room_manager.get_participants("doc-active-after-stale-close")).toContain("user-1");
+      expect(handler.get_room_socket_count("doc-active-after-stale-close")).toBe(1);
+    });
   });
 
   /**
