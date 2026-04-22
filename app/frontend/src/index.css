@@ -298,18 +298,21 @@ body {
 
 /* Suggestion-mode marks (MVP tracked changes) */
 .caret-editor .suggestion-insert {
-  background: rgb(16 185 129 / 0.18);
-  border-bottom: 2px solid rgb(16 185 129 / 0.9);
+  background: rgb(16 185 129 / 0.12);
+  text-decoration-line: underline;
+  text-decoration-color: rgb(16 185 129 / 0.95);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.12em;
   border-radius: 2px;
 }
 
 .caret-editor .suggestion-delete {
   color: rgb(var(--color-text-secondary-rgb));
-  text-decoration: line-through;
+  text-decoration-line: line-through underline;
+  text-decoration-color: rgb(244 63 94 / 0.95);
   text-decoration-thickness: 1.5px;
-  text-decoration-color: rgb(244 63 94 / 0.9);
-  background: rgb(244 63 94 / 0.12);
-  border-bottom: 2px solid rgb(244 63 94 / 0.85);
+  text-underline-offset: 0.12em;
+  background: rgb(244 63 94 / 0.1);
   border-radius: 2px;
 }
 

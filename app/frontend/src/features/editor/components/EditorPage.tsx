@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Loader2, ArrowLeft, Check, AlertCircle, Sparkles, UserPlus } from "lucide-react";
+import { Loader2, ArrowLeft, Check, AlertCircle, UserPlus } from "lucide-react";
 import type { JSONContent, Editor } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
 import { Button } from "../../../components/ui/Button";
@@ -16,7 +16,8 @@ import {
   replace_collaboration_document_content,
 } from "../utils";
 import { indexDocumentEmbeddings } from "../../ai-assistant/api/aiApi";
-import type { DocumentChangePayload, DocumentContextSnapshot } from "../../ai-assistant/api/aiApi";
+import type { DocumentContextSnapshot } from "../../ai-assistant/api/aiApi";
+import { DocumentSuggestionPreview } from "./DocumentSuggestionPreview";
 import {
   CollaborationPresenceBar,
   LOCAL_COLLAB_WS_BASE_URL,
@@ -43,136 +44,6 @@ function getCollaborationWsUrl(): string {
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
-
-interface DiffLine {
-  type: "equal" | "removed" | "added";
-  text: string;
-}
-
-function compute_line_diff(original: string, proposed: string): DiffLine[] {
-  const a = original.split("\n");
-  const b = proposed.split("\n");
-  const m = a.length;
-  const n = b.length;
-
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] =
-        a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
-    }
-  }
-
-  const result: DiffLine[] = [];
-  let i = m;
-  let j = n;
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
-      result.unshift({ type: "equal", text: a[i - 1] });
-      i--;
-      j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      result.unshift({ type: "added", text: b[j - 1] });
-      j--;
-    } else {
-      result.unshift({ type: "removed", text: a[i - 1] });
-      i--;
-    }
-  }
-
-  return result;
-}
-
-interface DocumentChangeReviewOverlayProps {
-  pending_change: DocumentChangePayload;
-  on_accept: () => void;
-  on_reject: () => void;
-  is_accepting?: boolean;
-}
-
-/**
- * Floating review card rendered directly over the editor canvas.
- * Shows a git-style inline diff and explicit Accept/Reject actions.
- */
-function DocumentChangeReviewOverlay({
-  pending_change,
-  on_accept,
-  on_reject,
-  is_accepting = false,
-}: DocumentChangeReviewOverlayProps) {
-  const full_diff = compute_line_diff(
-    pending_change.original_text ?? "",
-    pending_change.proposed_text,
-  );
-
-  const added_count = full_diff.filter((line) => line.type === "added").length;
-  const removed_count = full_diff.filter((line) => line.type === "removed").length;
-
-  return (
-    <div className="absolute inset-x-3 top-3 z-40 pointer-events-none">
-      <div className="mx-auto w-full max-w-[var(--max-width-document-wide)] pointer-events-auto rounded-lg border border-accent-ai/30 bg-surface/95 shadow-elevated backdrop-blur-sm">
-        <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border-subtle">
-          <div className="flex items-center gap-2 min-w-0">
-            <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent-ai" />
-            <span className="text-ui-sm font-medium text-accent-ai">AI proposed changes</span>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded-full bg-diff-add-bg px-2 py-0.5 text-[10px] font-mono text-text-primary">
-              +{added_count}
-            </span>
-            <span className="rounded-full bg-diff-del-bg px-2 py-0.5 text-[10px] font-mono text-diff-del-text">
-              -{removed_count}
-            </span>
-          </div>
-        </div>
-
-        {/* Inline diff preview so the user can see exactly what changes */}
-        <div className="max-h-48 overflow-y-auto border-b border-border-subtle px-3 py-2 font-mono text-ui-xs leading-relaxed">
-          {full_diff.map((line, idx) => {
-            if (line.type === "equal") {
-              return (
-                <div key={idx} className="text-text-secondary">
-                  {"  "}
-                  {line.text || "\u00a0"}
-                </div>
-              );
-            }
-            if (line.type === "removed") {
-              return (
-                <div key={idx} className="text-diff-del-text bg-diff-del-bg/30 line-through">
-                  - {line.text || "\u00a0"}
-                </div>
-              );
-            }
-            return (
-              <div key={idx} className="text-accent-main bg-diff-add-bg/30">
-                + {line.text || "\u00a0"}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-3 py-2">
-          <button
-            onClick={on_reject}
-            disabled={is_accepting}
-            className="rounded-md border border-border-subtle px-3 py-1.5 text-ui-xs font-medium text-text-secondary hover:bg-app transition-colors"
-          >
-            Reject
-          </button>
-          <button
-            onClick={on_accept}
-            disabled={is_accepting}
-            className="flex items-center gap-1.5 rounded-md bg-accent-ai px-3 py-1.5 text-ui-xs font-medium text-white hover:bg-accent-ai/90 transition-colors"
-          >
-            <Check className="h-3 w-3" />
-            {is_accepting ? "Applying..." : "Accept"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Editor page component.
@@ -344,7 +215,11 @@ export function EditorPage() {
     }
   }, [editor_instance]);
 
-  useGhostText({ editor: editor_instance, conversationId: activeConversationId });
+  useGhostText({
+    editor: editor_instance,
+    conversationId: activeConversationId,
+    documentId: document_id ?? null,
+  });
   useFocusMode(true);
 
   useEffect(() => {
@@ -625,7 +500,7 @@ export function EditorPage() {
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 overflow-hidden">
           {pending_change !== null && (
-            <DocumentChangeReviewOverlay
+            <DocumentSuggestionPreview
               pending_change={pending_change}
               on_accept={handleAcceptPendingChange}
               on_reject={handleRejectPendingChange}

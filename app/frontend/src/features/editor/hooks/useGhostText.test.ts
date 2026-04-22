@@ -22,6 +22,7 @@ describe("useGhostText", () => {
       useGhostText({
         editor: null,
         conversationId: null,
+        documentId: null,
       }),
     );
     expect(result.current.suggestion).toBe("");
@@ -33,6 +34,7 @@ describe("useGhostText", () => {
       useGhostText({
         editor: null,
         conversationId: "conv-123",
+        documentId: "doc-123",
       }),
     );
     await act(async () => {
@@ -55,6 +57,7 @@ describe("useGhostText", () => {
       useGhostText({
         editor: mock_editor,
         conversationId: null,
+        documentId: "doc-123",
       }),
     );
     await act(async () => {
@@ -68,6 +71,7 @@ describe("useGhostText", () => {
       useGhostText({
         editor: null,
         conversationId: null,
+        documentId: null,
       }),
     );
     expect(typeof result.current.accept_suggestion).toBe("function");

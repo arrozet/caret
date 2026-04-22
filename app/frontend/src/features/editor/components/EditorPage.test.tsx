@@ -392,7 +392,7 @@ describe("EditorPage", () => {
     expect(extract_text_from_json(mock_set_content.mock.calls[0][0] as JSONContent)).toBe("Hola.");
   });
 
-  it("shows the diff overlay with additions and removals", () => {
+  it("shows the inline preview with suggestion marks", () => {
     current_pending_change = {
       operation: "replace_full",
       original_text: "Texto original",
@@ -401,8 +401,11 @@ describe("EditorPage", () => {
     render(<EditorPage />);
 
     expect(screen.getByText("AI proposed changes")).toBeInTheDocument();
-    expect(screen.getByText("+1")).toBeInTheDocument();
-    expect(screen.getByText("-1")).toBeInTheDocument();
+
+    const preview_call = latest_caret_editor_calls.find((props) => props.editable === false);
+    expect(preview_call?.editable).toBe(false);
+    expect(JSON.stringify(preview_call?.content)).toContain("suggestion_delete");
+    expect(JSON.stringify(preview_call?.content)).toContain("suggestion_insert");
   });
 
   it("reject clears the pending change without modifying editor content", () => {
