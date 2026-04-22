@@ -8,7 +8,7 @@
   "close_panel": "Cerrar panel de IA",
   "messages_region": "Mensajes de la conversación de IA",
   "empty_state": "Pregunta lo que quieras sobre tu documento.",
-  "keyboard_hint": "Enter para enviar · Shift+Enter para nueva línea",
+  "keyboard_hint": "Enter para enviar · Shift+Enter para nueva línea · Tab para aceptar sugerencia",
   "thought_briefly": "Pensamiento breve",
   "model_selector": "Modelo",
   "history_selector": "Recientes",

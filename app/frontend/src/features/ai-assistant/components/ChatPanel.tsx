@@ -16,6 +16,7 @@ import {
 import { Button } from "../../../components/ui/Button";
 import { useAiStore } from "../../../stores/aiStore";
 import { useAiStream } from "../hooks/useAiStream";
+import { useCompletion } from "../hooks/useCompletion";
 import type { ChatMessage } from "../hooks/useAiStream";
 import { deleteConversation, getModels, listConversations } from "../api/aiApi";
 import type { DocumentContextSnapshot, ModelInfo } from "../api/aiApi";
@@ -376,6 +377,7 @@ export function ChatPanel({
   const [isModelOpen, setIsModelOpen] = useState(false);
   const [historyQuery, setHistoryQuery] = useState("");
   const [modelQuery, setModelQuery] = useState("");
+  const completionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isUserScrolling = useRef(false);
@@ -383,6 +385,15 @@ export function ChatPanel({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const historyPanelRef = useRef<HTMLDivElement>(null);
   const modelPanelRef = useRef<HTMLDivElement>(null);
+
+  const {
+    suggestion: completionSuggestion,
+    request_completion,
+    accept_suggestion: accept_completion,
+    dismiss_suggestion: dismiss_completion,
+  } = useCompletion((next_suggestion) => {
+    setInputValue((current) => current + next_suggestion);
+  });
 
   // Fetch catalog; `default_model_id` comes from server OPENROUTER_MODEL (single backend source of truth).
   useEffect(() => {
@@ -486,6 +497,27 @@ export function ChatPanel({
     }
   }, [messages.length, loadRecentConversations]);
 
+  useEffect(() => {
+    if (completionDebounceRef.current) {
+      clearTimeout(completionDebounceRef.current);
+    }
+
+    dismiss_completion();
+
+    const trimmed_input = inputValue.trim();
+    if (!trimmed_input || is_loading) return;
+
+    completionDebounceRef.current = setTimeout(() => {
+      void request_completion(inputValue, selectedModelId);
+    }, 350);
+
+    return () => {
+      if (completionDebounceRef.current) {
+        clearTimeout(completionDebounceRef.current);
+      }
+    };
+  }, [inputValue, selectedModelId, request_completion, dismiss_completion, is_loading]);
+
   // Handle manual scroll to detect if user scrolled up.
   const handleScroll = useCallback(() => {
     if (!messagesContainerRef.current) return;
@@ -514,6 +546,7 @@ export function ChatPanel({
   const handleSend = useCallback(async () => {
     const trimmed = inputValue.trim();
     if (!trimmed || is_loading) return;
+    dismiss_completion();
     setInputValue("");
     isUserScrolling.current = false;
     const agentTypeToUse = aiMode === "agent" ? selectedAgentType : undefined;
@@ -528,6 +561,7 @@ export function ChatPanel({
     selectedModelId,
     aiMode,
     selectedAgentType,
+    dismiss_completion,
   ]);
 
   /**
@@ -535,12 +569,24 @@ export function ChatPanel({
    */
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Tab" && completionSuggestion) {
+        e.preventDefault();
+        accept_completion();
+        return;
+      }
+
+      if (e.key === "Escape" && completionSuggestion) {
+        e.preventDefault();
+        dismiss_completion();
+        return;
+      }
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend],
+    [handleSend, completionSuggestion, accept_completion, dismiss_completion],
   );
 
   /**
@@ -880,25 +926,38 @@ export function ChatPanel({
         </div>
 
         <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-app px-3 py-2.5 transition-all duration-200 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20 shadow-sm">
-          <textarea
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={t("input_placeholder")}
-            disabled={is_loading}
-            rows={1}
-            className="flex-1 resize-none bg-transparent text-ui-sm text-text-primary placeholder:text-text-secondary/60 outline-none leading-relaxed max-h-[120px] overflow-y-auto disabled:opacity-50 py-0.5"
-            aria-label={t("input_placeholder")}
-            style={{
-              height: "auto",
-            }}
-            onInput={(e) => {
-              const target = e.currentTarget;
-              target.style.height = "auto";
-              target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
-            }}
-          />
+          <div className="relative flex-1 min-w-0">
+            {(inputValue.length > 0 || completionSuggestion.length > 0) && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words py-0.5 text-ui-sm leading-relaxed text-text-primary"
+              >
+                <span>{inputValue}</span>
+                <span data-testid="chat-completion-suggestion" className="opacity-40">
+                  {completionSuggestion}
+                </span>
+              </div>
+            )}
+            <textarea
+              ref={inputRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={t("input_placeholder")}
+              disabled={is_loading}
+              rows={1}
+              className="relative z-10 w-full resize-none bg-transparent text-ui-sm text-transparent caret-text-primary placeholder:text-text-secondary/60 outline-none leading-relaxed max-h-[120px] overflow-y-auto disabled:opacity-50 py-0.5"
+              aria-label={t("input_placeholder")}
+              style={{
+                height: "auto",
+              }}
+              onInput={(e) => {
+                const target = e.currentTarget;
+                target.style.height = "auto";
+                target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+              }}
+            />
+          </div>
 
           {is_loading ? (
             <Button

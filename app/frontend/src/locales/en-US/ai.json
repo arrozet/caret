@@ -8,7 +8,7 @@
   "close_panel": "Close AI panel",
   "messages_region": "AI conversation messages",
   "empty_state": "Ask anything about your document.",
-  "keyboard_hint": "Enter to send · Shift+Enter for newline",
+  "keyboard_hint": "Enter to send · Shift+Enter for newline · Tab to accept suggestion",
   "thought_briefly": "Thought briefly",
   "model_selector": "Model",
   "history_selector": "Recent",

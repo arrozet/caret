@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -16,9 +16,10 @@ const mock_load_messages = vi.fn();
 const mock_clear = vi.fn();
 const mock_clear_pending_change = vi.fn();
 
-const { mock_get_models, mock_list_conversations } = vi.hoisted(() => ({
+const { mock_get_models, mock_list_conversations, mock_complete_text } = vi.hoisted(() => ({
   mock_get_models: vi.fn(() => new Promise<never>(() => {})),
   mock_list_conversations: vi.fn(() => new Promise<never>(() => {})),
+  mock_complete_text: vi.fn().mockResolvedValue({ completion: " there" }),
 }));
 
 let mock_messages: Array<{
@@ -98,6 +99,7 @@ vi.mock("../api/aiApi", () => ({
   listConversations: mock_list_conversations,
   streamAiResponse: vi.fn(),
   getModels: mock_get_models,
+  completeText: mock_complete_text,
 }));
 
 // Import after mocking so the component sees the test doubles.
@@ -126,6 +128,31 @@ describe("ChatPanel", () => {
     render(<ChatPanel document_id="doc-1" />);
     const input = screen.getByRole("textbox", { name: "input_placeholder" });
     expect(input).toBeInTheDocument();
+  });
+
+  it("shows a completion suggestion and accepts it with Tab", async () => {
+    vi.useFakeTimers();
+
+    try {
+      render(<ChatPanel document_id="doc-1" />);
+      const input = screen.getByRole("textbox", { name: "input_placeholder" });
+
+      await act(async () => {
+        fireEvent.change(input, { target: { value: "Hello" } });
+        await vi.advanceTimersByTimeAsync(400);
+      });
+
+      expect(mock_complete_text).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("chat-completion-suggestion")).toHaveTextContent("there");
+
+      await act(async () => {
+        fireEvent.keyDown(input, { key: "Tab" });
+      });
+
+      expect(input).toHaveValue("Hello there");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows the close button", () => {

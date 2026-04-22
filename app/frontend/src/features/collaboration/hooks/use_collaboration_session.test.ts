@@ -2,24 +2,43 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useCollaborationSession } from "./useCollaborationSession";
 
-const connect_mock = vi.fn();
-const disconnect_mock = vi.fn();
-const destroy_mock = vi.fn();
-let sync_handler: ((is_synced: boolean) => void) | null = null;
-const on_mock = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-  if (event === "sync") {
-    sync_handler = handler as (is_synced: boolean) => void;
-  }
-});
-const off_mock = vi.fn();
-const set_local_state_field_mock = vi.fn();
-const awareness_on_mock = vi.fn();
-const awareness_off_mock = vi.fn();
+const {
+  connect_mock,
+  disconnect_mock,
+  destroy_mock,
+  on_mock,
+  off_mock,
+  set_local_state_field_mock,
+  awareness_on_mock,
+  awareness_off_mock,
+  extract_presence_users_mock,
+  bootstrap_collaboration_document_mock,
+  has_bootstrap_content_mock,
+  is_collaboration_document_empty_mock,
+  sync_state,
+} = vi.hoisted(() => {
+  const sync_state = { handler: null as ((is_synced: boolean) => void) | null };
 
-const extract_presence_users_mock = vi.fn(() => []);
-const bootstrap_collaboration_document_mock = vi.fn();
-const has_bootstrap_content_mock = vi.fn((content: unknown) => Boolean(content));
-const is_collaboration_document_empty_mock = vi.fn(() => true);
+  return {
+    connect_mock: vi.fn(),
+    disconnect_mock: vi.fn(),
+    destroy_mock: vi.fn(),
+    on_mock: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      if (event === "sync") {
+        sync_state.handler = handler as (is_synced: boolean) => void;
+      }
+    }),
+    off_mock: vi.fn(),
+    set_local_state_field_mock: vi.fn(),
+    awareness_on_mock: vi.fn(),
+    awareness_off_mock: vi.fn(),
+    extract_presence_users_mock: vi.fn(() => []),
+    bootstrap_collaboration_document_mock: vi.fn(),
+    has_bootstrap_content_mock: vi.fn((content: unknown) => Boolean(content)),
+    is_collaboration_document_empty_mock: vi.fn(() => true),
+    sync_state,
+  };
+});
 
 vi.mock("../utils", () => ({
   LOCAL_COLLAB_WS_BASE_URL: "ws://localhost:3003/document",
@@ -44,18 +63,16 @@ vi.mock("../utils", () => ({
 }));
 
 vi.mock("../../editor/utils", () => ({
-  bootstrap_collaboration_document: (...args: unknown[]) =>
-    bootstrap_collaboration_document_mock(...args),
-  has_bootstrap_content: (...args: unknown[]) => has_bootstrap_content_mock(...args),
-  is_collaboration_document_empty: (...args: unknown[]) =>
-    is_collaboration_document_empty_mock(...args),
+  bootstrap_collaboration_document: bootstrap_collaboration_document_mock,
+  has_bootstrap_content: has_bootstrap_content_mock,
+  is_collaboration_document_empty: is_collaboration_document_empty_mock,
 }));
 
 /** Unit tests for collaboration session lifecycle hook. */
 describe("useCollaborationSession", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    sync_handler = null;
+    sync_state.handler = null;
   });
 
   /** Verifies disabled mode returns a safe disconnected state. */
@@ -124,7 +141,7 @@ describe("useCollaborationSession", () => {
 
     // Act
     act(() => {
-      sync_handler?.(true);
+      sync_state.handler?.(true);
     });
 
     // Assert
@@ -160,7 +177,7 @@ describe("useCollaborationSession", () => {
     );
 
     act(() => {
-      sync_handler?.(true);
+      sync_state.handler?.(true);
     });
 
     const initial_content = {

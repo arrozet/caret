@@ -150,6 +150,11 @@ export interface ModelsResponse {
   default_model_id: string;
 }
 
+/** Response body for POST /ai/completions. */
+export interface CompletionResponse {
+  completion: string;
+}
+
 // ---------------------------------------------------------------------------
 // REST API functions
 // ---------------------------------------------------------------------------
@@ -205,6 +210,23 @@ export function listMessages(conversation_id: string): Promise<MessageResponse[]
 export function deleteConversation(conversation_id: string): Promise<void> {
   return api_fetch<void>(`${AI_BASE}/conversations/${conversation_id}`, {
     method: "DELETE",
+  });
+}
+
+/**
+ * Request a short inline completion from the AI service.
+ *
+ * This endpoint is stateless and returns a single continuation string.
+ */
+export function completeText(
+  prompt: string,
+  model_id?: string,
+  signal?: AbortSignal,
+): Promise<CompletionResponse> {
+  return api_fetch<CompletionResponse>(`${AI_BASE}/completions`, {
+    method: "POST",
+    body: JSON.stringify({ prompt, model_id }),
+    signal,
   });
 }
 

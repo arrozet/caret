@@ -5,6 +5,7 @@ import {
   listMessages,
   type MessageResponse,
   type DocumentChangePayload,
+  type DocumentContextSnapshot,
 } from "../api/aiApi";
 import { useAiStore } from "../../../stores/aiStore";
 

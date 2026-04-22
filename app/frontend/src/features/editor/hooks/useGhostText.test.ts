@@ -10,6 +10,14 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+
+const { mock_complete_text } = vi.hoisted(() => ({
+  mock_complete_text: vi.fn().mockResolvedValue({ completion: " there" }),
+}));
+
+vi.mock("../../ai-assistant/api/aiApi", () => ({
+  completeText: mock_complete_text,
+}));
 import { useGhostText } from "./useGhostText";
 
 describe("useGhostText", () => {
@@ -49,6 +57,10 @@ describe("useGhostText", () => {
           removeEventListener: vi.fn(),
         },
       },
+      commands: {
+        setGhostText: vi.fn(),
+        clearGhostText: vi.fn(),
+      },
     } as unknown as import("@tiptap/core").Editor;
 
     const { result } = renderHook(() =>
@@ -72,5 +84,51 @@ describe("useGhostText", () => {
     );
     expect(typeof result.current.accept_suggestion).toBe("function");
     expect(typeof result.current.dismiss_suggestion).toBe("function");
+  });
+
+  it("should request a completion after typing pauses", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const dom = document.createElement("div");
+      const mock_editor = {
+        isDestroyed: false,
+        view: { dom },
+        state: {
+          selection: {
+            $head: {
+              start: () => 0,
+              end: () => 5,
+            },
+          },
+          doc: {
+            textBetween: vi.fn(() => "Hello"),
+          },
+        },
+        commands: {
+          setGhostText: vi.fn(),
+          clearGhostText: vi.fn(),
+        },
+      } as unknown as import("@tiptap/core").Editor;
+
+      renderHook(() =>
+        useGhostText({
+          editor: mock_editor,
+          conversationId: "conv-123",
+        }),
+      );
+
+      await act(async () => {
+        dom.dispatchEvent(new Event("input", { bubbles: true }));
+        await vi.advanceTimersByTimeAsync(400);
+      });
+
+      expect(mock_complete_text).toHaveBeenCalledTimes(1);
+      expect(mock_editor.commands.setGhostText as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+        " there",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
