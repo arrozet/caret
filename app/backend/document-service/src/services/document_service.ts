@@ -1,12 +1,13 @@
 import type { DocumentRepository } from "../repositories/document_repository.js";
+import type { DocumentMemberRepository } from "../repositories/document_member_repository.js";
 import type { DocumentVersionRepository } from "../repositories/document_version_repository.js";
 import type { WorkspaceRepository } from "../repositories/workspace_repository.js";
 import type { CreateDocumentDto } from "../dtos/create_document_dto.js";
 import type { UpdateDocumentDto } from "../dtos/update_document_dto.js";
 import type { DocumentResponseDto } from "../dtos/document_response_dto.js";
-import type { InviteWorkspaceMemberResponseDto } from "../dtos/invite_workspace_member_response_dto.js";
+import type { InviteDocumentMemberResponseDto } from "../dtos/invite_document_member_response_dto.js";
 import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
-import { NotFoundError, ForbiddenError, ConflictError } from "../lib/errors.js";
+import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from "../lib/errors.js";
 
 /**
  * Business logic for document lifecycle: create, read, update, delete.
@@ -18,6 +19,8 @@ import { NotFoundError, ForbiddenError, ConflictError } from "../lib/errors.js";
 export class DocumentService {
   /** Document table repository. */
   private documentRepository: DocumentRepository;
+  /** Per-document membership repository. */
+  private documentMemberRepository: DocumentMemberRepository;
   /** Document version table repository. */
   private versionRepository: DocumentVersionRepository;
   /** Workspace membership repository (for authorization checks). */
@@ -25,10 +28,12 @@ export class DocumentService {
 
   constructor(
     documentRepository: DocumentRepository,
+    documentMemberRepository: DocumentMemberRepository,
     versionRepository: DocumentVersionRepository,
     workspaceRepository: WorkspaceRepository,
   ) {
     this.documentRepository = documentRepository;
+    this.documentMemberRepository = documentMemberRepository;
     this.versionRepository = versionRepository;
     this.workspaceRepository = workspaceRepository;
   }
@@ -42,16 +47,39 @@ export class DocumentService {
    * @returns The created document as a response DTO.
    */
   async createDocument(dto: CreateDocumentDto, userId: string): Promise<DocumentResponseDto> {
+    if (!dto.workspace_id) {
+      throw new ValidationError("workspace_id is required");
+    }
+
+    const workspace = await this.workspaceRepository.findById(dto.workspace_id);
+    if (!workspace) {
+      throw new NotFoundError("Workspace not found");
+    }
+
     /* Authorization: caller must belong to the workspace */
     const membership = await this.workspaceRepository.findMembership(dto.workspace_id, userId);
     if (!membership) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
+    if (dto.folder_id !== undefined && dto.folder_id !== null) {
+      const folder = await this.workspaceRepository.findFolderById(dto.folder_id);
+      if (!folder) {
+        throw new NotFoundError("Folder not found");
+      }
+      if (folder.workspace_id !== dto.workspace_id) {
+        throw new ForbiddenError("Folder does not belong to the specified workspace");
+      }
+    }
+
+    const visibility =
+      this.getWorkspaceKind(workspace.settings) === "personal" ? "private" : "workspace";
+
     const doc = await this.documentRepository.create({
       title: dto.title,
       workspace_id: dto.workspace_id,
       folder_id: dto.folder_id ?? null,
+      visibility,
       owner_user_id: userId,
       created_by_user_id: userId,
       updated_by_user_id: userId,
@@ -89,10 +117,27 @@ export class DocumentService {
       throw new NotFoundError("Document not found");
     }
 
+    const workspaceMembership = await this.workspaceRepository.findMembership(
+      doc.workspace_id,
+      userId,
+    );
+    const documentMembership = await this.documentMemberRepository.findMembership(
+      documentId,
+      userId,
+    );
+
     /* Authorization */
-    const membership = await this.workspaceRepository.findMembership(doc.workspace_id, userId);
-    if (!membership) {
+    if (!workspaceMembership && !documentMembership) {
       throw new ForbiddenError("You are not a member of this workspace");
+    }
+
+    if (
+      doc.visibility === "private" &&
+      !documentMembership &&
+      workspaceMembership?.role !== "owner" &&
+      workspaceMembership?.role !== "admin"
+    ) {
+      throw new ForbiddenError("You do not have access to this document");
     }
 
     const latestVersion = await this.versionRepository.findLatest(documentId);
@@ -122,15 +167,48 @@ export class DocumentService {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    const { data, total } = await this.documentRepository.listByWorkspace(workspaceId, pagination);
+    const { data } = await this.documentRepository.listByWorkspace(workspaceId, pagination);
+    const visibleData = data.filter(
+      (doc) =>
+        doc.visibility !== "private" || membership.role === "owner" || membership.role === "admin",
+    );
     return {
-      data: data.map((doc) => this.toResponseDto(doc)),
+      data: visibleData.map((doc) => this.toResponseDto(doc)),
+      pagination: {
+        total: visibleData.length,
+        limit: pagination.limit,
+        offset: pagination.offset,
+      },
+    };
+  }
+
+  /**
+   * List documents directly shared with the current user.
+   */
+  async listSharedDocuments(
+    userId: string,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<DocumentResponseDto>> {
+    const { data, total } = await this.documentMemberRepository.listByUser(userId, pagination);
+
+    return {
+      data: data.map((row) => {
+        const { role: _role, ...document } = row;
+        return this.toResponseDto(document);
+      }),
       pagination: {
         total,
         limit: pagination.limit,
         offset: pagination.offset,
       },
     };
+  }
+
+  async list_shared_documents(
+    userId: string,
+    pagination: PaginationParams,
+  ): Promise<PaginatedResponse<DocumentResponseDto>> {
+    return this.listSharedDocuments(userId, pagination);
   }
 
   /**
@@ -151,14 +229,24 @@ export class DocumentService {
       throw new NotFoundError("Document not found");
     }
 
-    const membership = await this.workspaceRepository.findMembership(doc.workspace_id, userId);
-    if (!membership) {
+    const workspaceMembership = await this.workspaceRepository.findMembership(
+      doc.workspace_id,
+      userId,
+    );
+    const documentMembership = await this.documentMemberRepository.findMembership(
+      documentId,
+      userId,
+    );
+    if (!this.canModifyDocument(workspaceMembership, documentMembership)) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
     /* Build a type-safe update payload — only whitelisted fields */
     const updateFields: Partial<{
       title: string;
+      workspace_id: string;
+      folder_id: string | null;
+      visibility: string;
       updated_by_user_id: string;
       latest_version_id: string;
     }> = {
@@ -166,6 +254,37 @@ export class DocumentService {
     };
     if (dto.title !== undefined) {
       updateFields.title = dto.title;
+    }
+
+    let targetWorkspaceId = doc.workspace_id;
+    if (dto.workspace_id !== undefined) {
+      const targetWorkspace = await this.workspaceRepository.findById(dto.workspace_id);
+      if (!targetWorkspace) {
+        throw new NotFoundError("Workspace not found");
+      }
+
+      targetWorkspaceId = dto.workspace_id;
+      updateFields.workspace_id = dto.workspace_id;
+      updateFields.visibility =
+        this.getWorkspaceKind(targetWorkspace.settings) === "personal" ? "private" : "workspace";
+      if (dto.folder_id === undefined) {
+        updateFields.folder_id = null;
+      }
+    }
+
+    if (dto.folder_id !== undefined) {
+      if (dto.folder_id === null) {
+        updateFields.folder_id = null;
+      } else {
+        const folder = await this.workspaceRepository.findFolderById(dto.folder_id);
+        if (!folder) {
+          throw new NotFoundError("Folder not found");
+        }
+        if (folder.workspace_id !== targetWorkspaceId) {
+          throw new ForbiddenError("Folder does not belong to the specified workspace");
+        }
+        updateFields.folder_id = dto.folder_id;
+      }
     }
 
     /* If content was provided, create a new version snapshot */
@@ -207,8 +326,15 @@ export class DocumentService {
       throw new NotFoundError("Document not found");
     }
 
-    const membership = await this.workspaceRepository.findMembership(doc.workspace_id, userId);
-    if (!membership) {
+    const workspaceMembership = await this.workspaceRepository.findMembership(
+      doc.workspace_id,
+      userId,
+    );
+    const documentMembership = await this.documentMemberRepository.findMembership(
+      documentId,
+      userId,
+    );
+    if (!this.canModifyDocument(workspaceMembership, documentMembership)) {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
@@ -261,24 +387,28 @@ export class DocumentService {
   }
 
   /**
-   * Invite an existing user (resolved by email) to the document's workspace.
+   * Invite an existing user (resolved by email) to a document directly.
    *
-   * Current MVP behavior grants workspace membership (`member`) so the invited
-   * user can see and open the shared document in their list.
-   *
-   * @param document_id - Document UUID to share.
-   * @param invited_email - Email address of the target user.
-   * @param inviter_user_id - Authenticated inviter user UUID.
-   * @returns Invitation result payload.
+   * Direct document sharing is only available for documents that live in a
+   * shared workspace.
    */
   async inviteDocumentCollaborator(
     documentId: string,
     invitedEmail: string,
     inviterUserId: string,
-  ): Promise<InviteWorkspaceMemberResponseDto> {
+  ): Promise<InviteDocumentMemberResponseDto> {
     const doc = await this.documentRepository.findById(documentId);
     if (!doc) {
       throw new NotFoundError("Document not found");
+    }
+
+    const workspace = await this.workspaceRepository.findById(doc.workspace_id);
+    if (!workspace) {
+      throw new NotFoundError("Workspace not found");
+    }
+
+    if (this.getWorkspaceKind(workspace.settings) === "personal") {
+      throw new ForbiddenError("Personal workspaces cannot be shared directly");
     }
 
     const inviterMembership = await this.workspaceRepository.findMembership(
@@ -295,45 +425,33 @@ export class DocumentService {
       throw new NotFoundError("User with this email does not exist in Caret");
     }
 
-    const existingActive = await this.workspaceRepository.findMembership(
-      doc.workspace_id,
+    const existingMember = await this.documentMemberRepository.findMembership(
+      documentId,
       invitedUserId,
     );
-
-    if (existingActive) {
+    if (existingMember) {
       return {
-        workspace_id: doc.workspace_id,
+        document_id: documentId,
         user_id: invitedUserId,
         email: invitedEmail,
-        role: "member",
+        role: existingMember.role,
+        scope: "document",
       };
     }
 
-    const existingAny = await this.workspaceRepository.findMembershipAny(
-      doc.workspace_id,
-      invitedUserId,
-    );
-
-    if (existingAny) {
-      await this.workspaceRepository.reactivateMember(
-        doc.workspace_id,
-        invitedUserId,
-        inviterUserId,
-      );
-    } else {
-      await this.workspaceRepository.addMember({
-        workspace_id: doc.workspace_id,
-        user_id: invitedUserId,
-        role: "member",
-        invited_by_user_id: inviterUserId,
-      });
-    }
+    await this.documentMemberRepository.addMember({
+      document_id: documentId,
+      user_id: invitedUserId,
+      role: "editor",
+      added_by_user_id: inviterUserId,
+    });
 
     return {
-      workspace_id: doc.workspace_id,
+      document_id: documentId,
       user_id: invitedUserId,
       email: invitedEmail,
-      role: "member",
+      role: "editor",
+      scope: "document",
     };
   }
 
@@ -406,8 +524,36 @@ export class DocumentService {
     documentId: string,
     invitedEmail: string,
     inviterUserId: string,
-  ): Promise<InviteWorkspaceMemberResponseDto> {
+  ): Promise<InviteDocumentMemberResponseDto> {
     return this.inviteDocumentCollaborator(documentId, invitedEmail, inviterUserId);
+  }
+
+  /**
+   * Resolve the workspace kind from its settings JSON blob.
+   */
+  private getWorkspaceKind(settings: unknown): "personal" | "shared" {
+    if (typeof settings === "object" && settings !== null && "kind" in settings) {
+      const kind = (settings as { kind?: unknown }).kind;
+      if (kind === "personal") {
+        return "personal";
+      }
+    }
+
+    return "shared";
+  }
+
+  /**
+   * Determine whether the caller can modify a document.
+   */
+  private canModifyDocument(
+    workspaceMembership: { role: string } | null,
+    documentMembership: { role: string } | null,
+  ): boolean {
+    if (workspaceMembership) {
+      return true;
+    }
+
+    return documentMembership?.role === "owner" || documentMembership?.role === "editor";
   }
 }
 

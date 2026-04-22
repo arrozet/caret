@@ -7,4 +7,6 @@ export interface CreateWorkspaceDto {
   name: string;
   /** Optional URL-friendly slug. Auto-generated if omitted. */
   slug?: string;
+  /** Workspace kind: shared by default, personal for private home workspaces. */
+  kind?: "personal" | "shared";
 }

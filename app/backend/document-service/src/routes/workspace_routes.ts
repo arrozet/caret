@@ -2,7 +2,13 @@ import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import type { WorkspaceService } from "../services/workspace_service.js";
 import type { CreateWorkspaceDto } from "../dtos/create_workspace_dto.js";
-import { validateNonEmptyString, validateUuid, parsePagination } from "../lib/validation.js";
+import type { InviteWorkspaceMemberDto } from "../dtos/invite_workspace_member_dto.js";
+import {
+  validateNonEmptyString,
+  validateUuid,
+  parsePagination,
+  validateEmail,
+} from "../lib/validation.js";
 
 /**
  * Build Express Router for workspace CRUD endpoints.
@@ -11,6 +17,7 @@ import { validateNonEmptyString, validateUuid, parsePagination } from "../lib/va
  * Endpoints:
  *   POST   /          — create a workspace
  *   GET    /          — list the caller's workspaces
+ *   POST   /:id/invite — invite a collaborator by email
  *   GET    /:id       — get a single workspace
  *
  * @param workspace_service - Injected WorkspaceService instance.
@@ -34,6 +41,31 @@ export function createWorkspaceRoutes(workspaceService: WorkspaceService): Route
       next(err);
     }
   });
+
+  /**
+   * POST /:id/invite — Invite a collaborator by email.
+   */
+  router.post(
+    "/:id/invite",
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      try {
+        const id = req.params.id as string;
+        validateUuid(id, "id");
+        const dto = req.body as InviteWorkspaceMemberDto;
+        validateNonEmptyString(dto.email, "email");
+        validateEmail(dto.email, "email");
+        const userId = req.auth_user!.sub;
+        const result = await workspaceService.inviteWorkspaceCollaborator(
+          id,
+          dto.email.trim(),
+          userId,
+        );
+        res.status(201).json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   /**
    * GET / — List workspaces the authenticated user belongs to.

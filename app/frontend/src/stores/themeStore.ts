@@ -9,6 +9,12 @@ type ResolvedTheme = "light" | "dark";
 /** localStorage key for persisting the user's theme choice. */
 const THEME_STORAGE_KEY = "caret-theme";
 
+/** Whether DOM and localStorage access is available. */
+const is_browser_environment =
+  typeof window !== "undefined" &&
+  typeof document !== "undefined" &&
+  typeof localStorage !== "undefined";
+
 /** Shape of the theme store managed by Zustand. */
 interface ThemeState {
   /** The user's explicit preference (or "system" for OS-level). */
@@ -25,6 +31,9 @@ interface ThemeState {
  */
 function resolveTheme(theme: Theme): ResolvedTheme {
   if (theme === "system") {
+    if (!is_browser_environment) {
+      return "light";
+    }
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
   return theme;
@@ -36,6 +45,10 @@ function resolveTheme(theme: Theme): ResolvedTheme {
  * class-based dark mode).
  */
 function applyThemeToDom(resolved: ResolvedTheme): void {
+  if (!is_browser_environment) {
+    return;
+  }
+
   const root = document.documentElement;
   if (resolved === "dark") {
     root.classList.add("dark");
@@ -49,6 +62,10 @@ function applyThemeToDom(resolved: ResolvedTheme): void {
  * Falls back to "system" if nothing is stored or the value is invalid.
  */
 function readStoredTheme(): Theme {
+  if (!is_browser_environment) {
+    return "system";
+  }
+
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === "light" || stored === "dark" || stored === "system") {
     return stored;
@@ -79,7 +96,9 @@ export const useThemeStore = create<ThemeState>((set) => ({
   setTheme(theme: Theme) {
     const resolved = resolveTheme(theme);
     applyThemeToDom(resolved);
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    if (is_browser_environment) {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
     set({ theme, resolvedTheme: resolved });
   },
 }));
@@ -88,11 +107,13 @@ export const useThemeStore = create<ThemeState>((set) => ({
  * Listen for OS-level theme changes so "system" mode stays in sync.
  * This runs once at module load time.
  */
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  const state = useThemeStore.getState();
-  if (state.theme === "system") {
-    const resolved = resolveTheme("system");
-    applyThemeToDom(resolved);
-    useThemeStore.setState({ resolvedTheme: resolved });
-  }
-});
+if (is_browser_environment) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    const state = useThemeStore.getState();
+    if (state.theme === "system") {
+      const resolved = resolveTheme("system");
+      applyThemeToDom(resolved);
+      useThemeStore.setState({ resolvedTheme: resolved });
+    }
+  });
+}

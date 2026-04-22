@@ -16,6 +16,7 @@ describe("workspace_routes", () => {
     create_workspace: ReturnType<typeof vi.fn>;
     get_workspace: ReturnType<typeof vi.fn>;
     list_workspaces: ReturnType<typeof vi.fn>;
+    invite_workspace_collaborator: ReturnType<typeof vi.fn>;
   };
 
   /* ── fixtures ───────────────────────────────────────── */
@@ -132,11 +133,13 @@ describe("workspace_routes", () => {
       create_workspace: vi.fn(),
       get_workspace: vi.fn(),
       list_workspaces: vi.fn(),
+      invite_workspace_collaborator: vi.fn(),
     };
 
     workspace_service.createWorkspace = workspace_service.create_workspace;
     workspace_service.getWorkspace = workspace_service.get_workspace;
     workspace_service.listWorkspaces = workspace_service.list_workspaces;
+    workspace_service.inviteWorkspaceCollaborator = workspace_service.invite_workspace_collaborator;
 
     router = create_workspace_routes(workspace_service as never);
   });
@@ -194,6 +197,45 @@ describe("workspace_routes", () => {
 
       // Assert
       expect(next_error).toBe(conflict_err);
+    });
+  });
+
+  /* ── POST /:id/invite ───────────────────────────────── */
+
+  describe("POST /:id/invite", () => {
+    it("should_invite_collaborator_and_return_201", async () => {
+      // Arrange
+      workspace_service.invite_workspace_collaborator.mockResolvedValue({
+        workspace_id: WORKSPACE_ID,
+        user_id: "invited-user-1",
+        email: "juan@nombre.es",
+        role: "member",
+      });
+
+      // Act
+      const { status_code, body, next_error } = await call_route_handler(
+        router,
+        "post",
+        "/:id/invite",
+        {
+          params: { id: WORKSPACE_ID },
+          body: { email: "juan@nombre.es" },
+        },
+      );
+
+      // Assert
+      expect(next_error).toBeUndefined();
+      expect(status_code).toBe(201);
+      expect(body).toMatchObject({
+        workspace_id: WORKSPACE_ID,
+        email: "juan@nombre.es",
+        role: "member",
+      });
+      expect(workspace_service.invite_workspace_collaborator).toHaveBeenCalledWith(
+        WORKSPACE_ID,
+        "juan@nombre.es",
+        USER_ID,
+      );
     });
   });
 

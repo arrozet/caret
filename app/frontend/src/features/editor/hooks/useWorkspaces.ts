@@ -21,8 +21,12 @@ export function useWorkspaces() {
 export function useCreateWorkspace() {
   const queryClient = useQueryClient();
 
-  return useMutation<WorkspaceResponse, Error, { name: string; slug?: string }>({
-    mutationFn: ({ name, slug }) => createWorkspace(name, slug),
+  return useMutation<
+    WorkspaceResponse,
+    Error,
+    { name: string; slug?: string; kind?: "personal" | "shared" }
+  >({
+    mutationFn: ({ name, slug, kind }) => createWorkspace(name, slug, kind),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     },

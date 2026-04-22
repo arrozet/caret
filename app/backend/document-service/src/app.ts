@@ -5,6 +5,7 @@ import { config } from "./lib/config.js";
 import { logger } from "./lib/logger.js";
 import { db } from "./db/client.js";
 import { DocumentRepository } from "./repositories/document_repository.js";
+import { DocumentMemberRepository } from "./repositories/document_member_repository.js";
 import { WorkspaceRepository } from "./repositories/workspace_repository.js";
 import { DocumentVersionRepository } from "./repositories/document_version_repository.js";
 import { DocumentService } from "./services/document_service.js";
@@ -28,12 +29,14 @@ app.use(express.json());
    ============================================================ */
 
 const documentRepository = new DocumentRepository(db);
+const documentMemberRepository = new DocumentMemberRepository(db);
 const workspaceRepository = new WorkspaceRepository(db);
 const versionRepository = new DocumentVersionRepository(db);
 const folderRepository = new FolderRepository(db);
 
 const documentService = new DocumentService(
   documentRepository,
+  documentMemberRepository,
   versionRepository,
   workspaceRepository,
 );

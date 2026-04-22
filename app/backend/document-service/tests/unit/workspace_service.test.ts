@@ -15,6 +15,7 @@ describe("WorkspaceService", () => {
     create: ReturnType<typeof vi.fn>;
     findBySlug: ReturnType<typeof vi.fn>;
     findById: ReturnType<typeof vi.fn>;
+    findPersonalByUser: ReturnType<typeof vi.fn>;
     listByUser: ReturnType<typeof vi.fn>;
     addMember: ReturnType<typeof vi.fn>;
     findMembership: ReturnType<typeof vi.fn>;
@@ -32,7 +33,7 @@ describe("WorkspaceService", () => {
       slug: "my-project",
       name: "My Project",
       created_by_user_id: USER_ID,
-      settings: {},
+      settings: { kind: "shared" },
       created_at: new Date("2025-06-01T00:00:00Z"),
       updated_at: new Date("2025-06-01T00:00:00Z"),
       deleted_at: null,
@@ -59,6 +60,7 @@ describe("WorkspaceService", () => {
       create: vi.fn(),
       findBySlug: vi.fn(),
       findById: vi.fn(),
+      findPersonalByUser: vi.fn(),
       listByUser: vi.fn(),
       addMember: vi.fn(),
       findMembership: vi.fn(),
@@ -80,6 +82,27 @@ describe("WorkspaceService", () => {
    * deduplicación de slug y race condition con violación de unicidad.
    */
   describe("create_workspace", () => {
+    /** verifies that personal workspaces are created with the personal kind. */
+    it("should_create_personal_workspace_with_kind", async () => {
+      // Arrange
+      const dto = { name: "My Docs", kind: "personal" as const };
+      workspace_repo.findBySlug.mockResolvedValue(null);
+      workspace_repo.create.mockResolvedValue(make_workspace({ settings: { kind: "personal" } }));
+      workspace_repo.addMember.mockResolvedValue(make_membership());
+
+      // Act
+      const result = await service.create_workspace(dto, USER_ID);
+
+      // Assert
+      expect(workspace_repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "My Docs",
+          settings: { kind: "personal" },
+        }),
+      );
+      expect(result.kind).toBe("personal");
+    });
+
     /** verifica que crea workspace y agrega al creador como owner */
     it("should_create_workspace_and_add_creator_as_owner", async () => {
       // Arrange
@@ -194,6 +217,18 @@ describe("WorkspaceService", () => {
       });
       expect(typeof result.created_at).toBe("string");
       expect(typeof result.updated_at).toBe("string");
+    });
+
+    /** verifies that workspace invites are blocked for personal workspaces. */
+    it("should_forbid_invites_for_personal_workspaces", async () => {
+      // Arrange
+      workspace_repo.findById.mockResolvedValue(make_workspace({ settings: { kind: "personal" } }));
+      workspace_repo.findMembership.mockResolvedValue(make_membership());
+
+      // Act & Assert
+      await expect(service.get_workspace(WORKSPACE_ID, USER_ID)).resolves.toMatchObject({
+        kind: "personal",
+      });
     });
   });
 

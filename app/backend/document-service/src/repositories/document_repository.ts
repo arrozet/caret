@@ -80,6 +80,52 @@ export class DocumentRepository {
   }
 
   /**
+   * List documents directly shared with a user, excluding workspace shares.
+   * @param userId - User UUID.
+   * @param pagination - Limit and offset for pagination.
+   */
+  async listSharedWithUser(userId: string, pagination: PaginationParams) {
+    const whereClause = and(
+      eq(schema.document_members.user_id, userId),
+      isNull(schema.documents.deleted_at),
+    );
+
+    const selectFields = {
+      id: schema.documents.id,
+      workspace_id: schema.documents.workspace_id,
+      folder_id: schema.documents.folder_id,
+      title: schema.documents.title,
+      status: schema.documents.status,
+      visibility: schema.documents.visibility,
+      owner_user_id: schema.documents.owner_user_id,
+      created_at: schema.documents.created_at,
+      updated_at: schema.documents.updated_at,
+      role: schema.document_members.role,
+    };
+
+    const [data, countResult] = await Promise.all([
+      this.db
+        .select(selectFields)
+        .from(schema.document_members)
+        .innerJoin(schema.documents, eq(schema.document_members.document_id, schema.documents.id))
+        .where(whereClause)
+        .limit(pagination.limit)
+        .offset(pagination.offset),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.document_members)
+        .innerJoin(schema.documents, eq(schema.document_members.document_id, schema.documents.id))
+        .where(whereClause),
+    ]);
+
+    return { data, total: countResult[0].count };
+  }
+
+  async list_shared_with_user(userId: string, pagination: PaginationParams) {
+    return this.listSharedWithUser(userId, pagination);
+  }
+
+  /**
    * Update a document by ID and return the updated row.
    * @param id - Document UUID.
    * @param data - Partial column values to update.

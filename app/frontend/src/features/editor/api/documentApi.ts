@@ -40,6 +40,8 @@ export interface WorkspaceResponse {
   slug: string | null;
   /** Display name. */
   name: string;
+  /** Workspace kind. */
+  kind: "personal" | "shared";
   /** User who created the workspace. */
   created_by_user_id: string | null;
   /** Caller's role within this workspace. */
@@ -62,6 +64,22 @@ export interface InviteCollaboratorResponse {
   email: string;
   /** Assigned role for this MVP flow. */
   role: "member";
+}
+
+/**
+ * Response payload for a direct document share.
+ */
+export interface InviteDocumentCollaboratorResponse {
+  /** Document that now includes the invited member. */
+  document_id: string;
+  /** User id of the invited account. */
+  user_id: string;
+  /** Email used for the invite lookup. */
+  email: string;
+  /** Assigned document role for this MVP flow. */
+  role: "owner" | "editor" | "commenter" | "viewer";
+  /** Share scope for this response. */
+  scope: "document";
 }
 
 /**
@@ -138,10 +156,14 @@ export function deleteDocument(documentId: string): Promise<void> {
  * @param slug - Optional URL slug.
  * @returns The created workspace.
  */
-export function createWorkspace(name: string, slug?: string): Promise<WorkspaceResponse> {
+export function createWorkspace(
+  name: string,
+  slug?: string,
+  kind?: "personal" | "shared",
+): Promise<WorkspaceResponse> {
   return api_fetch<WorkspaceResponse>("/workspaces", {
     method: "POST",
-    body: JSON.stringify({ name, slug }),
+    body: JSON.stringify({ name, slug, kind }),
   });
 }
 
@@ -154,6 +176,14 @@ export function listWorkspaces(): Promise<WorkspaceResponse[]> {
 }
 
 /**
+ * List documents shared directly with the current user.
+ * @returns Array of directly shared documents.
+ */
+export function listSharedDocuments(): Promise<DocumentResponse[]> {
+  return api_fetch<DocumentResponse[]>("/documents/shared");
+}
+
+/**
  * Invite an existing Caret user to the current document's workspace by email.
  * @param document_id - Document UUID.
  * @param email - Target user email.
@@ -162,8 +192,24 @@ export function listWorkspaces(): Promise<WorkspaceResponse[]> {
 export function inviteDocumentCollaborator(
   documentId: string,
   email: string,
+): Promise<InviteDocumentCollaboratorResponse> {
+  return api_fetch<InviteDocumentCollaboratorResponse>(`/documents/${documentId}/invite`, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+/**
+ * Invite a collaborator to an entire workspace by email.
+ * @param workspaceId - Workspace UUID.
+ * @param email - Target user email.
+ * @returns Invitation result.
+ */
+export function inviteWorkspaceCollaborator(
+  workspaceId: string,
+  email: string,
 ): Promise<InviteCollaboratorResponse> {
-  return api_fetch<InviteCollaboratorResponse>(`/documents/${documentId}/invite`, {
+  return api_fetch<InviteCollaboratorResponse>(`/workspaces/${workspaceId}/invite`, {
     method: "POST",
     body: JSON.stringify({ email }),
   });

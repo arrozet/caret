@@ -5,6 +5,8 @@
 export interface WorkspaceResponseDto {
   /** Workspace UUID. */
   id: string;
+  /** Workspace kind, used to distinguish personal home workspaces. */
+  kind: "personal" | "shared";
   /** URL-friendly slug. */
   slug: string | null;
   /** Display name. */

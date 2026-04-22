@@ -1,6 +1,7 @@
 import type { WorkspaceRepository } from "../repositories/workspace_repository.js";
 import type { CreateWorkspaceDto } from "../dtos/create_workspace_dto.js";
 import type { WorkspaceResponseDto } from "../dtos/workspace_response_dto.js";
+import type { InviteWorkspaceMemberResponseDto } from "../dtos/invite_workspace_member_response_dto.js";
 import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
 import { NotFoundError, ForbiddenError, ConflictError } from "../lib/errors.js";
 
@@ -29,9 +30,17 @@ export class WorkspaceService {
    * @returns The created workspace as a response DTO.
    */
   async createWorkspace(dto: CreateWorkspaceDto, userId: string): Promise<WorkspaceResponseDto> {
+    if ((dto.kind ?? "shared") === "personal") {
+      const existingPersonal = await this.workspaceRepository.findPersonalByUser(userId);
+      if (existingPersonal) {
+        return this.toResponseDto(existingPersonal, "owner");
+      }
+    }
+
     const base_slug = dto.slug ?? dto.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
     const slug = await this.resolveUniqueSlug(base_slug);
+    const kind = dto.kind ?? "shared";
 
     let workspace;
     try {
@@ -39,6 +48,7 @@ export class WorkspaceService {
         name: dto.name,
         slug,
         created_by_user_id: userId,
+        settings: { kind },
       });
     } catch (err: unknown) {
       /* Safety net: race condition where slug was taken between check and insert */
@@ -127,6 +137,7 @@ export class WorkspaceService {
             slug: row.slug,
             name: row.name,
             created_by_user_id: row.created_by_user_id,
+            settings: row.settings,
             created_at: row.created_at,
             updated_at: row.updated_at,
           },
@@ -149,6 +160,81 @@ export class WorkspaceService {
   }
 
   /**
+   * Invite an existing user (resolved by email) to a workspace.
+   * Personal workspaces cannot be shared.
+   */
+  async inviteWorkspaceCollaborator(
+    workspaceId: string,
+    invitedEmail: string,
+    inviterUserId: string,
+  ): Promise<InviteWorkspaceMemberResponseDto> {
+    const workspace = await this.workspaceRepository.findById(workspaceId);
+    if (!workspace) {
+      throw new NotFoundError("Workspace not found");
+    }
+
+    if (this.getWorkspaceKind(workspace.settings) === "personal") {
+      throw new ForbiddenError("Personal workspaces cannot be shared");
+    }
+
+    const inviterMembership = await this.workspaceRepository.findMembership(
+      workspaceId,
+      inviterUserId,
+    );
+    if (!inviterMembership) {
+      throw new ForbiddenError("You are not a member of this workspace");
+    }
+
+    const invitedUserId = await this.workspaceRepository.findAuthUserIdByEmail(invitedEmail);
+    if (!invitedUserId) {
+      throw new NotFoundError("User with this email does not exist in Caret");
+    }
+
+    const existingActive = await this.workspaceRepository.findMembership(
+      workspaceId,
+      invitedUserId,
+    );
+    if (existingActive) {
+      return {
+        workspace_id: workspaceId,
+        user_id: invitedUserId,
+        email: invitedEmail,
+        role: "member",
+      };
+    }
+
+    const existingAny = await this.workspaceRepository.findMembershipAny(
+      workspaceId,
+      invitedUserId,
+    );
+    if (existingAny) {
+      await this.workspaceRepository.reactivateMember(workspaceId, invitedUserId, inviterUserId);
+    } else {
+      await this.workspaceRepository.addMember({
+        workspace_id: workspaceId,
+        user_id: invitedUserId,
+        role: "member",
+        invited_by_user_id: inviterUserId,
+      });
+    }
+
+    return {
+      workspace_id: workspaceId,
+      user_id: invitedUserId,
+      email: invitedEmail,
+      role: "member",
+    };
+  }
+
+  async invite_workspace_collaborator(
+    workspaceId: string,
+    invitedEmail: string,
+    inviterUserId: string,
+  ): Promise<InviteWorkspaceMemberResponseDto> {
+    return this.inviteWorkspaceCollaborator(workspaceId, invitedEmail, inviterUserId);
+  }
+
+  /**
    * Map a raw workspace row to a WorkspaceResponseDto.
    * @param workspace - Database workspace row.
    * @param role - Caller's role within the workspace (optional).
@@ -160,6 +246,7 @@ export class WorkspaceService {
       slug: string | null;
       name: string;
       created_by_user_id: string | null;
+      settings?: unknown;
       created_at: Date;
       updated_at: Date;
     },
@@ -167,6 +254,7 @@ export class WorkspaceService {
   ): WorkspaceResponseDto {
     return {
       id: workspace.id,
+      kind: this.getWorkspaceKind(workspace.settings),
       slug: workspace.slug,
       name: workspace.name,
       created_by_user_id: workspace.created_by_user_id,
@@ -174,6 +262,18 @@ export class WorkspaceService {
       created_at: workspace.created_at.toISOString(),
       updated_at: workspace.updated_at.toISOString(),
     };
+  }
+
+  /**
+   * Resolve a workspace kind from its JSON settings blob.
+   */
+  private getWorkspaceKind(settings: unknown): "personal" | "shared" {
+    if (typeof settings === "object" && settings !== null && "kind" in settings) {
+      const kind = (settings as { kind?: unknown }).kind;
+      if (kind === "personal") return "personal";
+    }
+
+    return "shared";
   }
 }
 

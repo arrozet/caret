@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { listDocuments } from "../api/documentApi";
+import { listDocuments, listSharedDocuments } from "../api/documentApi";
 import type { DocumentResponse } from "../api/documentApi";
 
 /**
@@ -13,5 +13,16 @@ export function useDocuments(workspaceId: string | undefined) {
     queryKey: ["documents", workspaceId],
     queryFn: () => listDocuments(workspaceId!),
     enabled: !!workspaceId,
+  });
+}
+
+/**
+ * TanStack Query hook to fetch documents shared directly with the user.
+ * @returns Standard useQuery result with typed document array.
+ */
+export function useSharedDocuments() {
+  return useQuery<DocumentResponse[]>({
+    queryKey: ["shared-documents"],
+    queryFn: listSharedDocuments,
   });
 }

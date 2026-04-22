@@ -61,6 +61,41 @@ export class WorkspaceRepository {
   }
 
   /**
+   * Find the active personal workspace for a user.
+   * @param userId - User UUID.
+   * @returns The workspace row, or null if the user has no personal workspace.
+   */
+  async findPersonalByUser(userId: string) {
+    const rows = await this.db
+      .select({
+        id: schema.workspaces.id,
+        slug: schema.workspaces.slug,
+        name: schema.workspaces.name,
+        created_by_user_id: schema.workspaces.created_by_user_id,
+        settings: schema.workspaces.settings,
+        created_at: schema.workspaces.created_at,
+        updated_at: schema.workspaces.updated_at,
+      })
+      .from(schema.workspace_members)
+      .innerJoin(schema.workspaces, eq(schema.workspace_members.workspace_id, schema.workspaces.id))
+      .where(
+        and(
+          eq(schema.workspace_members.user_id, userId),
+          isNull(schema.workspace_members.revoked_at),
+          isNull(schema.workspaces.deleted_at),
+          sql`${schema.workspaces.settings}->>'kind' = 'personal'`,
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ?? null;
+  }
+
+  async find_personal_by_user(userId: string) {
+    return this.findPersonalByUser(userId);
+  }
+
+  /**
    * List all workspaces the given user is a non-revoked member of, with pagination.
    * @param user_id - User UUID.
    * @param pagination - Limit and offset for pagination.
@@ -173,6 +208,23 @@ export class WorkspaceRepository {
 
   async find_membership_any(workspaceId: string, userId: string) {
     return this.findMembershipAny(workspaceId, userId);
+  }
+
+  /**
+   * Find a folder by its UUID.
+   * @param folderId - Folder UUID.
+   * @returns The folder row, or null when not found.
+   */
+  async findFolderById(folderId: string) {
+    const rows = await this.db
+      .select()
+      .from(schema.folders)
+      .where(and(eq(schema.folders.id, folderId), isNull(schema.folders.deleted_at)));
+    return rows[0] ?? null;
+  }
+
+  async find_folder_by_id(folderId: string) {
+    return this.findFolderById(folderId);
   }
 
   /**

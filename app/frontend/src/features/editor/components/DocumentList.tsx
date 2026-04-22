@@ -1,436 +1,407 @@
-import { useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Plus,
-  FileText,
-  Loader2,
-  Trash2,
-  Pencil,
-  Check,
-  X,
-  MoreVertical,
-  Info,
-} from "lucide-react";
+import { FileText, Loader2, MoveRight, Plus } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
-import { useDocuments } from "../hooks/useDocuments";
-import { useWorkspaces, useCreateWorkspace } from "../hooks/useWorkspaces";
-import { createDocument, updateDocument, deleteDocument } from "../api/documentApi";
-import type { DocumentResponse } from "../api/documentApi";
+import { NotificationToast } from "../../../components/ui/NotificationToast";
+import type { DocumentResponse, WorkspaceResponse } from "../api/documentApi";
+import { useCreateDocument } from "../hooks/useCreateDocument";
+import { useMoveDocument } from "../hooks/useMoveDocument";
+import { useDocuments, useSharedDocuments } from "../hooks/useDocuments";
+import { useCreateWorkspace, useWorkspaces } from "../hooks/useWorkspaces";
+
+type WorkspaceKind = "personal" | "shared";
+
+interface MoveTarget {
+  document: DocumentResponse;
+  workspace_id: string;
+}
 
 /**
- * Document list page.
+ * Documents home page.
  *
- * Shows the user's workspaces and documents. Provides a "New document"
- * button to create documents, and per-document actions: rename, delete.
- * If no workspace exists, the user is prompted to create one first
- * (auto-created on first visit).
+ * Groups the user's content into personal workspaces, shared workspaces,
+ * and directly shared documents.
  */
 export function DocumentList() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
-  const createWorkspaceMutation = useCreateWorkspace();
+  const { data: workspaces = [], isLoading: workspaces_loading } = useWorkspaces();
+  const { data: shared_documents = [], isLoading: shared_documents_loading } = useSharedDocuments();
+  const create_workspace_mutation = useCreateWorkspace();
 
-  /* Use the first workspace as the active workspace for this PoC */
-  const activeWorkspace = workspaces?.[0];
+  const [toast_message, set_toast_message] = useState<string | null>(null);
+  const [move_target, set_move_target] = useState<MoveTarget | null>(null);
+  const [move_workspace_id, set_move_workspace_id] = useState("");
 
-  const {
-    data: documents,
-    isLoading: documentsLoading,
-    error: documentsError,
-  } = useDocuments(activeWorkspace?.id);
+  const seen_shared_workspace_ids_ref = useRef(new Set<string>());
+  const seen_shared_document_ids_ref = useRef(new Set<string>());
+  const has_baseline_ref = useRef(false);
 
-  const [isCreating, setIsCreating] = useState(false);
+  const personal_workspaces = useMemo(
+    () => workspaces.filter((workspace) => workspace.kind === "personal"),
+    [workspaces],
+  );
+  const shared_workspaces = useMemo(
+    () => workspaces.filter((workspace) => workspace.kind === "shared"),
+    [workspaces],
+  );
+  const primary_personal_workspace = personal_workspaces[0] ?? null;
+  const create_document_mutation = useCreateDocument();
+  const move_document_mutation = useMoveDocument();
 
-  const createDocMutation = useMutation({
-    mutationFn: (workspaceId: string) => createDocument("Untitled", workspaceId),
-    onSuccess: (doc) => {
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-      navigate(`/documents/${doc.id}`);
-    },
-  });
-
-  /**
-   * Handle creating a new document.
-   * If no workspace exists, creates a default one first.
-   */
-  async function handle_create_document() {
-    setIsCreating(true);
-    try {
-      let workspaceId = activeWorkspace?.id;
-
-      if (!workspaceId) {
-        const newWorkspace = await createWorkspaceMutation.mutateAsync({
-          name: "My Workspace",
-        });
-        workspaceId = newWorkspace.id;
-      }
-
-      await createDocMutation.mutateAsync(workspaceId);
-    } finally {
-      setIsCreating(false);
+  useEffect(() => {
+    if (workspaces_loading || shared_documents_loading) {
+      return;
     }
+
+    const current_shared_workspace_ids = new Set(
+      shared_workspaces.map((workspace) => workspace.id),
+    );
+    const current_shared_document_ids = new Set(shared_documents.map((document) => document.id));
+
+    if (!has_baseline_ref.current) {
+      seen_shared_workspace_ids_ref.current = current_shared_workspace_ids;
+      seen_shared_document_ids_ref.current = current_shared_document_ids;
+      has_baseline_ref.current = true;
+      return;
+    }
+
+    const new_shared_workspace = shared_workspaces.find(
+      (workspace) => !seen_shared_workspace_ids_ref.current.has(workspace.id),
+    );
+    const new_shared_document = shared_documents.find(
+      (document) => !seen_shared_document_ids_ref.current.has(document.id),
+    );
+
+    if (new_shared_workspace) {
+      set_toast_message(`Shared workspace added: ${new_shared_workspace.name}`);
+    } else if (new_shared_document) {
+      set_toast_message(`Shared document added: ${new_shared_document.title}`);
+    }
+
+    seen_shared_workspace_ids_ref.current = current_shared_workspace_ids;
+    seen_shared_document_ids_ref.current = current_shared_document_ids;
+  }, [shared_documents, shared_documents_loading, shared_workspaces, workspaces_loading]);
+
+  async function handle_new_workspace() {
+    await create_workspace_mutation.mutateAsync({ name: "New workspace", kind: "shared" });
   }
 
-  const isLoading = workspacesLoading || documentsLoading;
+  async function handle_blank_document() {
+    const target_workspace =
+      primary_personal_workspace ??
+      (await create_workspace_mutation.mutateAsync({ name: "My Documents", kind: "personal" }));
+    const document = await create_document_mutation.mutateAsync(target_workspace.id);
+    navigate(`/documents/${document.id}`);
+  }
+
+  function handle_request_move(document: DocumentResponse) {
+    const default_workspace = shared_workspaces[0]?.id ?? "";
+    set_move_target({ document, workspace_id: default_workspace });
+    set_move_workspace_id(default_workspace);
+  }
+
+  async function handle_confirm_move() {
+    if (!move_target || !move_workspace_id) {
+      return;
+    }
+
+    await move_document_mutation.mutateAsync({
+      documentId: move_target.document.id,
+      workspaceId: move_workspace_id,
+    });
+    set_move_target(null);
+    set_move_workspace_id("");
+  }
+
+  const is_loading = workspaces_loading || shared_documents_loading;
 
   return (
-    <div className="flex flex-1 flex-col bg-app h-full">
+    <div className="flex h-full flex-1 flex-col overflow-y-auto bg-app">
       <div className="mx-auto w-full max-w-[var(--max-width-document-wide)] p-6 md:p-10">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-ui text-display text-text-primary">Documents</h1>
-            <p className="text-ui-base text-text-secondary mt-1">Manage and edit your documents</p>
-          </div>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={handle_create_document}
-            disabled={isCreating}
-            isLoading={isCreating}
-            className="shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-            Blank document
-          </Button>
-        </div>
-
-        {/* Loading state */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-text-secondary" />
-          </div>
-        )}
-
-        {/* Error state */}
-        {documentsError && (
-          <div className="rounded-base border border-error bg-error/10 p-4 text-ui-base text-error">
-            Failed to load documents: {documentsError.message}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!isLoading && !documentsError && documents?.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center bg-surface border border-border-subtle rounded-lg shadow-sm">
-            <div className="h-16 w-16 bg-accent-main/10 text-accent-main rounded-full flex items-center justify-center mb-4">
-              <FileText className="h-8 w-8" />
-            </div>
-            <p className="text-ui-lg font-medium text-text-primary">No documents yet</p>
-            <p className="mt-1 mb-6 text-ui-base text-text-secondary max-w-sm">
-              Create your first document to start writing. Documents are synced automatically.
+            <p className="mt-1 text-ui-base text-text-secondary">
+              Organize personal workspaces, shared spaces, and direct shares.
             </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={handle_new_workspace}
+              isLoading={create_workspace_mutation.isPending}
+            >
+              <Plus className="h-4 w-4" />
+              New workspace
+            </Button>
             <Button
               variant="primary"
               size="md"
-              onClick={handle_create_document}
-              disabled={isCreating}
-              isLoading={isCreating}
+              onClick={handle_blank_document}
+              isLoading={create_document_mutation.isPending}
             >
-              <Plus className="h-4 w-4" />
+              <FileText className="h-4 w-4" />
               Blank document
             </Button>
           </div>
-        )}
+        </div>
 
-        {/* Document Grid */}
-        {!isLoading && documents && documents.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {documents.map((doc) => (
-              <DocumentCard
-                key={doc.id}
-                document={doc}
-                on_navigate={() => navigate(`/documents/${doc.id}`)}
-              />
-            ))}
+        {is_loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-text-secondary" />
+          </div>
+        ) : (
+          <div className="space-y-10">
+            <section className="space-y-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="text-ui-lg font-medium text-text-primary">Personal workspace</h2>
+              </div>
+              {personal_workspaces.length > 0 ? (
+                <div className="space-y-4">
+                  {personal_workspaces.map((workspace) => (
+                    <WorkspaceSection
+                      key={workspace.id}
+                      workspace={workspace}
+                      onOpenDocument={(document_id) => navigate(`/documents/${document_id}`)}
+                      onRequestMove={handle_request_move}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyWorkspaceState onCreate={handle_blank_document} />
+              )}
+            </section>
+
+            {shared_workspaces.length > 0 ? (
+              <section className="space-y-4">
+                <h2 className="text-ui-lg font-medium text-text-primary">Shared workspaces</h2>
+                <div className="space-y-4">
+                  {shared_workspaces.map((workspace) => (
+                    <WorkspaceSection
+                      key={workspace.id}
+                      workspace={workspace}
+                      onOpenDocument={(document_id) => navigate(`/documents/${document_id}`)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {shared_documents.length > 0 ? (
+              <section className="space-y-4">
+                <h2 className="text-ui-lg font-medium text-text-primary">
+                  Directly shared documents
+                </h2>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {shared_documents.map((document) => (
+                    <DocumentCard
+                      key={document.id}
+                      document={document}
+                      workspace_kind="shared"
+                      onOpen={() => navigate(`/documents/${document.id}`)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </div>
         )}
+      </div>
+
+      {toast_message ? (
+        <NotificationToast message={toast_message} onDismiss={() => set_toast_message(null)} />
+      ) : null}
+
+      {move_target ? (
+        <MoveDocumentDialog
+          document_title={move_target.document.title}
+          workspaces={shared_workspaces}
+          selected_workspace_id={move_workspace_id}
+          on_select_workspace={set_move_workspace_id}
+          on_cancel={() => set_move_target(null)}
+          on_confirm={handle_confirm_move}
+          is_loading={move_document_mutation.isPending}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+interface WorkspaceSectionProps {
+  workspace: WorkspaceResponse;
+  onOpenDocument: (document_id: string) => void;
+  onRequestMove?: (document: DocumentResponse) => void;
+}
+
+function WorkspaceSection({ workspace, onOpenDocument, onRequestMove }: WorkspaceSectionProps) {
+  const { data: documents = [], isLoading } = useDocuments(workspace.id);
+
+  return (
+    <section className="space-y-3 rounded-lg border border-border-subtle bg-surface p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-ui-base font-medium text-text-primary">{workspace.name}</h3>
+          <p className="text-ui-sm text-text-secondary">
+            {workspace.kind === "personal" ? "Personal workspace" : "Shared workspace"}
+          </p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-ui-sm text-text-secondary">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading documents
+        </div>
+      ) : documents.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {documents.map((document) => (
+            <DocumentCard
+              key={document.id}
+              document={document}
+              workspace_kind={workspace.kind}
+              onOpen={() => onOpenDocument(document.id)}
+              onRequestMove={onRequestMove}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="text-ui-sm text-text-secondary">No documents yet.</p>
+      )}
+    </section>
+  );
+}
+
+interface DocumentCardProps {
+  document: DocumentResponse;
+  workspace_kind: WorkspaceKind;
+  onOpen: () => void;
+  onRequestMove?: (document: DocumentResponse) => void;
+}
+
+function DocumentCard({ document, workspace_kind, onOpen, onRequestMove }: DocumentCardProps) {
+  return (
+    <article className="group flex min-h-[184px] flex-col rounded-lg border border-border-subtle bg-surface shadow-sm transition hover:border-accent-main/30 hover:shadow-elevated">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-h-32 items-center justify-center border-b border-border-subtle bg-app/40 px-4 text-center"
+        aria-label={`Open ${document.title || "Untitled"}`}
+      >
+        <FileText className="h-10 w-10 text-text-secondary/70" aria-hidden="true" />
+      </button>
+
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div>
+          <p className="truncate text-ui-base font-medium text-text-primary">
+            {document.title || "Untitled"}
+          </p>
+          <p className="mt-1 text-ui-sm text-text-secondary">
+            Updated {new Date(document.updated_at).toLocaleDateString()}
+          </p>
+        </div>
+
+        {workspace_kind === "personal" && onRequestMove ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onRequestMove(document)}
+            className="mt-auto w-full"
+          >
+            <MoveRight className="h-4 w-4" />
+            Move to workspace
+          </Button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+interface EmptyWorkspaceStateProps {
+  onCreate: () => void;
+}
+
+function EmptyWorkspaceState({ onCreate }: EmptyWorkspaceStateProps) {
+  return (
+    <div className="rounded-lg border border-dashed border-border-subtle bg-surface p-6 text-center">
+      <p className="text-ui-base text-text-primary">No personal workspace yet.</p>
+      <p className="mt-1 text-ui-sm text-text-secondary">
+        Create a blank document to bootstrap your private home workspace.
+      </p>
+      <div className="mt-4">
+        <Button variant="secondary" size="sm" onClick={onCreate}>
+          <Plus className="h-4 w-4" />
+          Blank document
+        </Button>
       </div>
     </div>
   );
 }
 
-/* ============================================================
-   DocumentCard — Individual document row with actions
-   ============================================================ */
-
-interface DocumentCardProps {
-  /** Document data. */
-  document: DocumentResponse;
-  /** Navigate to the editor page. */
-  on_navigate: () => void;
+interface MoveDocumentDialogProps {
+  document_title: string;
+  workspaces: WorkspaceResponse[];
+  selected_workspace_id: string;
+  on_select_workspace: (workspace_id: string) => void;
+  on_cancel: () => void;
+  on_confirm: () => void;
+  is_loading: boolean;
 }
 
-/**
- * Single document card in the list. Supports inline rename
- * and delete with confirmation.
- */
-function DocumentCard({ document: doc, on_navigate }: DocumentCardProps) {
-  const query_client = useQueryClient();
-  const [is_renaming, set_is_renaming] = useState(false);
-  const [rename_value, set_rename_value] = useState(doc.title);
-  const [show_menu, set_show_menu] = useState(false);
-  const [show_delete_confirm, set_show_delete_confirm] = useState(false);
-  const [show_info, set_show_info] = useState(false);
-  const rename_input_ref = useRef<HTMLInputElement>(null);
-  const menu_ref = useRef<HTMLDivElement>(null);
-
-  const rename_mutation = useMutation({
-    mutationFn: (title: string) => updateDocument(doc.id, { title }),
-    onSuccess: () => {
-      query_client.invalidateQueries({ queryKey: ["documents"] });
-      set_is_renaming(false);
-    },
-  });
-
-  const delete_mutation = useMutation({
-    mutationFn: () => deleteDocument(doc.id),
-    onSuccess: () => {
-      query_client.invalidateQueries({ queryKey: ["documents"] });
-      set_show_delete_confirm(false);
-    },
-  });
-
-  /** Start rename mode. */
-  const start_rename = useCallback(() => {
-    set_rename_value(doc.title);
-    set_is_renaming(true);
-    set_show_menu(false);
-    setTimeout(() => rename_input_ref.current?.select(), 50);
-  }, [doc.title]);
-
-  /** Commit the rename. */
-  const commit_rename = useCallback(async () => {
-    const trimmed = rename_value.trim();
-    if (!trimmed || trimmed === doc.title) {
-      set_is_renaming(false);
-      return;
-    }
-    await rename_mutation.mutateAsync(trimmed);
-  }, [rename_value, doc.title, rename_mutation]);
-
-  /** Cancel the rename. */
-  const cancel_rename = useCallback(() => {
-    set_rename_value(doc.title);
-    set_is_renaming(false);
-  }, [doc.title]);
-
-  /** Handle keyboard events in rename input. */
-  const handle_rename_key_down = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        commit_rename();
-      } else if (e.key === "Escape") {
-        cancel_rename();
-      }
-    },
-    [commit_rename, cancel_rename],
-  );
-
-  /* Info view */
-  if (show_info) {
-    return (
-      <div className="group relative flex flex-col rounded-lg border border-border-subtle bg-surface shadow-sm transition-all h-full min-h-[224px]">
-        <div className="flex flex-1 flex-col items-center justify-center p-4 text-center">
-          <Info className="h-8 w-8 text-accent-main mb-3" />
-          <p className="text-ui-base text-text-primary mb-1 font-medium">Document Info</p>
-          <div className="text-ui-sm text-text-secondary mb-4 space-y-1">
-            <p>
-              Created:{" "}
-              {new Date(doc.created_at).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </p>
-          </div>
-          <div className="flex gap-2 w-full justify-center">
-            <Button variant="ghost" size="sm" onClick={() => set_show_info(false)}>
-              Close
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* Delete confirmation */
-  if (show_delete_confirm) {
-    return (
-      <div className="group relative flex flex-col rounded-lg border border-error/50 bg-error/5 shadow-sm transition-all h-full min-h-[224px]">
-        <div className="flex flex-1 flex-col items-center justify-center p-4 text-center">
-          <Trash2 className="h-8 w-8 text-error mb-3" />
-          <p className="text-ui-base text-text-primary mb-1">
-            Delete "<span className="font-medium">{doc.title || "Untitled"}</span>"?
-          </p>
-          <p className="text-ui-sm text-text-secondary mb-4">This action cannot be undone.</p>
-          <div className="flex gap-2 w-full justify-center">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => set_show_delete_confirm(false)}
-              disabled={delete_mutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => delete_mutation.mutateAsync()}
-              isLoading={delete_mutation.isPending}
-              disabled={delete_mutation.isPending}
-            >
-              Delete
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* Rename mode / Normal document card */
+function MoveDocumentDialog({
+  document_title,
+  workspaces,
+  selected_workspace_id,
+  on_select_workspace,
+  on_cancel,
+  on_confirm,
+  is_loading,
+}: MoveDocumentDialogProps) {
   return (
-    <div
-      className={`group relative flex flex-col rounded-lg border bg-surface shadow-sm transition-all h-full ${
-        is_renaming
-          ? "border-accent-main shadow-elevated"
-          : "border-border-subtle hover:shadow-elevated hover:border-accent-main/30"
-      }`}
-    >
-      {/* Visual document preview area (mock) */}
-      <button
-        onClick={on_navigate}
-        className="flex h-40 w-full items-center justify-center bg-app/50 border-b border-border-subtle relative overflow-hidden rounded-t-[calc(var(--radius-lg)-1px)]"
-        aria-label={`Open ${doc.title || "Untitled"}`}
-        disabled={is_renaming}
-      >
-        <div className="absolute inset-0 flex flex-col p-4 opacity-30 gap-2">
-          {/* Mock text lines to make it look like a document */}
-          <div className="h-2 w-3/4 rounded bg-text-secondary"></div>
-          <div className="h-2 w-full rounded bg-text-secondary"></div>
-          <div className="h-2 w-5/6 rounded bg-text-secondary"></div>
-          <div className="h-2 w-full rounded bg-text-secondary"></div>
-          <div className="h-2 w-2/3 rounded bg-text-secondary"></div>
-          <div className="h-2 w-full rounded bg-text-secondary"></div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-lg border border-border-subtle bg-surface p-5 shadow-elevated">
+        <h2 className="text-ui-lg font-semibold text-text-primary">Move document</h2>
+        <p className="mt-1 text-ui-sm text-text-secondary">
+          Choose a shared workspace for {document_title || "this document"}.
+        </p>
+
+        <div className="mt-4 space-y-2">
+          {workspaces.length > 0 ? (
+            workspaces.map((workspace) => (
+              <label
+                key={workspace.id}
+                className="flex items-center gap-3 rounded-[4px] border border-border-subtle px-3 py-2 text-ui-sm text-text-primary"
+              >
+                <input
+                  type="radio"
+                  name="move-workspace"
+                  checked={selected_workspace_id === workspace.id}
+                  onChange={() => on_select_workspace(workspace.id)}
+                />
+                {workspace.name}
+              </label>
+            ))
+          ) : (
+            <p className="text-ui-sm text-text-secondary">Create a shared workspace first.</p>
+          )}
         </div>
-        <FileText className="h-10 w-10 text-text-secondary opacity-50 relative z-10" />
-      </button>
 
-      {/* Info area */}
-      <div className="flex flex-col p-3">
-        {is_renaming ? (
-          <div className="flex items-center gap-2">
-            <input
-              ref={rename_input_ref}
-              type="text"
-              value={rename_value}
-              onChange={(e) => set_rename_value(e.target.value)}
-              onKeyDown={handle_rename_key_down}
-              onBlur={commit_rename}
-              className="min-w-0 flex-1 bg-app border border-border-subtle rounded px-2 py-1 text-ui-sm font-medium text-text-primary outline-none focus:border-accent-main focus:ring-1 focus:ring-accent-main"
-              placeholder="Document title"
-              autoFocus
-            />
-            <div className="flex shrink-0">
-              <button
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  commit_rename();
-                }}
-                className="p-1 rounded text-success hover:bg-success/10 cursor-pointer"
-                aria-label="Confirm rename"
-              >
-                <Check className="h-4 w-4" />
-              </button>
-              <button
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  cancel_rename();
-                }}
-                className="p-1 rounded text-text-secondary hover:bg-surface cursor-pointer"
-                aria-label="Cancel rename"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 flex-1">
-              <button
-                onClick={on_navigate}
-                className="w-full truncate text-left text-ui-base font-medium text-text-primary hover:text-accent-main"
-              >
-                {doc.title || "Untitled"}
-              </button>
-              <p className="text-ui-sm text-text-secondary mt-0.5">
-                {new Date(doc.updated_at).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </p>
-            </div>
-
-            {/* Actions menu */}
-            <div ref={menu_ref} className="relative ml-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  set_show_menu(!show_menu);
-                }}
-                className="p-1 rounded-[4px] text-text-secondary hover:text-text-primary hover:bg-app cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label="Document actions"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-
-              {/* Dropdown menu */}
-              {show_menu && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => set_show_menu(false)} />
-                  <div className="absolute right-0 top-full mt-1 z-40 w-36 rounded-md bg-surface border border-border-subtle shadow-elevated py-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        set_show_info(true);
-                        set_show_menu(false);
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-ui-sm text-text-primary hover:bg-app cursor-pointer"
-                    >
-                      <Info className="h-3.5 w-3.5" />
-                      Info
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        start_rename();
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-ui-sm text-text-primary hover:bg-app cursor-pointer"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Rename
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        set_show_delete_confirm(true);
-                        set_show_menu(false);
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-ui-sm text-error hover:bg-error/5 cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={on_cancel}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={on_confirm}
+            isLoading={is_loading}
+            disabled={!selected_workspace_id || workspaces.length === 0}
+          >
+            Move document
+          </Button>
+        </div>
       </div>
     </div>
   );

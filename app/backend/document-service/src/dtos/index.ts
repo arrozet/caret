@@ -12,6 +12,7 @@ export type { CreateWorkspaceDto } from "./create_workspace_dto.js";
 export type { WorkspaceResponseDto } from "./workspace_response_dto.js";
 export type { InviteWorkspaceMemberDto } from "./invite_workspace_member_dto.js";
 export type { InviteWorkspaceMemberResponseDto } from "./invite_workspace_member_response_dto.js";
+export type { InviteDocumentMemberResponseDto } from "./invite_document_member_response_dto.js";
 export type { CreateFolderDto } from "./create_folder_dto.js";
 export type { UpdateFolderDto } from "./update_folder_dto.js";
 export type { FolderResponseDto } from "./folder_response_dto.js";
