@@ -339,6 +339,8 @@ async def stream_ai_response(
             document_context=body.document_context,
             model_id=body.model_id,
             document_id=body.document_id,  # Pass optional document_id for RAG retrieval
+            workspace_id=body.workspace_id,
+            folder_id=body.folder_id,
             agent_type=body.agent_type,  # Pass optional agent_type for agentic mode
         ),
         media_type="text/event-stream",

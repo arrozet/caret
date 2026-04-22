@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic_ai import AgentRunResultEvent, PartStartEvent
+from pydantic_ai.messages import TextPart
 
 from models.ai import AiMessageRole
 from schemas.ai import StreamRequest
@@ -253,6 +255,41 @@ class TestRetrieveRagContext:
             top_k=3,
         )
 
+    @pytest.mark.asyncio
+    async def test_uses_workspace_scope_when_workspace_id_is_provided(self) -> None:
+        """_retrieve_rag_context should use workspace-scoped search when workspace_id is present."""
+        session = _make_mock_session()
+        service = AiAgentService(session)
+        doc_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+        folder_id = uuid.uuid4()
+
+        chunks = [_make_chunk_result(0, "Workspace passage.", 0.95)]
+
+        mock_emb_service = MagicMock()
+        mock_emb_service.search_similar_chunks = AsyncMock(return_value=[])
+        mock_emb_service.search_similar_chunks_in_workspace = AsyncMock(return_value=chunks)
+
+        with patch.dict(
+            "sys.modules",
+            {"services.embedding_service": _make_embedding_module(mock_emb_service)},
+        ):
+            result = await service._retrieve_rag_context(
+                document_id=doc_id,
+                workspace_id=workspace_id,
+                folder_id=folder_id,
+                query="Tell me about the workspace.",
+            )
+
+        assert "Workspace passage." in result
+        mock_emb_service.search_similar_chunks_in_workspace.assert_awaited_once_with(
+            query="Tell me about the workspace.",
+            workspace_id=workspace_id,
+            folder_id=folder_id,
+            document_id=doc_id,
+            top_k=5,
+        )
+
 
 # ---------------------------------------------------------------------------
 # AiAgentService.stream_response — RAG wiring
@@ -319,11 +356,85 @@ class TestStreamResponseRagWiring:
                 chunks.append(chunk)
 
         # _retrieve_rag_context must have been called exactly once with the right args
-        mock_rag.assert_awaited_once_with(document_id=doc_id, query="Summarise")
+        mock_rag.assert_awaited_once_with(
+            document_id=doc_id,
+            query="Summarise",
+            workspace_id=None,
+            folder_id=None,
+        )
 
         # Streaming must still complete successfully
         done = json.loads(chunks[-1].replace("data: ", "").strip())
         assert done["type"] == "done"
+
+    @pytest.mark.asyncio
+    async def test_stream_response_passes_workspace_context_to_general_agent(self) -> None:
+        """stream_response should inject workspace RAG context into general-agent deps."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        doc_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+        folder_id = uuid.uuid4()
+
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id, role=AiMessageRole.assistant, content="Answer."
+        )
+
+        async def fake_stream_events(*args, **kwargs):
+            yield PartStartEvent(index=0, part=TextPart(content="Answer."))
+            yield AgentRunResultEvent(result=MagicMock(output="Answer."))
+
+        mock_result = MagicMock()
+        mock_result.run_stream_events = MagicMock(return_value=fake_stream_events())
+
+        captured_deps: dict[str, object] = {}
+
+        def fake_general_deps(**kwargs):
+            captured_deps.update(kwargs)
+            deps = MagicMock(**kwargs)
+            deps.proposed_changes = []
+            return deps
+
+        with (
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("agents.general_agent.build_general_agent", return_value=mock_result),
+            patch("agents.general_agent.GeneralAgentDeps", side_effect=fake_general_deps),
+            patch.object(
+                AiAgentService,
+                "_retrieve_rag_context",
+                new_callable=AsyncMock,
+                return_value=(
+                    "--- Relevant document context (RAG) ---\n"
+                    "[1] Workspace passage.\n"
+                    "--- End of context ---"
+                ),
+            ),
+        ):
+            service = AiAgentService(session)
+            chunks = []
+            async for chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Summarise",
+                document_id=doc_id,
+                workspace_id=workspace_id,
+                folder_id=folder_id,
+                agent_type="general",
+            ):
+                chunks.append(chunk)
+
+        assert captured_deps["workspace_context"]
+        assert "Workspace passage." in str(captured_deps["workspace_context"])
 
     @pytest.mark.asyncio
     async def test_stream_response_does_not_call_rag_when_no_document_id(self) -> None:

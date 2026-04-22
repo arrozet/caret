@@ -191,6 +191,8 @@ export function EditorPage() {
   const { data: document, isLoading, error } = useDocument(document_id);
   const save_mutation = useSaveDocument(document_id ?? "");
   const invite_collaborator_mutation = useInviteDocumentCollaborator(document_id ?? "");
+  const workspace_id = document?.workspace_id;
+  const folder_id = document?.folder_id ?? undefined;
 
   const [save_status, set_save_status] = useState<SaveStatus>("idle");
   const [title, set_title] = useState("");
@@ -344,7 +346,12 @@ export function EditorPage() {
     }
   }, [editor_instance]);
 
-  useGhostText({ editor: editor_instance, conversationId: activeConversationId });
+  useGhostText({
+    editor: editor_instance,
+    conversationId: activeConversationId,
+    workspaceId: document?.workspace_id,
+    folderId: document?.folder_id,
+  });
   useFocusMode(true);
 
   useEffect(() => {
@@ -405,15 +412,24 @@ export function EditorPage() {
             content_text: text,
           });
           show_saved();
-          if (document_id && text.trim()) {
-            indexDocumentEmbeddings(document_id, text).catch(() => {});
+          if (document_id && workspace_id && text.trim()) {
+            indexDocumentEmbeddings(document_id, text, workspace_id, folder_id).catch(() => {});
           }
         } catch {
           set_save_status("error");
         }
       }, AUTOSAVE_DELAY_MS);
     },
-    [save_mutation, show_saved, document_id, debug_log, remember_document_context, set_save_status],
+    [
+      save_mutation,
+      show_saved,
+      document_id,
+      debug_log,
+      remember_document_context,
+      set_save_status,
+      workspace_id,
+      folder_id,
+    ],
   );
 
   const handleTitleChange = useCallback(
@@ -648,6 +664,8 @@ export function EditorPage() {
           <Suspense fallback={null}>
             <ChatPanel
               document_id={document_id ?? ""}
+              workspace_id={workspace_id}
+              folder_id={folder_id}
               get_document_context={get_document_context_snapshot}
               resolve_pending_change_token={resolve_pending_change_token}
             />

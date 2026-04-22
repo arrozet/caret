@@ -8,7 +8,7 @@ dependency_overrides mechanism — the correct approach for testing FastAPI apps
 
 import uuid
 from collections.abc import AsyncGenerator
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -103,12 +103,14 @@ class TestIndexEndpointAuth:
     async def test_index_requires_auth(self, client) -> None:
         """POST /ai/embeddings/index without an Authorization header must return 401."""
         # Arrange — no Authorization header
+        workspace_id = uuid.uuid4()
 
         # Act
         response = await client.post(
             "/ai/embeddings/index",
             json={
                 "document_id": str(uuid.uuid4()),
+                "workspace_id": str(workspace_id),
                 "content": "Some document content.",
             },
         )
@@ -120,6 +122,7 @@ class TestIndexEndpointAuth:
         """POST /ai/embeddings/index with empty content must return 422 (validation error)."""
         # Arrange — override auth so validation is reached
         mock_user = _make_mock_user()
+        workspace_id = uuid.uuid4()
         app.dependency_overrides[get_current_user] = lambda: mock_user
 
         try:
@@ -128,6 +131,7 @@ class TestIndexEndpointAuth:
                 "/ai/embeddings/index",
                 json={
                     "document_id": str(uuid.uuid4()),
+                    "workspace_id": str(workspace_id),
                     "content": "",
                 },
                 headers={"Authorization": "Bearer fake-token"},
@@ -142,6 +146,7 @@ class TestIndexEndpointAuth:
         """POST /ai/embeddings/index with a non-UUID document_id must return 422."""
         # Arrange — override auth so validation is reached
         mock_user = _make_mock_user()
+        workspace_id = uuid.uuid4()
         app.dependency_overrides[get_current_user] = lambda: mock_user
 
         try:
@@ -150,6 +155,7 @@ class TestIndexEndpointAuth:
                 "/ai/embeddings/index",
                 json={
                     "document_id": "not-a-uuid",
+                    "workspace_id": str(workspace_id),
                     "content": "Valid content.",
                 },
                 headers={"Authorization": "Bearer fake-token"},
@@ -159,6 +165,45 @@ class TestIndexEndpointAuth:
 
         # Assert
         assert response.status_code == 422
+
+
+class TestIndexEndpointSuccess:
+    """Verify the index endpoint forwards metadata to EmbeddingService."""
+
+    async def test_index_forwards_workspace_and_folder_metadata(
+        self,
+        client_with_auth_and_db,
+    ) -> None:
+        """POST /ai/embeddings/index should call the service with workspace metadata."""
+        document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+        folder_id = uuid.uuid4()
+
+        with patch(
+            "services.embedding_service.EmbeddingService.index_document",
+            new_callable=AsyncMock,
+            return_value=4,
+        ) as mock_index:
+            response = await client_with_auth_and_db.post(
+                "/ai/embeddings/index",
+                json={
+                    "document_id": str(document_id),
+                    "workspace_id": str(workspace_id),
+                    "folder_id": str(folder_id),
+                    "content": "Document content.",
+                },
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["document_id"] == str(document_id)
+        assert response.json()["chunks_indexed"] == 4
+        mock_index.assert_awaited_once_with(
+            document_id=document_id,
+            content="Document content.",
+            workspace_id=workspace_id,
+            folder_id=folder_id,
+        )
 
 
 # ---------------------------------------------------------------------------

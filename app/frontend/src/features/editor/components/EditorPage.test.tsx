@@ -360,6 +360,13 @@ describe("EditorPage", () => {
       | { content_text?: string }
       | undefined;
     expect(last_call?.content_text).toBe("Hola.");
+
+    expect(mock_index_document_embeddings).toHaveBeenCalledWith(
+      "doc-1",
+      "Hola.",
+      "ws-1",
+      undefined,
+    );
   });
 
   it("accept converts AI content through the schema-aware helper", () => {

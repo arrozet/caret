@@ -195,13 +195,15 @@ describe("ChatPanel", () => {
   });
 
   it("sends a message on Enter key", () => {
-    render(<ChatPanel document_id="doc-1" />);
+    render(<ChatPanel document_id="doc-1" workspace_id="ws-1" folder_id="folder-1" />);
     const input = screen.getByRole("textbox", { name: "input_placeholder" });
     fireEvent.change(input, { target: { value: "Test message" } });
     fireEvent.keyDown(input, { key: "Enter", shiftKey: false });
     expect(mock_send_message).toHaveBeenCalledWith(
       "Test message",
       "doc-1",
+      "ws-1",
+      "folder-1",
       undefined,
       undefined,
       undefined,

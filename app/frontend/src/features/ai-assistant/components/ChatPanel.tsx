@@ -309,6 +309,10 @@ interface ChatPanelProps {
    * Used when creating a new AI conversation.
    */
   document_id: string;
+  /** Workspace UUID for workspace-scoped retrieval. */
+  workspace_id?: string;
+  /** Folder UUID for folder-aware retrieval ranking. */
+  folder_id?: string;
   /**
    * Callback that returns the current live editor snapshot on demand.
    * Called immediately before each message is sent so the AI always receives
@@ -338,6 +342,8 @@ interface ChatPanelProps {
  */
 export function ChatPanel({
   document_id,
+  workspace_id,
+  folder_id,
   get_document_context,
   resolve_pending_change_token,
 }: ChatPanelProps) {
@@ -518,12 +524,22 @@ export function ChatPanel({
     isUserScrolling.current = false;
     const agentTypeToUse = aiMode === "agent" ? selectedAgentType : undefined;
     const currentContext = get_document_context?.();
-    await send_message(trimmed, document_id, currentContext, selectedModelId, agentTypeToUse);
+    await send_message(
+      trimmed,
+      document_id,
+      workspace_id,
+      folder_id,
+      currentContext,
+      selectedModelId,
+      agentTypeToUse,
+    );
   }, [
     inputValue,
     is_loading,
     send_message,
     document_id,
+    workspace_id,
+    folder_id,
     get_document_context,
     selectedModelId,
     aiMode,

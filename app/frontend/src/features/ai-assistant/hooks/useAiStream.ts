@@ -44,6 +44,8 @@ export interface UseAiStreamReturn {
   send_message: (
     user_message: string,
     document_id: string,
+    workspace_id?: string,
+    folder_id?: string,
     document_context?: string | DocumentContextSnapshot,
     model_id?: string,
     agent_type?: string,
@@ -127,6 +129,8 @@ export function useAiStream(): UseAiStreamReturn {
     async (
       user_message: string,
       document_id: string,
+      workspace_id?: string,
+      folder_id?: string,
       document_context?: string | DocumentContextSnapshot,
       model_id?: string,
       agent_type?: string,
@@ -173,6 +177,8 @@ export function useAiStream(): UseAiStreamReturn {
         const stream = streamAiResponse({
           conversation_id: conversationId,
           document_id,
+          workspace_id,
+          folder_id,
           message: user_message,
           document_context,
           model_id,

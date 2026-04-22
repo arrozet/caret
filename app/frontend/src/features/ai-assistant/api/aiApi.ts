@@ -220,6 +220,10 @@ export interface StreamRequestOptions {
   conversation_id: string;
   /** Active document UUID, used for document-scoped retrieval/context. */
   document_id: string;
+  /** Workspace UUID used to scope related-document retrieval. */
+  workspace_id?: string;
+  /** Folder UUID used to prefer nearby documents during retrieval. */
+  folder_id?: string;
   /** The user message text to send. */
   message: string;
   /** Optional document snapshot for context. */
@@ -251,8 +255,17 @@ export interface StreamRequestOptions {
 export async function* streamAiResponse(
   options: StreamRequestOptions,
 ): AsyncGenerator<StreamChunk> {
-  const { conversation_id, document_id, message, document_context, model_id, agent_type, signal } =
-    options;
+  const {
+    conversation_id,
+    document_id,
+    workspace_id,
+    folder_id,
+    message,
+    document_context,
+    model_id,
+    agent_type,
+    signal,
+  } = options;
 
   // Retrieve the current auth session to attach the Bearer token.
   const {
@@ -267,7 +280,15 @@ export async function* streamAiResponse(
       "Content-Type": "application/json",
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
     },
-    body: JSON.stringify({ message, document_context, model_id, document_id, agent_type }),
+    body: JSON.stringify({
+      message,
+      document_context,
+      model_id,
+      document_id,
+      workspace_id,
+      folder_id,
+      agent_type,
+    }),
     signal,
   });
 
@@ -356,9 +377,11 @@ export interface IndexEmbeddingsResponse {
 export function indexDocumentEmbeddings(
   document_id: string,
   content: string,
+  workspace_id: string,
+  folder_id?: string | null,
 ): Promise<IndexEmbeddingsResponse> {
   return api_fetch<IndexEmbeddingsResponse>(`${EMBEDDINGS_BASE}/index`, {
     method: "POST",
-    body: JSON.stringify({ document_id, content }),
+    body: JSON.stringify({ document_id, workspace_id, folder_id, content }),
   });
 }

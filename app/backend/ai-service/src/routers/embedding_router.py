@@ -72,6 +72,8 @@ async def index_document(
     chunks_indexed = await service.index_document(
         document_id=body.document_id,
         content=body.content,
+        workspace_id=body.workspace_id,
+        folder_id=body.folder_id,
     )
     return IndexResponse(
         document_id=body.document_id,

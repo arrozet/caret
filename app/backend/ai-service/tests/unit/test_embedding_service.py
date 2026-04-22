@@ -204,6 +204,8 @@ class TestEmbeddingServiceIndexDocument:
         # Arrange
         session = _make_mock_session()
         document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+        folder_id = uuid.uuid4()
         content = "Hello world. " * 10  # short text → single chunk
 
         fake_vector = [0.1] * 1536
@@ -226,7 +228,12 @@ class TestEmbeddingServiceIndexDocument:
             ) as mock_bulk_insert,
         ):
             # Act
-            result = await service.index_document(document_id=document_id, content=content)
+            result = await service.index_document(
+                document_id=document_id,
+                content=content,
+                workspace_id=workspace_id,
+                folder_id=folder_id,
+            )
 
         # Assert
         assert result == expected_chunk_count
@@ -240,6 +247,8 @@ class TestEmbeddingServiceIndexDocument:
         assert isinstance(text_chunk, str)
         assert len(text_chunk) > 0
         assert vector == fake_vector
+        assert call_args[1]["workspace_id"] == workspace_id
+        assert call_args[1]["folder_id"] == folder_id
 
     @pytest.mark.asyncio
     async def test_index_document_empty_content_returns_zero(self) -> None:
@@ -247,6 +256,7 @@ class TestEmbeddingServiceIndexDocument:
         # Arrange
         session = _make_mock_session()
         document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
 
         service = EmbeddingService(session)
 
@@ -256,7 +266,11 @@ class TestEmbeddingServiceIndexDocument:
             new_callable=AsyncMock,
         ) as mock_embed:
             # Act
-            result = await service.index_document(document_id=document_id, content="   ")
+            result = await service.index_document(
+                document_id=document_id,
+                content="   ",
+                workspace_id=workspace_id,
+            )
 
         # Assert
         assert result == 0
@@ -268,6 +282,7 @@ class TestEmbeddingServiceIndexDocument:
         # Arrange
         session = _make_mock_session()
         document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
         # 2000 chars → more than one 512-char chunk
         content = "word " * 400
 
@@ -290,7 +305,11 @@ class TestEmbeddingServiceIndexDocument:
             ) as mock_bulk_insert,
         ):
             # Act
-            await service.index_document(document_id=document_id, content=content)
+            await service.index_document(
+                document_id=document_id,
+                content=content,
+                workspace_id=workspace_id,
+            )
 
         # Assert — bulk_insert received multiple chunk rows
         call_args = mock_bulk_insert.call_args
@@ -302,6 +321,7 @@ class TestEmbeddingServiceIndexDocument:
         """index_document must serialize writes for the same document id."""
         session = _make_mock_session()
         document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
         content = "Hello world. " * 10
 
         fake_vector = [0.1] * 1536
@@ -322,9 +342,55 @@ class TestEmbeddingServiceIndexDocument:
                 return_value=1,
             ),
         ):
-            await service.index_document(document_id=document_id, content=content)
+            await service.index_document(
+                document_id=document_id,
+                content=content,
+                workspace_id=workspace_id,
+            )
 
         assert session.execute.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_index_document_passes_workspace_and_folder_to_repository(self) -> None:
+        """index_document should forward workspace and folder metadata to bulk_insert."""
+        # Arrange
+        session = _make_mock_session()
+        document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+        folder_id = uuid.uuid4()
+        content = "Hello world. " * 10
+
+        fake_vector = [0.1] * 1536
+
+        service = EmbeddingService(session)
+
+        with (
+            patch.object(
+                service,
+                "_embed_texts",
+                new_callable=AsyncMock,
+                return_value=[fake_vector],
+            ),
+            patch.object(
+                service._repo,
+                "bulk_insert",
+                new_callable=AsyncMock,
+                return_value=1,
+            ) as mock_bulk_insert,
+        ):
+            # Act
+            await service.index_document(
+                document_id=document_id,
+                content=content,
+                workspace_id=workspace_id,
+                folder_id=folder_id,
+            )
+
+        # Assert
+        mock_bulk_insert.assert_called_once()
+        call_args = mock_bulk_insert.call_args
+        assert call_args[1]["workspace_id"] == workspace_id
+        assert call_args[1]["folder_id"] == folder_id
 
 
 # ---------------------------------------------------------------------------
@@ -454,6 +520,58 @@ class TestEmbeddingServiceSearch:
 
         # Assert
         assert results[0].score == 0.0
+
+    @pytest.mark.asyncio
+    async def test_search_in_workspace_returns_chunk_results(self) -> None:
+        """search_similar_chunks_in_workspace should return workspace-scoped ChunkResult objects."""
+        # Arrange
+        session = _make_mock_session()
+        workspace_id = uuid.uuid4()
+        folder_id = uuid.uuid4()
+        document_id = uuid.uuid4()
+        query = "What is the main topic?"
+
+        fake_query_vector = [0.5] * 1536
+        mock_chunk = _make_mock_chunk(chunk_index=4, chunk_text="Workspace passage here.")
+        mock_repo_hits = [(mock_chunk, 0.15)]
+
+        service = EmbeddingService(session)
+
+        with (
+            patch.object(
+                service,
+                "_embed_texts",
+                new_callable=AsyncMock,
+                return_value=[fake_query_vector],
+            ),
+            patch.object(
+                service._repo,
+                "search_in_workspace",
+                new_callable=AsyncMock,
+                return_value=mock_repo_hits,
+            ) as mock_search,
+        ):
+            # Act
+            results = await service.search_similar_chunks_in_workspace(
+                query=query,
+                workspace_id=workspace_id,
+                folder_id=folder_id,
+                document_id=document_id,
+                top_k=7,
+            )
+
+        # Assert
+        assert len(results) == 1
+        assert results[0].chunk_index == 4
+        assert results[0].chunk_text == "Workspace passage here."
+        assert abs(results[0].score - 0.85) < 1e-6
+        mock_search.assert_awaited_once_with(
+            query_embedding=fake_query_vector,
+            workspace_id=workspace_id,
+            folder_id=folder_id,
+            document_id=document_id,
+            top_k=7,
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -259,6 +259,20 @@ class StreamRequest(BaseModel):
             "and injects them into the system prompt for RAG-enhanced responses."
         ),
     )
+    workspace_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Optional workspace UUID. When provided together with document_id, "
+            "the service retrieves workspace-scoped related chunks."
+        ),
+    )
+    folder_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Optional folder UUID. Used to prefer related chunks from the same folder "
+            "when workspace-scoped retrieval is enabled."
+        ),
+    )
     agent_type: str | None = Field(
         default=None,
         description=(

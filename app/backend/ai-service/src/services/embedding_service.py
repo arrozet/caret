@@ -58,7 +58,13 @@ class EmbeddingService:
     # Public API
     # ------------------------------------------------------------------
 
-    async def index_document(self, document_id: uuid.UUID, content: str) -> int:
+    async def index_document(
+        self,
+        document_id: uuid.UUID,
+        content: str,
+        workspace_id: uuid.UUID,
+        folder_id: uuid.UUID | None = None,
+    ) -> int:
         """
         Split `content` into overlapping chunks, embed each chunk, and
         store them in the document_embeddings table.
@@ -69,6 +75,8 @@ class EmbeddingService:
         Args:
             document_id: UUID of the document being indexed.
             content: Plain-text content of the document.
+            workspace_id: UUID of the workspace that owns the document.
+            folder_id: Optional folder UUID for folder-aware retrieval.
 
         Returns:
             The number of chunks stored.
@@ -87,7 +95,12 @@ class EmbeddingService:
         vectors = await self._embed_texts(texts)
 
         chunk_rows = [(idx, text, vector) for (idx, text), vector in zip(chunks, vectors)]
-        return await self._repo.bulk_insert(document_id, chunk_rows)
+        return await self._repo.bulk_insert(
+            document_id,
+            chunk_rows,
+            workspace_id=workspace_id,
+            folder_id=folder_id,
+        )
 
     async def search_similar_chunks(
         self,
@@ -122,6 +135,39 @@ class EmbeddingService:
                 chunk_index=chunk.chunk_index,
                 chunk_text=chunk.chunk_text,
                 score=max(0.0, 1.0 - float(distance)),  # cosine dist → similarity
+            )
+            for chunk, distance in hits
+        ]
+
+    async def search_similar_chunks_in_workspace(
+        self,
+        query: str,
+        workspace_id: uuid.UUID,
+        document_id: uuid.UUID | None = None,
+        folder_id: uuid.UUID | None = None,
+        top_k: int = 5,
+    ) -> list[ChunkResult]:
+        """
+        Embed `query` and return the most similar chunks in a workspace.
+
+        The current document can be excluded and chunks from the same folder are
+        ordered first when a folder is available.
+        """
+        query_vectors = await self._embed_texts([query])
+        query_vector = query_vectors[0]
+
+        hits = await self._repo.search_in_workspace(
+            query_embedding=query_vector,
+            workspace_id=workspace_id,
+            folder_id=folder_id,
+            document_id=document_id,
+            top_k=top_k,
+        )
+        return [
+            ChunkResult(
+                chunk_index=chunk.chunk_index,
+                chunk_text=chunk.chunk_text,
+                score=max(0.0, 1.0 - float(distance)),
             )
             for chunk, distance in hits
         ]

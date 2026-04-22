@@ -202,7 +202,7 @@ describe("use_ai_stream", () => {
     const { result } = renderHook(() => useAiStream());
 
     await act(async () => {
-      await result.current.send_message("Hi", "doc1", {
+      await result.current.send_message("Hi", "doc1", "ws-1", "folder-1", {
         content_json: { type: "doc", content: [] },
         content_text: "Hello world",
         selection: { from: 0, to: 5, text: "Hello" },
@@ -213,6 +213,8 @@ describe("use_ai_stream", () => {
       expect.objectContaining({
         conversation_id: "convo-structured",
         document_id: "doc1",
+        workspace_id: "ws-1",
+        folder_id: "folder-1",
         document_context: {
           content_json: { type: "doc", content: [] },
           content_text: "Hello world",

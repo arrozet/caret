@@ -294,6 +294,16 @@ class DocumentEmbedding(Base):
         nullable=False,
         index=True,
     )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
+    )
     chunk_index: Mapped[int] = mapped_column(
         Integer,
         nullable=False,

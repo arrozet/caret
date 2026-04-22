@@ -14,6 +14,13 @@ class IndexRequest(BaseModel):
     """Request body for POST /embeddings/index — triggers chunk indexing for a document."""
 
     document_id: uuid.UUID = Field(..., description="UUID of the document to index.")
+    workspace_id: uuid.UUID = Field(
+        ..., description="UUID of the workspace that owns the document."
+    )
+    folder_id: uuid.UUID | None = Field(
+        default=None,
+        description="Optional folder UUID for folder-aware retrieval boosting.",
+    )
     content: str = Field(
         ...,
         min_length=1,
@@ -34,6 +41,14 @@ class SearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=2_000, description="Query text.")
     document_id: uuid.UUID = Field(..., description="Restrict the search to this document.")
+    workspace_id: uuid.UUID | None = Field(
+        default=None,
+        description="Optional workspace UUID for workspace-scoped retrieval.",
+    )
+    folder_id: uuid.UUID | None = Field(
+        default=None,
+        description="Optional folder UUID to prefer related chunks when searching.",
+    )
     top_k: int = Field(default=5, ge=1, le=20, description="Maximum number of chunks to return.")
 
 

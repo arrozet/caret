@@ -351,6 +351,8 @@ class AiAgentService:
         document_id: uuid.UUID,
         query: str,
         top_k: int = 5,
+        workspace_id: uuid.UUID | None = None,
+        folder_id: uuid.UUID | None = None,
     ) -> str:
         """
         Retrieve the most relevant document chunks for `query` using vector
@@ -363,6 +365,8 @@ class AiAgentService:
             document_id: Document whose embeddings to search.
             query: The user's message text used as the search query.
             top_k: Maximum number of chunks to retrieve.
+            workspace_id: Optional workspace UUID for workspace-scoped retrieval.
+            folder_id: Optional folder UUID for folder-aware ranking.
 
         Returns:
             A formatted multi-line string with ranked context chunks, or "" if
@@ -373,11 +377,20 @@ class AiAgentService:
             from services.embedding_service import EmbeddingService  # noqa: PLC0415
 
             emb_service = EmbeddingService(self._session)
-            chunks = await emb_service.search_similar_chunks(
-                query=query,
-                document_id=document_id,
-                top_k=top_k,
-            )
+            if workspace_id is not None:
+                chunks = await emb_service.search_similar_chunks_in_workspace(
+                    query=query,
+                    workspace_id=workspace_id,
+                    folder_id=folder_id,
+                    document_id=document_id,
+                    top_k=top_k,
+                )
+            else:
+                chunks = await emb_service.search_similar_chunks(
+                    query=query,
+                    document_id=document_id,
+                    top_k=top_k,
+                )
             if not chunks:
                 return ""
             lines = ["--- Relevant document context (RAG) ---"]
@@ -400,6 +413,8 @@ class AiAgentService:
         document_context: BaseModel | dict[str, Any] | str | None = None,
         model_id: str | None = None,
         document_id: uuid.UUID | None = None,
+        workspace_id: uuid.UUID | None = None,
+        folder_id: uuid.UUID | None = None,
         agent_type: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """
@@ -432,6 +447,8 @@ class AiAgentService:
             document_context: Optional structured or plain-text document snapshot for context.
             model_id: Optional LLM model slug to override the server default.
             document_id: Optional document UUID for RAG chunk retrieval.
+            workspace_id: Optional workspace UUID for workspace-scoped RAG retrieval.
+            folder_id: Optional folder UUID for ranking related chunks first.
             agent_type: Optional agent type; ``"general"`` activates the agentic
                         document-editing mode. Defaults to plain chat mode.
 
@@ -472,6 +489,8 @@ class AiAgentService:
             rag_context = await self._retrieve_rag_context(
                 document_id=document_id,
                 query=user_message,
+                workspace_id=workspace_id,
+                folder_id=folder_id,
             )
             if rag_context:
                 system_prompt += f"\n\n{rag_context}"
@@ -506,6 +525,7 @@ class AiAgentService:
                 document_content=normalized_document_context,
                 document_context=document_context,
                 selection=selection_payload,
+                workspace_context=rag_context if document_id is not None else None,
             )
             agent_instance = build_general_agent(model)
             fallback_proposed_texts: list[str] = []

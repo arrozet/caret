@@ -20,6 +20,7 @@ from typing import Any
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
+from pydantic_ai.models.test import TestModel
 
 # ---------------------------------------------------------------------------
 # Dependency injection container
@@ -34,16 +35,19 @@ class GeneralAgentDeps:
     Attributes:
         document_content: Plain-text snapshot of the current document.
                           None if no document context is available.
-        document_context: Raw structured document payload, preserved for
-                          editor-aware tool logic.
+    document_context: Raw structured document payload, preserved for
+                           editor-aware tool logic.
+        workspace_context: Workspace-level RAG context retrieved by the AI
+                           service and injected into the agent prompt.
         proposed_changes: Mutable list that agent tools append proposed edits to.
-                          The service layer reads this list after the agent run
-                          completes to emit document_change SSE events.
+                           The service layer reads this list after the agent run
+                           completes to emit document_change SSE events.
     """
 
     document_content: str | None = None
     document_context: dict[str, Any] | str | None = None
     selection: dict[str, Any] | None = None
+    workspace_context: str | None = None
     proposed_changes: list[dict[str, str]] = field(default_factory=list)
 
 
@@ -140,7 +144,10 @@ _SYSTEM_PROMPT = (
     "RULE 5: If the user says 'write it in the document', 'write it directly', "
     "'add to document', 'edit the document', or similar — this ALWAYS means you must "
     "call propose_document_replacement. Not write in chat.\n\n"
-    "RULE 6: When proposing replacement text, prefer Markdown formatting for headings, "
+    "RULE 6: If workspace_context is available, use it as related background from "
+    "other documents in the same workspace, but do not quote unrelated passages unless "
+    "they directly help the user's request.\n\n"
+    "RULE 7: When proposing replacement text, prefer Markdown formatting for headings, "
     "lists, blockquotes, code, links, and emphasis. If you need richer structures such "
     "as tables or task lists, you may emit valid HTML fragments inside the replacement "
     "text because the editor will parse them.\n\n"
@@ -180,26 +187,24 @@ def build_general_agent(model: Model) -> "Agent[GeneralAgentDeps, str]":
 # Backward-compatibility shim
 # ---------------------------------------------------------------------------
 # The test suite imports `GeneralAgent` by name and asserts it is an Agent
-# instance.  Provide a sentinel Agent built with a string model identifier
-# that can be constructed without a real API key so imports do not crash.
-# This shim is NOT used in production — all real requests go through
-# build_general_agent(model) which receives a fully resolved Model object.
+# instance.  Provide a sentinel Agent built with PydanticAI's TestModel so
+# imports do not require a real API key.  This shim is NOT used in production
+# — all real requests go through build_general_agent(model) which receives a
+# fully resolved Model object.
 
 
 def _make_sentinel_agent() -> "Agent[GeneralAgentDeps, str]":
     """
     Create a placeholder Agent used only for backward-compatible imports.
 
-    The sentinel is built with the string ``"openai:gpt-4o"`` so that
-    PydanticAI's lazy-resolution path is taken (no API key needed at
-    construction time in recent PydanticAI versions).  It is never invoked
-    in production.
+    The sentinel uses PydanticAI's in-memory TestModel so the module can be
+    imported in test environments without an OpenAI key.
 
     Returns:
         A GeneralAgentDeps-typed Agent that satisfies isinstance checks.
     """
     return Agent(
-        model="openai:gpt-4o",
+        model=TestModel(),
         deps_type=GeneralAgentDeps,
         output_type=str,
         system_prompt=_SYSTEM_PROMPT,

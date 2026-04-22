@@ -548,6 +548,8 @@ class TestStreamAiResponse:
         """POST /ai/conversations/{id}/stream should return text/event-stream content-type."""
         # Arrange
         conv_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+        folder_id = uuid.uuid4()
         mock_conv = _make_mock_conv()
         mock_conv.id = conv_id
 
@@ -569,7 +571,12 @@ class TestStreamAiResponse:
             # Act
             response = await client_with_auth_and_db.post(
                 f"/ai/conversations/{conv_id}/stream",
-                json={"message": "Hello there"},
+                json={
+                    "message": "Hello there",
+                    "document_id": str(uuid.uuid4()),
+                    "workspace_id": str(workspace_id),
+                    "folder_id": str(folder_id),
+                },
                 headers={"Authorization": "Bearer fake-token"},
             )
 
@@ -581,6 +588,8 @@ class TestStreamAiResponse:
         """POST /ai/conversations/{id}/stream response body contains valid SSE data lines."""
         # Arrange
         conv_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+        folder_id = uuid.uuid4()
         mock_conv = _make_mock_conv()
         mock_conv.id = conv_id
         assistant_msg_id = uuid.uuid4()
@@ -607,7 +616,12 @@ class TestStreamAiResponse:
             # Act
             response = await client_with_auth_and_db.post(
                 f"/ai/conversations/{conv_id}/stream",
-                json={"message": "Hello"},
+                json={
+                    "message": "Hello",
+                    "document_id": str(uuid.uuid4()),
+                    "workspace_id": str(workspace_id),
+                    "folder_id": str(folder_id),
+                },
                 headers={"Authorization": "Bearer fake-token"},
             )
 

@@ -24,6 +24,10 @@ interface UseGhostTextOptions {
   editor: Editor | null;
   /** Current AI conversation UUID (null if no conversation is active). */
   conversationId: string | null;
+  /** Workspace UUID for workspace-scoped retrieval. */
+  workspaceId?: string | null;
+  /** Folder UUID for folder-aware retrieval ranking. */
+  folderId?: string | null;
 }
 
 /** Return type of the useGhostText hook. */
@@ -65,7 +69,12 @@ function getCursorContext(editor: Editor): string {
  * @param options - Configuration options.
  * @returns State and handlers for the ghost text feature.
  */
-export function useGhostText({ editor, conversationId }: UseGhostTextOptions): UseGhostTextReturn {
+export function useGhostText({
+  editor,
+  conversationId,
+  workspaceId,
+  folderId,
+}: UseGhostTextOptions): UseGhostTextReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [suggestion, set_suggestion] = useState("");
 
@@ -119,6 +128,8 @@ export function useGhostText({ editor, conversationId }: UseGhostTextOptions): U
     try {
       const generator = streamAiResponse({
         conversation_id: conversationId,
+        workspace_id: workspaceId ?? undefined,
+        folder_id: folderId ?? undefined,
         message: `Continue the following text naturally (respond with only the continuation, no preamble): "${context}"`,
         document_context: context,
         signal: controller.signal,
@@ -148,7 +159,7 @@ export function useGhostText({ editor, conversationId }: UseGhostTextOptions): U
     } finally {
       setIsLoading(false);
     }
-  }, [editor, conversationId, dismiss_suggestion]);
+  }, [editor, conversationId, workspaceId, folderId, dismiss_suggestion]);
 
   /**
    * Register keyboard shortcuts on the editor DOM element.

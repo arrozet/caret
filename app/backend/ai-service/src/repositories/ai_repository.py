@@ -368,6 +368,8 @@ class DocumentEmbeddingRepository:
         self,
         document_id: uuid.UUID,
         chunks: list[tuple[int, str, list[float]]],
+        workspace_id: uuid.UUID,
+        folder_id: uuid.UUID | None = None,
     ) -> int:
         """
         Insert multiple embedding chunks for a document in one operation.
@@ -387,6 +389,8 @@ class DocumentEmbeddingRepository:
         rows = [
             DocumentEmbedding(
                 document_id=document_id,
+                workspace_id=workspace_id,
+                folder_id=folder_id,
                 chunk_index=index,
                 chunk_text=text,
                 embedding=vector,
@@ -424,6 +428,44 @@ class DocumentEmbeddingRepository:
             select(DocumentEmbedding, distance_col.label("distance"))
             .where(DocumentEmbedding.document_id == document_id)
             .order_by(distance_col)
+            .limit(top_k)
+        )
+        return [(row.DocumentEmbedding, row.distance) for row in result.all()]
+
+    async def search_in_workspace(
+        self,
+        query_embedding: list[float],
+        workspace_id: uuid.UUID,
+        folder_id: uuid.UUID | None = None,
+        document_id: uuid.UUID | None = None,
+        top_k: int = 5,
+    ) -> list[tuple["DocumentEmbedding", float]]:
+        """
+        Find the top-k most relevant chunks within a workspace.
+
+        The current document can be excluded so retrieval prefers related documents.
+        Chunks from the same folder receive a small score boost by being ordered first.
+        """
+        from pgvector.sqlalchemy import Vector
+        from sqlalchemy import and_, case, cast
+
+        distance_col = DocumentEmbedding.embedding.cosine_distance(
+            cast(query_embedding, Vector(1536))
+        )
+
+        where_clauses = [DocumentEmbedding.workspace_id == workspace_id]
+        if document_id is not None:
+            where_clauses.append(DocumentEmbedding.document_id != document_id)
+
+        order_by_clauses = []
+        if folder_id is not None:
+            order_by_clauses.append(case((DocumentEmbedding.folder_id == folder_id, 0), else_=1))
+        order_by_clauses.append(distance_col)
+
+        result = await self._session.execute(
+            select(DocumentEmbedding, distance_col.label("distance"))
+            .where(and_(*where_clauses))
+            .order_by(*order_by_clauses)
             .limit(top_k)
         )
         return [(row.DocumentEmbedding, row.distance) for row in result.all()]
