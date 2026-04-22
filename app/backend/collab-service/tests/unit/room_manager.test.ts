@@ -307,5 +307,21 @@ describe("RoomManager", () => {
       // Assert
       expect(room_manager.getParticipants(document_id)).toContain("user-1");
     });
+
+    /** Verifies stale socket leave requests do not evict a newer session for the same user. */
+    it("should_ignore_leave_requests_from_stale_socket_id", () => {
+      // Arrange
+      const document_id = "stale-socket-doc";
+      room_manager.joinRoom(document_id, "user-1", "sock-old");
+      room_manager.joinRoom(document_id, "user-1", "sock-new");
+
+      // Act
+      const result = room_manager.leaveRoom(document_id, "user-1", "sock-old");
+
+      // Assert
+      expect(result).toBe(false);
+      expect(room_manager.getParticipants(document_id)).toContain("user-1");
+      expect(room_manager.getParticipantCount(document_id)).toBe(1);
+    });
   });
 });

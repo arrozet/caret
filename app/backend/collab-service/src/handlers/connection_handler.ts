@@ -9,6 +9,7 @@
  */
 
 import type { WebSocket, RawData } from "ws";
+import { randomUUID } from "node:crypto";
 import * as Y from "yjs";
 import * as syncProtocol from "y-protocols/sync";
 import * as awarenessProtocol from "y-protocols/awareness";
@@ -77,7 +78,7 @@ export class ConnectionHandler {
     const { user_id, doc_id } = auth;
 
     // Generate unique socket_id for this connection
-    const socketId = `${user_id}_${Date.now()}`;
+    const socketId = `${user_id}_${randomUUID()}`;
 
     // Join the room (creates room and Y.Doc if needed)
     roomManager.joinRoom(doc_id, user_id, socketId);
@@ -117,7 +118,7 @@ export class ConnectionHandler {
     // Set up message handler
     ws.on("message", (data: RawData) => {
       try {
-        const closeCode = this.handleMessage(ctx, data, awareness);
+        const closeCode = this.handleMessage(ctx, data, awareness, ws);
         if (closeCode !== null) {
           ws.close(closeCode, "Protocol error");
         }
@@ -133,7 +134,7 @@ export class ConnectionHandler {
 
     // Set up close handler
     ws.on("close", (code, reason) => {
-      this.handleClose(ctx, awareness);
+      this.handleClose(ctx, awareness, ws, socketId);
       logger.info("Client disconnected", {
         doc_id,
         user_id,
@@ -149,7 +150,7 @@ export class ConnectionHandler {
         user_id,
         error: error.message,
       });
-      this.handleClose(ctx, awareness);
+      this.handleClose(ctx, awareness, ws, socketId);
     });
   }
 
@@ -164,12 +165,14 @@ export class ConnectionHandler {
    * @param ctx - Connection context
    * @param data - Raw message data (binary)
    * @param awareness - Awareness instance for the document
+   * @param ws - WebSocket used to verify the active connection
    * @returns Close code if connection should be closed due to protocol error, null otherwise
    */
   private handleMessage(
     ctx: ConnectionContext,
     data: RawData,
     awareness: awarenessProtocol.Awareness,
+    ws: WebSocket,
   ): number | null {
     const { auth } = ctx;
     const roomManager =
@@ -178,6 +181,13 @@ export class ConnectionHandler {
       return 1002;
     }
     const { user_id, doc_id } = auth;
+
+    // Ignore stale sockets that were superseded by a newer connection for the same user.
+    const activeSocket = this.roomSockets.get(doc_id)?.get(user_id);
+    if (activeSocket !== ws) {
+      logger.debug("Ignoring message from stale socket", { doc_id, user_id });
+      return null;
+    }
 
     // Convert RawData to Uint8Array
     const message = this.toUint8Array(data);
@@ -284,8 +294,15 @@ export class ConnectionHandler {
    *
    * @param ctx - Connection context
    * @param awareness - Awareness instance for the document
+   * @param ws - WebSocket used to verify the active connection
+   * @param socketId - Stable identifier for the current connection
    */
-  private handleClose(ctx: ConnectionContext, awareness: awarenessProtocol.Awareness): void {
+  private handleClose(
+    ctx: ConnectionContext,
+    awareness: awarenessProtocol.Awareness,
+    ws: WebSocket,
+    socketId: string,
+  ): void {
     const { auth } = ctx;
     const roomManager =
       ctx.roomManager ?? (ctx as ConnectionContext & { room_manager?: RoomManager }).room_manager;
@@ -294,6 +311,13 @@ export class ConnectionHandler {
     }
     const { user_id, doc_id } = auth;
 
+    // Ignore stale sockets that were already replaced by a newer connection.
+    const activeSocket = this.roomSockets.get(doc_id)?.get(user_id);
+    if (activeSocket !== ws) {
+      logger.debug("Ignoring close from stale socket", { doc_id, user_id });
+      return;
+    }
+
     // Remove awareness state for this user
     awarenessProtocol.removeAwarenessStates(awareness, [awareness.clientID], null);
 
@@ -301,7 +325,7 @@ export class ConnectionHandler {
     this.untrackSocket(doc_id, user_id);
 
     // Leave the room
-    roomManager.leaveRoom(doc_id, user_id);
+    roomManager.leaveRoom(doc_id, user_id, socketId);
 
     // Broadcast awareness removal to remaining peers
     const encoder = encoding.createEncoder();

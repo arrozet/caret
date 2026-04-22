@@ -56,12 +56,20 @@ export class RoomManager {
    *
    * @param document_id - The unique identifier of the document/room.
    * @param user_id - The unique identifier of the user leaving.
+   * @param socket_id - Optional WebSocket identifier for stale-connection protection.
    * @returns True if the user was removed, false if room or user didn't exist.
    */
-  leaveRoom(documentId: string, userId: string): boolean {
+  leaveRoom(documentId: string, userId: string, socketId?: string): boolean {
     const room = this.rooms.get(documentId);
     if (!room) {
       return false;
+    }
+
+    if (socketId !== undefined) {
+      const participant = room.participants.get(userId);
+      if (!participant || participant.socket_id !== socketId) {
+        return false;
+      }
     }
 
     const removed = room.participants.delete(userId);
@@ -69,8 +77,8 @@ export class RoomManager {
     return removed;
   }
 
-  leave_room(documentId: string, userId: string): boolean {
-    return this.leaveRoom(documentId, userId);
+  leave_room(documentId: string, userId: string, socketId?: string): boolean {
+    return this.leaveRoom(documentId, userId, socketId);
   }
 
   /**

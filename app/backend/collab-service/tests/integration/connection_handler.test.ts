@@ -592,6 +592,28 @@ describe("ConnectionHandler", () => {
       const message = (ws2.send as Mock).mock.calls[0][0] as Uint8Array;
       expect(get_message_type(message)).toBe(MESSAGE_AWARENESS);
     });
+
+    /** Verifies a stale close does not evict a newer connection for the same user. */
+    it("should_ignore_close_from_stale_socket_when_user_reconnects", () => {
+      // Arrange
+      const first_ws = make_mock_ws();
+      const second_ws = make_mock_ws();
+      const auth = make_auth("user-1", "doc-reconnect");
+
+      handler.handle_connection({ ws: first_ws, auth, room_manager });
+      handler.handle_connection({ ws: second_ws, auth, room_manager });
+
+      expect(room_manager.get_participants("doc-reconnect")).toContain("user-1");
+      expect(handler.get_room_socket_count("doc-reconnect")).toBe(1);
+
+      // Act - old socket closes after a newer reconnect is already active
+      first_ws.trigger("close", 1000, Buffer.from(""));
+
+      // Assert
+      expect(room_manager.get_participants("doc-reconnect")).toContain("user-1");
+      expect(handler.get_room_socket_count("doc-reconnect")).toBe(1);
+      expect(handler.get_active_room_count()).toBe(1);
+    });
   });
 
   /**
