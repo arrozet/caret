@@ -614,6 +614,32 @@ describe("ConnectionHandler", () => {
       expect(handler.get_room_socket_count("doc-reconnect")).toBe(1);
       expect(handler.get_active_room_count()).toBe(1);
     });
+
+    /** Verifies stale sockets cannot mutate document state after a reconnect. */
+    it("should_ignore_messages_from_stale_socket_after_reconnect", () => {
+      // Arrange
+      const first_ws = make_mock_ws();
+      const second_ws = make_mock_ws();
+      const auth = make_auth("user-1", "doc-stale-message");
+
+      handler.handle_connection({ ws: first_ws, auth, room_manager });
+      handler.handle_connection({ ws: second_ws, auth, room_manager });
+
+      (second_ws.send as Mock).mockClear();
+
+      const client_doc = new Y.Doc();
+      client_doc.getText("content").insert(0, "stale update");
+      const update = Y.encodeStateAsUpdate(client_doc);
+      const message = create_update_message(update);
+
+      // Act - old socket sends an update after the reconnect is already active
+      first_ws.trigger("message", Buffer.from(message));
+
+      // Assert
+      const server_doc = room_manager.get_doc("doc-stale-message");
+      expect(server_doc?.getText("content").toString()).toBe("");
+      expect(second_ws.send).not.toHaveBeenCalled();
+    });
   });
 
   /**
