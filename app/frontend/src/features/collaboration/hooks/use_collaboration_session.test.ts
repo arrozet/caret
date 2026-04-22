@@ -19,7 +19,10 @@ const awareness_off_mock = vi.fn();
 const extract_presence_users_mock = vi.fn(() => []);
 const bootstrap_collaboration_document_mock = vi.fn();
 const has_bootstrap_content_mock = vi.fn((content: unknown) => Boolean(content));
-const is_collaboration_document_empty_mock = vi.fn(() => true);
+const is_collaboration_document_empty_mock = vi.fn((ydoc: unknown) => {
+  void ydoc;
+  return true;
+});
 
 vi.mock("../utils", () => ({
   LOCAL_COLLAB_WS_BASE_URL: "ws://localhost:3003/document",
@@ -44,11 +47,10 @@ vi.mock("../utils", () => ({
 }));
 
 vi.mock("../../editor/utils", () => ({
-  bootstrap_collaboration_document: (...args: unknown[]) =>
-    bootstrap_collaboration_document_mock(...args),
-  has_bootstrap_content: (...args: unknown[]) => has_bootstrap_content_mock(...args),
-  is_collaboration_document_empty: (...args: unknown[]) =>
-    is_collaboration_document_empty_mock(...args),
+  bootstrap_collaboration_document: (ydoc: unknown, content: unknown) =>
+    bootstrap_collaboration_document_mock(ydoc, content),
+  has_bootstrap_content: (content: unknown) => has_bootstrap_content_mock(content),
+  is_collaboration_document_empty: (ydoc: unknown) => is_collaboration_document_empty_mock(ydoc),
 }));
 
 /** Unit tests for collaboration session lifecycle hook. */
