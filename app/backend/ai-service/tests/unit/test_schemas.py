@@ -13,6 +13,8 @@ from pydantic import ValidationError
 
 from models.ai import AiMessageRole, AiSuggestionStatus
 from schemas.ai import (
+    CompletionRequest,
+    CompletionResponse,
     ConversationCreate,
     DocumentChangePayload,
     DocumentContextPayload,
@@ -243,6 +245,53 @@ class TestStreamRequest:
         # Arrange / Act / Assert
         with pytest.raises(ValidationError):
             StreamRequest(message="hi", document_context="y" * 64_001)
+
+
+# ---------------------------------------------------------------------------
+# CompletionRequest / CompletionResponse
+# ---------------------------------------------------------------------------
+
+
+class TestCompletionRequest:
+    """Validate CompletionRequest body schema."""
+
+    def test_valid_minimal(self) -> None:
+        """CompletionRequest with only prompt should succeed."""
+        # Arrange
+        prompt = "Write a short intro"
+
+        # Act
+        schema = CompletionRequest(prompt=prompt)
+
+        # Assert
+        assert schema.prompt == prompt
+        assert schema.model_id is None
+
+    def test_valid_with_model_id(self) -> None:
+        """CompletionRequest should accept an optional model_id."""
+        # Arrange / Act
+        schema = CompletionRequest(prompt="Continue", model_id="z-ai/glm-4.5-air:free")
+
+        # Assert
+        assert schema.model_id == "z-ai/glm-4.5-air:free"
+
+    def test_empty_prompt_raises(self) -> None:
+        """CompletionRequest with empty prompt must raise ValidationError."""
+        # Arrange / Act / Assert
+        with pytest.raises(ValidationError):
+            CompletionRequest(prompt="")
+
+
+class TestCompletionResponse:
+    """Validate CompletionResponse schema."""
+
+    def test_valid_response(self) -> None:
+        """CompletionResponse should accept a non-empty completion string."""
+        # Arrange / Act
+        response = CompletionResponse(completion=" and keep going")
+
+        # Assert
+        assert response.completion == " and keep going"
 
 
 # ---------------------------------------------------------------------------

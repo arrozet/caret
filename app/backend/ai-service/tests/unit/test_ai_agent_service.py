@@ -253,6 +253,30 @@ class TestAiAgentServiceConversations:
         assert result.items[0].role == AiMessageRole.user
         assert result.items[1].role == AiMessageRole.assistant
 
+    @pytest.mark.asyncio
+    async def test_complete_text_returns_completion_string(self) -> None:
+        """complete_text should return only the final completion text."""
+        # Arrange
+        session = _make_mock_session()
+        mock_result = MagicMock()
+        mock_result.output = " and keep going."
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.run = AsyncMock(return_value=mock_result)
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("services.ai_agent_service.Agent", return_value=mock_agent_instance),
+        ):
+            # Act
+            service = AiAgentService(session)
+            result = await service.complete_text("Write the next sentence")
+
+        # Assert
+        assert result == "and keep going."
+        mock_agent_instance.run.assert_awaited_once_with("Write the next sentence")
+
 
 # ---------------------------------------------------------------------------
 # AiAgentService — SSE streaming

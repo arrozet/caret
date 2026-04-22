@@ -184,6 +184,30 @@ class SuggestionResponse(_TimestampedResponse):
 
 
 # ---------------------------------------------------------------------------
+# ai_completions
+# ---------------------------------------------------------------------------
+
+
+class CompletionRequest(BaseModel):
+    """Request body for POST /completions."""
+
+    prompt: str = Field(..., min_length=1, max_length=32_000)
+    model_id: str | None = Field(
+        default=None,
+        description=(
+            "Optional OpenRouter model slug to use for this completion. "
+            "Falls back to the cheapest default when omitted."
+        ),
+    )
+
+
+class CompletionResponse(BaseModel):
+    """Response body for inline completion requests."""
+
+    completion: str = Field(..., min_length=1)
+
+
+# ---------------------------------------------------------------------------
 # Models catalog
 # ---------------------------------------------------------------------------
 

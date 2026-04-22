@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 from db.session import engine
+from routers.ai_router import completion_router as ai_completion_router
 from routers.ai_router import meta_router as ai_meta_router
 from routers.ai_router import router as ai_router
 from routers.embedding_router import router as embedding_router
@@ -46,6 +47,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 app.include_router(ai_router, prefix="/ai", tags=["ai"])
 app.include_router(ai_meta_router, prefix="/ai", tags=["ai"])
+app.include_router(ai_completion_router, prefix="/ai", tags=["ai"])
 app.include_router(embedding_router, prefix="/ai", tags=["embeddings"])
 
 

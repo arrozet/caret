@@ -621,3 +621,33 @@ class TestStreamAiResponse:
         assert delta["type"] == "delta"
         assert done["type"] == "done"
         assert done["message_id"] == str(assistant_msg_id)
+
+
+# ---------------------------------------------------------------------------
+# POST /ai/completions
+# ---------------------------------------------------------------------------
+
+
+class TestCompletions:
+    """Test the inline completion endpoint."""
+
+    async def test_completion_requires_auth(self, client) -> None:
+        """POST /ai/completions without auth must return 401."""
+        response = await client.post("/ai/completions", json={"prompt": "Hello"})
+        assert response.status_code == 401
+
+    async def test_completion_returns_json_payload(self, client_with_auth_and_db) -> None:
+        """POST /ai/completions should return a JSON completion payload."""
+        with patch(
+            "services.ai_agent_service.AiAgentService.complete_text",
+            new_callable=AsyncMock,
+            return_value=" and keep going.",
+        ):
+            response = await client_with_auth_and_db.post(
+                "/ai/completions",
+                json={"prompt": "Write the next sentence"},
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"completion": " and keep going."}

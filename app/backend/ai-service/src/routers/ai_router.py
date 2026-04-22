@@ -8,6 +8,7 @@ Route map (relative to the /ai prefix registered in main.py):
   GET    /conversations/{id}/messages          — List messages in a conversation
   DELETE /conversations/{id}                   — Delete a conversation
   POST   /conversations/{id}/stream            — SSE: stream an AI response
+  POST   /completions                          — JSON: inline text completion
 
 Rule: NO business logic here. Validate input → call Service → return DTO.
 """
@@ -24,6 +25,8 @@ from core.config import settings
 from core.dependencies import get_db_session
 from core.models_catalog import OPENROUTER_MODELS, ModelEntry
 from schemas.ai import (
+    CompletionRequest,
+    CompletionResponse,
     ConversationCreate,
     ConversationListByDocumentResponse,
     ConversationResponse,
@@ -41,6 +44,7 @@ logger = logging.getLogger(__name__)
 # `meta_router` handles /ai/models (no auth required — static data)
 router = APIRouter(prefix="/conversations", tags=["ai"])
 meta_router = APIRouter(tags=["ai"])
+completion_router = APIRouter(tags=["ai"])
 
 
 # ---------------------------------------------------------------------------
@@ -349,3 +353,34 @@ async def stream_ai_response(
             "Connection": "keep-alive",
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /completions  — inline text completion
+# ---------------------------------------------------------------------------
+
+
+@completion_router.post(
+    "/completions",
+    response_model=CompletionResponse,
+    summary="Generate an inline completion",
+    description=(
+        "Returns a short completion string for autocomplete-style suggestions. "
+        "This endpoint is separate from conversation streaming and does not persist messages."
+    ),
+)
+async def complete_text(
+    body: CompletionRequest,
+    user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> CompletionResponse:
+    """
+    Generate a short inline completion for the supplied prompt.
+
+    The request is authenticated in the same way as conversation endpoints,
+    but the result is a plain JSON payload instead of SSE.
+    """
+    _ = user
+    service = _get_service(session)
+    completion = await service.complete_text(prompt=body.prompt, model_id=body.model_id)
+    return CompletionResponse(completion=completion)

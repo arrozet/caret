@@ -79,6 +79,19 @@ Guidelines:
 - If document context is provided, ground your answer in it.
 """
 
+_COMPLETION_MODEL_ID = "z-ai/glm-4.5-air:free"
+
+_COMPLETION_SYSTEM_PROMPT = """\
+You are Caret's inline text completer.
+
+Rules:
+- Continue the user's text naturally.
+- Return only the completion text, with no preamble, bullets, code fences, or explanation.
+- Keep completions short and useful.
+- Preserve the language and tone of the input.
+- Do not repeat the prompt.
+"""
+
 
 def _normalize_document_context(
     document_context: BaseModel | dict[str, Any] | str | None,
@@ -341,6 +354,22 @@ class AiAgentService:
         )
         items = [ConversationListItemResponse.model_validate(row) for row in rows]
         return ConversationListByDocumentResponse(items=items, total=total)
+
+    async def complete_text(self, prompt: str, model_id: str | None = None) -> str:
+        """Return a short inline completion for the given prompt."""
+        model = _build_model(model_id or _COMPLETION_MODEL_ID)
+
+        agent: Agent[None, str] = Agent(
+            model=model,
+            output_type=str,
+            system_prompt=_COMPLETION_SYSTEM_PROMPT,
+        )
+
+        result = await agent.run(prompt)
+        completion = str(result.output).strip()
+        if not completion:
+            raise RuntimeError("Empty completion returned from model.")
+        return completion
 
     # ------------------------------------------------------------------
     # RAG retrieval
