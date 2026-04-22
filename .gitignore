@@ -207,6 +207,7 @@ docker-compose.local.yml
 .cursorindexingignore
 /.cursor
 /.opencode
+.worktrees/
 
 # Superpowers working docs
 /docs/superpowers/
