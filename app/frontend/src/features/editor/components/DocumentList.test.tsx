@@ -271,7 +271,7 @@ describe("DocumentList", () => {
   /** Verifies that the bootstrap path surfaces failures and blocks duplicate clicks while pending. */
   it("shows a toast and guards duplicate bootstrap clicks when creating a blank document without a personal workspace", async () => {
     // Arrange
-    let resolve_workspace_creation: (value: { id: string }) => void = () => undefined;
+    let resolve_workspace_creation: ((value: { id: string }) => void) | null = null;
     current_workspaces = [];
     current_workspace_documents = {};
     mock_create_workspace.mockImplementationOnce(
@@ -284,24 +284,29 @@ describe("DocumentList", () => {
     render(<DocumentList />);
     const blank_document_button = screen.getAllByRole("button", { name: /blank document/i })[0];
 
-    // Act
-    fireEvent.click(blank_document_button);
+    try {
+      // Act
+      fireEvent.click(blank_document_button);
 
-    // Assert
-    await waitFor(() => expect(blank_document_button).toBeDisabled());
+      // Assert
+      await waitFor(() => expect(blank_document_button).toBeDisabled());
 
-    // Act
-    fireEvent.click(blank_document_button);
+      // Act
+      fireEvent.click(blank_document_button);
 
-    // Assert
-    expect(mock_create_workspace).toHaveBeenCalledTimes(1);
+      // Assert
+      expect(mock_create_workspace).toHaveBeenCalledTimes(1);
 
-    // Act
-    mock_create_document.mockRejectedValueOnce(new Error("Document bootstrap failed"));
-    resolve_workspace_creation({ id: "ws-personal" });
+      // Act
+      mock_create_document.mockRejectedValueOnce(new Error("Document bootstrap failed"));
+      resolve_workspace_creation?.({ id: "ws-personal" });
 
-    // Assert
-    expect(await screen.findByRole("status")).toHaveTextContent(/document bootstrap failed/i);
+      // Assert
+      expect(await screen.findByRole("status")).toHaveTextContent(/document bootstrap failed/i);
+    } finally {
+      // Never leak pending deferred work into the next test.
+      resolve_workspace_creation?.({ id: "ws-personal-finalize" });
+    }
   });
 
   /** Verifies that newly visible shared workspaces announce themselves with a toast. */
@@ -873,15 +878,11 @@ describe("DocumentList", () => {
     };
 
     let rerender_document_list: ((ui: React.ReactNode) => void) | null = null;
-    mock_delete_document.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          setTimeout(() => {
-            current_workspace_documents = { "ws-personal": [] };
-            rerender_document_list?.(<DocumentList />);
-            resolve();
-          }, 0);
-        }),
+    mock_delete_document.mockImplementationOnce(() =>
+      Promise.resolve().then(() => {
+        current_workspace_documents = { "ws-personal": [] };
+        rerender_document_list?.(<DocumentList />);
+      }),
     );
 
     const { rerender } = render(<DocumentList />);
