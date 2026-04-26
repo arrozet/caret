@@ -1,14 +1,11 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [react(), tailwindcss()],
   server: {
     // Accept connections from outside the container (required for Docker)
     host: true,
@@ -26,4 +23,4 @@ export default defineConfig({
       exclude: ["src/test/**", "src/main.tsx", "src/vite-env.d.ts"],
     },
   },
-})
+});

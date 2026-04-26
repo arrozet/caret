@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Loader2,
@@ -8,6 +8,7 @@ import {
   Sparkles,
   UserPlus,
   MoveRight,
+  Folder,
 } from "lucide-react";
 import type { JSONContent, Editor } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
@@ -18,7 +19,9 @@ import { useSaveDocument } from "../hooks/useSaveDocument";
 import { useInviteDocumentCollaborator } from "../hooks/useInviteDocumentCollaborator";
 import { useInviteWorkspaceCollaborator } from "../hooks/useInviteWorkspaceCollaborator";
 import { useWorkspaces } from "../hooks/useWorkspaces";
+import { useFolders } from "../hooks/useFolders";
 import { updateDocument } from "../api/documentApi";
+import type { FolderResponse } from "../api/documentApi";
 import { useFocusMode } from "../../../hooks/useFocusMode";
 import { useTabsStore, useAiStore, useAuthStore } from "../../../stores";
 import { useGhostText } from "../hooks/useGhostText";
@@ -202,6 +205,7 @@ export function EditorPage() {
   const { data: document, isLoading, error } = useDocument(document_id);
   const save_mutation = useSaveDocument(document_id ?? "");
   const { data: workspaces = [] } = useWorkspaces();
+  const { data: folders = [] } = useFolders(document?.workspace_id);
   const document_invite_mutation = useInviteDocumentCollaborator(document_id ?? "");
   const workspace_invite_mutation = useInviteWorkspaceCollaborator(document?.workspace_id ?? "");
 
@@ -233,6 +237,10 @@ export function EditorPage() {
   const current_workspace_kind =
     current_workspace?.kind ?? (document?.visibility === "workspace" ? "shared" : "personal");
   const shared_workspaces = workspaces.filter((workspace) => workspace.kind === "shared");
+  const current_folder_path = useMemo(
+    () => build_folder_path(folders, document?.folder_id ?? null),
+    [document?.folder_id, folders],
+  );
 
   const collaboration_enabled =
     isCollaborationEnabled() &&
@@ -651,16 +659,50 @@ export function EditorPage() {
           <span className="hidden sm:inline">Documents</span>
         </Button>
 
-        <input
-          type="text"
-          value={title}
-          onChange={handleTitleChange}
-          onFocus={() => set_is_title_focused(true)}
-          onBlur={handleTitleBlur}
-          placeholder="Untitled"
-          className="min-w-0 max-w-sm bg-transparent border-none outline-none font-ui text-ui-lg font-semibold text-text-primary placeholder:text-text-secondary/50 focus:border-b-2 focus:border-accent-main px-1 py-0.5 transition-all"
-          aria-label="Document title"
-        />
+        <nav
+          className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-ui-sm text-text-secondary"
+          aria-label="Document location"
+        >
+          <button
+            type="button"
+            onClick={handle_back}
+            className="shrink-0 rounded-[4px] px-1 transition hover:bg-app hover:text-text-primary"
+          >
+            Caret
+          </button>
+
+          {current_workspace ? (
+            <>
+              <span aria-hidden="true">/</span>
+              <span className="inline-flex min-w-0 items-center gap-1 text-text-primary">
+                <Folder className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{current_workspace.name}</span>
+              </span>
+            </>
+          ) : null}
+
+          {current_folder_path.map((folder) => (
+            <span key={folder.id} className="inline-flex min-w-0 items-center gap-2">
+              <span aria-hidden="true">/</span>
+              <span className="inline-flex min-w-0 items-center gap-1 text-text-primary">
+                <Folder className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{folder.name}</span>
+              </span>
+            </span>
+          ))}
+
+          <span aria-hidden="true">/</span>
+          <input
+            type="text"
+            value={title}
+            onChange={handleTitleChange}
+            onFocus={() => set_is_title_focused(true)}
+            onBlur={handleTitleBlur}
+            placeholder="Untitled"
+            className="min-w-[8rem] max-w-sm bg-transparent border-none outline-none font-ui text-ui-base font-medium text-text-primary placeholder:text-text-secondary/50 focus:border-b-2 focus:border-accent-main px-1 py-0.5 transition-all"
+            aria-label="Document title"
+          />
+        </nav>
 
         <div className="ml-auto flex items-center gap-2">
           {current_workspace_kind === "shared" ? (
@@ -902,4 +944,25 @@ function SaveStatusIndicator({ status }: SaveStatusIndicatorProps) {
       {label}
     </span>
   );
+}
+
+function build_folder_path(folders: FolderResponse[], folder_id: string | null) {
+  const by_id = new Map(folders.map((folder) => [folder.id, folder]));
+  const path: FolderResponse[] = [];
+  const visited_ids = new Set<string>();
+  let current_id = folder_id;
+
+  while (current_id && !visited_ids.has(current_id)) {
+    const folder = by_id.get(current_id);
+
+    if (!folder) {
+      break;
+    }
+
+    path.unshift(folder);
+    visited_ids.add(current_id);
+    current_id = folder.parent_folder_id;
+  }
+
+  return path;
 }

@@ -9,6 +9,7 @@ const mock_invite_workspace = vi.fn();
 
 let current_document: Record<string, unknown> | null = null;
 let current_workspaces: Array<Record<string, unknown>> = [];
+let current_folders: Array<Record<string, unknown>> = [];
 
 vi.mock("react-router-dom", () => ({
   useParams: () => ({ id: "doc-1" }),
@@ -27,6 +28,14 @@ vi.mock("../hooks/useWorkspaces", () => ({
   useWorkspaces: () => ({
     data: current_workspaces,
     isLoading: false,
+  }),
+}));
+
+vi.mock("../hooks/useFolders", () => ({
+  useFolders: () => ({
+    data: current_folders,
+    isLoading: false,
+    error: null,
   }),
 }));
 
@@ -113,6 +122,7 @@ describe("EditorPage share and move controls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     current_workspaces = [];
+    current_folders = [];
     current_document = null;
   });
 

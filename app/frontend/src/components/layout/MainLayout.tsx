@@ -25,9 +25,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       <div className="flex flex-1 flex-col pt-14 min-h-0">
         {/* Document tabs strip — persistent across editor and document list */}
         <DocumentTabs />
-        <main className="flex flex-1 flex-col overflow-hidden min-h-0">
-          {children}
-        </main>
+        <main className="flex flex-1 flex-col overflow-hidden min-h-0">{children}</main>
       </div>
     </div>
   );

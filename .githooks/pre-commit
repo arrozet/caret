@@ -31,27 +31,85 @@ staged_files_for_prefix() {
   echo "$staged_files" | grep "^$prefix" || true
 }
 
+is_js_file() {
+  case "$1" in
+    *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.json|*.css|*.html|*.md|*.yml|*.yaml|*.toml)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+is_py_file() {
+  case "$1" in
+    *.py)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+collect_service_files() {
+  local prefix="$1"
+  local kind="$2"
+  local -a files=()
+
+  while IFS= read -r file; do
+    [ -z "$file" ] && continue
+
+    case "$file" in
+      "$prefix"*)
+        local rel_file="${file#$prefix}"
+        if [ "$kind" = "js" ]; then
+          if is_js_file "$rel_file"; then
+            files+=("$rel_file")
+          fi
+        else
+          if is_py_file "$rel_file"; then
+            files+=("$rel_file")
+          fi
+        fi
+        ;;
+    esac
+  done <<< "$staged_files"
+
+  printf '%s\n' "${files[@]}"
+}
+
 run_js_lint() {
   local service="$1"
   local dir="$2"
   local prefix="$3"
-  local files
+  local files=()
 
   if ! service_has_changes "$prefix"; then
     echo -e "  ${YELLOW}⟳ $service (lint/format)${NC}  (no staged changes — skipped)"
     return 0
   fi
 
-  files=$(staged_files_for_prefix "$prefix")
+  while IFS= read -r file; do
+    [ -n "$file" ] && files+=("$file")
+  done < <(collect_service_files "$prefix" "js")
+
+  if [ "${#files[@]}" -eq 0 ]; then
+    echo -e "  ${YELLOW}⟳ $service (lint/format)${NC}  (no lintable files — skipped)"
+    return 0
+  fi
+
+  local file_args="${files[*]}"
 
   echo -e "  ${CYAN}▶ $service (lint/format)${NC}"
 
-  if ! (cd "$dir" && make lint-fix FILES="$files" 2>&1); then
+  if ! (cd "$dir" && make lint-fix FILES="$file_args" 2>&1); then
     echo -e "  ${RED}✗ $service lint FAILED — unfixable errors; commit blocked${NC}"
     return 1
   fi
 
-  if ! (cd "$dir" && make format-write FILES="$files" 2>&1); then
+  if ! (cd "$dir" && make format-write FILES="$file_args" 2>&1); then
     echo -e "  ${RED}✗ $service format FAILED — commit blocked${NC}"
     return 1
   fi
@@ -71,23 +129,32 @@ run_python_lint() {
   local service="ai-service"
   local dir="$BACKEND/$service"
   local prefix="app/backend/${service}/"
-  local files
+  local files=()
 
   if ! service_has_changes "$prefix"; then
     echo -e "  ${YELLOW}⟳ $service (lint/format)${NC}  (no staged changes — skipped)"
     return 0
   fi
 
-  files=$(staged_files_for_prefix "$prefix")
+  while IFS= read -r file; do
+    [ -n "$file" ] && files+=("$file")
+  done < <(collect_service_files "$prefix" "py")
+
+  if [ "${#files[@]}" -eq 0 ]; then
+    echo -e "  ${YELLOW}⟳ $service (lint/format)${NC}  (no Python files — skipped)"
+    return 0
+  fi
+
+  local file_args="${files[*]}"
 
   echo -e "  ${CYAN}▶ $service (lint/format)${NC}"
 
-  if ! (cd "$dir" && make lint-fix FILES="$files" 2>&1); then
+  if ! (cd "$dir" && make lint-fix FILES="$file_args" 2>&1); then
     echo -e "  ${RED}✗ $service lint FAILED — unfixable Ruff errors; commit blocked${NC}"
     return 1
   fi
 
-  if ! (cd "$dir" && make format-write FILES="$files" 2>&1); then
+  if ! (cd "$dir" && make format-write FILES="$file_args" 2>&1); then
     echo -e "  ${RED}✗ $service format FAILED — commit blocked${NC}"
     return 1
   fi
