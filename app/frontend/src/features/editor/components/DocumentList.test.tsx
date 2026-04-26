@@ -30,6 +30,7 @@ let current_workspace_folders: Record<string, Array<Record<string, unknown>>> = 
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mock_navigate,
+  useLocation: () => ({ pathname: "/documents", state: null }),
 }));
 
 vi.mock("../../../components/ui/Button", () => ({

@@ -21,6 +21,7 @@ describe("WorkspaceService", () => {
     findPersonalByUser: ReturnType<typeof vi.fn>;
     findVisibleByUserAndName: ReturnType<typeof vi.fn>;
     listByUser: ReturnType<typeof vi.fn>;
+    listActiveMemberEmailsByWorkspace: ReturnType<typeof vi.fn>;
     listActiveMembersByWorkspace: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     softDeleteWorkspace: ReturnType<typeof vi.fn>;
@@ -94,6 +95,7 @@ describe("WorkspaceService", () => {
       findPersonalByUser: vi.fn(),
       findVisibleByUserAndName: vi.fn(),
       listByUser: vi.fn(),
+      listActiveMemberEmailsByWorkspace: vi.fn(),
       listActiveMembersByWorkspace: vi.fn(),
       update: vi.fn(),
       softDeleteWorkspace: vi.fn(),
@@ -140,6 +142,7 @@ describe("WorkspaceService", () => {
           documentMemberRepository: document_member_repo,
         }),
     );
+    workspace_repo.listActiveMemberEmailsByWorkspace.mockResolvedValue([]);
 
     workspace_repo.find_by_slug = workspace_repo.findBySlug;
     workspace_repo.find_by_id = workspace_repo.findById;

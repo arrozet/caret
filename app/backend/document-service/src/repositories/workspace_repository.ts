@@ -263,6 +263,26 @@ export class WorkspaceRepository {
   }
 
   /**
+   * List active member emails for one workspace, excluding the caller.
+   */
+  async listActiveMemberEmailsByWorkspace(workspaceId: string, excludeUserId: string) {
+    return this.db.execute(
+      sql<{ email: string }>`
+        SELECT COALESCE(au.email::text, wm.user_id::text) AS email
+        FROM ${schema.workspace_members} AS wm
+        LEFT JOIN auth.users AS au ON au.id = wm.user_id
+        WHERE wm.workspace_id = ${workspaceId}::uuid
+          AND wm.user_id <> ${excludeUserId}::uuid
+          AND wm.revoked_at IS NULL
+      `,
+    );
+  }
+
+  async list_active_member_emails_by_workspace(workspaceId: string, excludeUserId: string) {
+    return this.listActiveMemberEmailsByWorkspace(workspaceId, excludeUserId);
+  }
+
+  /**
    * List active members for a workspace.
    */
   async listActiveMembersByWorkspace(workspaceId: string) {

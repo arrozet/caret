@@ -46,6 +46,8 @@ export interface WorkspaceResponse {
   created_by_user_id: string | null;
   /** Caller's role within this workspace. */
   role?: string;
+  /** Other member emails this workspace is shared with (excluding caller). */
+  shared_with?: string[];
   /** Row creation timestamp (ISO 8601). */
   created_at: string;
   /** Row last-update timestamp (ISO 8601). */

@@ -127,6 +127,18 @@ export class WorkspaceService {
     pagination: PaginationParams,
   ): Promise<PaginatedResponse<WorkspaceResponseDto>> {
     const { data: rows, total } = await this.workspaceRepository.listByUser(userId, pagination);
+    const sharedWithByWorkspaceId = new Map<string, string[]>();
+    await Promise.all(
+      rows.map(async (row) => {
+        const memberRows = await this.workspaceRepository.listActiveMemberEmailsByWorkspace(
+          row.id,
+          userId,
+        );
+        const uniqueEmails = Array.from(new Set(memberRows.map((member) => member.email)));
+        sharedWithByWorkspaceId.set(row.id, uniqueEmails);
+      }),
+    );
+
     return {
       data: rows.map((row) =>
         this.toResponseDto(
@@ -140,6 +152,7 @@ export class WorkspaceService {
             updated_at: row.updated_at,
           },
           row.role,
+          sharedWithByWorkspaceId.get(row.id) ?? [],
         ),
       ),
       pagination: {
@@ -355,6 +368,7 @@ export class WorkspaceService {
       updated_at: Date;
     },
     role?: string,
+    sharedWith?: string[],
   ): WorkspaceResponseDto {
     return {
       id: workspace.id,
@@ -363,6 +377,7 @@ export class WorkspaceService {
       name: workspace.name,
       created_by_user_id: workspace.created_by_user_id,
       role,
+      shared_with: sharedWith,
       created_at: workspace.created_at.toISOString(),
       updated_at: workspace.updated_at.toISOString(),
     };

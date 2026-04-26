@@ -678,19 +678,28 @@ function WorkspaceCard({
   on_delete?: (trigger: HTMLElement | null) => void;
 }) {
   const is_personal = workspace.kind === "personal";
+  const shared_with = workspace.shared_with ?? [];
+  const shared_with_label =
+    shared_with.length > 0 ? `Shared with ${shared_with.length} people` : "Not shared yet";
   const [menu_open, set_menu_open] = useState(false);
+  const [shared_with_open, set_shared_with_open] = useState(false);
   const menu_ref = useRef<HTMLDivElement | null>(null);
+  const shared_with_ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!menu_open) return;
+    if (!menu_open && !shared_with_open) return;
     function handle_outside(event: MouseEvent) {
-      if (menu_ref.current && !menu_ref.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (menu_ref.current && !menu_ref.current.contains(target)) {
         set_menu_open(false);
+      }
+      if (shared_with_ref.current && !shared_with_ref.current.contains(target)) {
+        set_shared_with_open(false);
       }
     }
     document.addEventListener("mousedown", handle_outside);
     return () => document.removeEventListener("mousedown", handle_outside);
-  }, [menu_open]);
+  }, [menu_open, shared_with_open]);
 
   const has_menu = on_rename || on_delete;
 
@@ -701,7 +710,7 @@ function WorkspaceCard({
       <button
         type="button"
         onClick={on_select}
-        className="flex w-full items-center gap-3 p-4 pl-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-main/40"
+        className="flex w-full items-center gap-3 px-4 pb-1 pt-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-main/40"
         aria-label={`Open workspace ${workspace.name}`}
       >
         <span
@@ -713,11 +722,50 @@ function WorkspaceCard({
           <span className="block truncate text-ui-base font-medium text-text-primary">
             {workspace.name}
           </span>
-          <span className="mt-0.5 block text-ui-sm text-text-secondary">
-            {is_personal ? "Personal · Private" : "Shared workspace"}
-          </span>
         </span>
       </button>
+
+      <div className="px-4 pb-3 text-ui-sm text-text-secondary">
+        {is_personal ? (
+          <span>Personal · Private</span>
+        ) : shared_with.length > 0 ? (
+          <div ref={shared_with_ref} className="relative inline-block">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                set_menu_open(false);
+                set_shared_with_open((prev) => !prev);
+              }}
+              className="rounded-[4px] px-1 py-0.5 text-text-secondary transition hover:bg-app hover:text-text-primary"
+              aria-expanded={shared_with_open}
+              aria-label={`View people shared in ${workspace.name}`}
+            >
+              {shared_with_label}
+            </button>
+
+            {shared_with_open ? (
+              <div className="absolute left-0 top-full z-40 mt-1 min-w-[220px] rounded-lg border border-border-subtle bg-surface p-2 shadow-elevated">
+                <p className="px-1 pb-1 text-ui-xs uppercase tracking-wide text-text-secondary">
+                  Shared with
+                </p>
+                <div className="max-h-40 overflow-y-auto">
+                  {shared_with.map((email) => (
+                    <p
+                      key={email}
+                      className="truncate rounded-[4px] px-2 py-1 text-ui-sm text-text-primary"
+                    >
+                      {email}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <span>Not shared yet</span>
+        )}
+      </div>
 
       {has_menu ? (
         <div ref={menu_ref} className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -725,6 +773,7 @@ function WorkspaceCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              set_shared_with_open(false);
               set_menu_open((prev) => !prev);
             }}
             className={`rounded-[4px] p-1.5 text-text-secondary transition-opacity hover:bg-border-subtle/50 hover:text-text-primary ${menu_open ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
