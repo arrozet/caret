@@ -35,20 +35,23 @@ run_js_lint() {
   local service="$1"
   local dir="$2"
   local prefix="$3"
+  local files
 
   if ! service_has_changes "$prefix"; then
     echo -e "  ${YELLOW}⟳ $service (lint/format)${NC}  (no staged changes — skipped)"
     return 0
   fi
 
+  files=$(staged_files_for_prefix "$prefix")
+
   echo -e "  ${CYAN}▶ $service (lint/format)${NC}"
 
-  if ! (cd "$dir" && make lint-fix 2>&1); then
+  if ! (cd "$dir" && make lint-fix FILES="$files" 2>&1); then
     echo -e "  ${RED}✗ $service lint FAILED — unfixable errors; commit blocked${NC}"
     return 1
   fi
 
-  if ! (cd "$dir" && make format-write 2>&1); then
+  if ! (cd "$dir" && make format-write FILES="$files" 2>&1); then
     echo -e "  ${RED}✗ $service format FAILED — commit blocked${NC}"
     return 1
   fi
@@ -68,20 +71,23 @@ run_python_lint() {
   local service="ai-service"
   local dir="$BACKEND/$service"
   local prefix="app/backend/${service}/"
+  local files
 
   if ! service_has_changes "$prefix"; then
     echo -e "  ${YELLOW}⟳ $service (lint/format)${NC}  (no staged changes — skipped)"
     return 0
   fi
 
+  files=$(staged_files_for_prefix "$prefix")
+
   echo -e "  ${CYAN}▶ $service (lint/format)${NC}"
 
-  if ! (cd "$dir" && make lint-fix 2>&1); then
+  if ! (cd "$dir" && make lint-fix FILES="$files" 2>&1); then
     echo -e "  ${RED}✗ $service lint FAILED — unfixable Ruff errors; commit blocked${NC}"
     return 1
   fi
 
-  if ! (cd "$dir" && make format-write 2>&1); then
+  if ! (cd "$dir" && make format-write FILES="$files" 2>&1); then
     echo -e "  ${RED}✗ $service format FAILED — commit blocked${NC}"
     return 1
   fi
