@@ -1,17 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import {
-  Loader2,
-  ArrowLeft,
-  Check,
-  AlertCircle,
-  Sparkles,
-  UserPlus,
-  MoveRight,
-  Folder,
-} from "lucide-react";
+import { Loader2, ArrowLeft, Check, AlertCircle, Sparkles, UserPlus } from "lucide-react";
 import type { JSONContent, Editor } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
+import { EditorToolbar } from "./EditorToolbar";
+import type { PaperSize } from "../extensions/pagination";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { useDocument } from "../hooks/useDocument";
@@ -19,9 +12,7 @@ import { useSaveDocument } from "../hooks/useSaveDocument";
 import { useInviteDocumentCollaborator } from "../hooks/useInviteDocumentCollaborator";
 import { useInviteWorkspaceCollaborator } from "../hooks/useInviteWorkspaceCollaborator";
 import { useWorkspaces } from "../hooks/useWorkspaces";
-import { useFolders } from "../hooks/useFolders";
 import { updateDocument } from "../api/documentApi";
-import type { FolderResponse } from "../api/documentApi";
 import { useFocusMode } from "../../../hooks/useFocusMode";
 import { useTabsStore, useAiStore, useAuthStore } from "../../../stores";
 import { useGhostText } from "../hooks/useGhostText";
@@ -42,9 +33,6 @@ const ChatPanel = lazy(() => import("../../ai-assistant").then((m) => ({ default
 
 /** Debounce delay in milliseconds before autosaving after the last keystroke. */
 const AUTOSAVE_DELAY_MS = 1_000;
-
-/** Debounce delay for title saves (shorter since it's a single field). */
-const TITLE_SAVE_DELAY_MS = 500;
 
 function isCollaborationEnabled(): boolean {
   return import.meta.env.VITE_ENABLE_COLLABORATION !== "false";
@@ -205,13 +193,10 @@ export function EditorPage() {
   const { data: document, isLoading, error } = useDocument(document_id);
   const save_mutation = useSaveDocument(document_id ?? "");
   const { data: workspaces = [] } = useWorkspaces();
-  const { data: folders = [] } = useFolders(document?.workspace_id);
   const document_invite_mutation = useInviteDocumentCollaborator(document_id ?? "");
   const workspace_invite_mutation = useInviteWorkspaceCollaborator(document?.workspace_id ?? "");
 
   const [save_status, set_save_status] = useState<SaveStatus>("idle");
-  const [title, set_title] = useState("");
-  const [is_title_focused, set_is_title_focused] = useState(false);
   const [is_invite_dialog_open, set_is_invite_dialog_open] = useState(false);
   const [is_move_dialog_open, set_is_move_dialog_open] = useState(false);
   const [invite_email, set_invite_email] = useState("");
@@ -222,13 +207,13 @@ export function EditorPage() {
   const [move_error, set_move_error] = useState<string | null>(null);
   const [is_accepting_change, set_is_accepting_change] = useState(false);
   const debounce_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const title_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor_ref = useRef<Editor | null>(null);
   const last_known_document_context_ref = useRef<DocumentContextSnapshot | null>(null);
 
   const [resolve_pending_change_token, set_resolve_pending_change_token] = useState(0);
+  const [paper_size, set_paper_size] = useState<PaperSize>("a4");
 
   const [editor_instance, set_editor_instance] = useState<Editor | null>(null);
 
@@ -237,10 +222,6 @@ export function EditorPage() {
   const current_workspace_kind =
     current_workspace?.kind ?? (document?.visibility === "workspace" ? "shared" : "personal");
   const shared_workspaces = workspaces.filter((workspace) => workspace.kind === "shared");
-  const current_folder_path = useMemo(
-    () => build_folder_path(folders, document?.folder_id ?? null),
-    [document?.folder_id, folders],
-  );
 
   const collaboration_enabled =
     isCollaborationEnabled() &&
@@ -394,13 +375,6 @@ export function EditorPage() {
   }, [togglePanel]);
 
   useEffect(() => {
-    if (document?.title && !is_title_focused) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      set_title(document.title);
-    }
-  }, [document?.title, is_title_focused]);
-
-  useEffect(() => {
     if (document_id && document?.title) {
       addTab({ id: document_id, title: document.title });
       updateTabTitle(document_id, document.title);
@@ -410,7 +384,6 @@ export function EditorPage() {
   useEffect(() => {
     return () => {
       if (debounce_timer_ref.current) clearTimeout(debounce_timer_ref.current);
-      if (title_timer_ref.current) clearTimeout(title_timer_ref.current);
       if (saved_indicator_timer_ref.current) clearTimeout(saved_indicator_timer_ref.current);
     };
   }, []);
@@ -450,43 +423,6 @@ export function EditorPage() {
     },
     [save_mutation, show_saved, document_id, debug_log, remember_document_context, set_save_status],
   );
-
-  const handleTitleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const new_title = e.target.value;
-      set_title(new_title);
-      if (title_timer_ref.current) clearTimeout(title_timer_ref.current);
-      title_timer_ref.current = setTimeout(async () => {
-        if (!new_title.trim()) return;
-        set_save_status("saving");
-        try {
-          await save_mutation.mutateAsync({ title: new_title.trim() });
-          if (document_id) updateTabTitle(document_id, new_title.trim());
-          show_saved();
-        } catch {
-          set_save_status("error");
-        }
-      }, TITLE_SAVE_DELAY_MS);
-    },
-    [save_mutation, show_saved, document_id, updateTabTitle, set_title, set_save_status],
-  );
-
-  const handleTitleBlur = async () => {
-    set_is_title_focused(false);
-    if (title_timer_ref.current) clearTimeout(title_timer_ref.current);
-    const trimmed = title.trim();
-    if (trimmed && trimmed !== document?.title) {
-      set_save_status("saving");
-      try {
-        await save_mutation.mutateAsync({ title: trimmed });
-        if (document_id) updateTabTitle(document_id, trimmed);
-        show_saved();
-      } catch {
-        set_save_status("error");
-      }
-    }
-    if (!trimmed) set_title(document?.title || "Untitled");
-  };
 
   const handleRejectPendingChange = useCallback(() => {
     set_is_accepting_change(false);
@@ -560,7 +496,12 @@ export function EditorPage() {
   ]);
 
   function handle_back() {
-    navigate("/documents");
+    navigate("/documents", {
+      state: {
+        workspace_id: document?.workspace_id ?? null,
+        folder_id: document?.folder_id ?? null,
+      },
+    });
   }
 
   function openShareDialog() {
@@ -575,12 +516,6 @@ export function EditorPage() {
     set_is_invite_dialog_open(false);
     set_invite_error(null);
     set_invite_success(null);
-  }
-
-  function openMoveDialog() {
-    set_is_move_dialog_open(true);
-    set_move_error(null);
-    set_move_workspace_id(shared_workspaces[0]?.id ?? "");
   }
 
   function closeMoveDialog() {
@@ -648,74 +583,36 @@ export function EditorPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-app">
-      <div className="flex w-full shrink-0 items-center gap-3 px-4 py-2 border-b border-border-subtle bg-surface z-20">
+      {/* Full-width toolbar — spans both editor and AI panel */}
+      <div className="shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle flex items-center gap-2 px-2">
         <Button
           variant="ghost"
           size="sm"
           onClick={handle_back}
-          className="hover:bg-border-subtle/50"
+          className="shrink-0 hover:bg-border-subtle/50"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Documents</span>
         </Button>
 
-        <nav
-          className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-ui-sm text-text-secondary"
-          aria-label="Document location"
-        >
-          <button
-            type="button"
-            onClick={handle_back}
-            className="shrink-0 rounded-[4px] px-1 transition hover:bg-app hover:text-text-primary"
-          >
-            Caret
-          </button>
-
-          {current_workspace ? (
-            <>
-              <span aria-hidden="true">/</span>
-              <span className="inline-flex min-w-0 items-center gap-1 text-text-primary">
-                <Folder className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{current_workspace.name}</span>
-              </span>
-            </>
+        <div className="flex min-w-0 flex-1 justify-center">
+          {editor_instance ? (
+            <div className="w-full max-w-[var(--max-width-document-wide)]">
+              <EditorToolbar
+                editor={editor_instance}
+                paperSize={paper_size}
+                setPaperSize={set_paper_size}
+              />
+            </div>
           ) : null}
+        </div>
 
-          {current_folder_path.map((folder) => (
-            <span key={folder.id} className="inline-flex min-w-0 items-center gap-2">
-              <span aria-hidden="true">/</span>
-              <span className="inline-flex min-w-0 items-center gap-1 text-text-primary">
-                <Folder className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{folder.name}</span>
-              </span>
-            </span>
-          ))}
-
-          <span aria-hidden="true">/</span>
-          <input
-            type="text"
-            value={title}
-            onChange={handleTitleChange}
-            onFocus={() => set_is_title_focused(true)}
-            onBlur={handleTitleBlur}
-            placeholder="Untitled"
-            className="min-w-[8rem] max-w-sm bg-transparent border-none outline-none font-ui text-ui-base font-medium text-text-primary placeholder:text-text-secondary/50 focus:border-b-2 focus:border-accent-main px-1 py-0.5 transition-all"
-            aria-label="Document title"
-          />
-        </nav>
-
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {current_workspace_kind === "shared" ? (
             <Button variant="secondary" size="sm" onClick={openShareDialog} className="inline-flex">
               <UserPlus className="h-4 w-4" />
               Share
             </Button>
-          ) : (
-            <Button variant="secondary" size="sm" onClick={openMoveDialog} className="inline-flex">
-              <MoveRight className="h-4 w-4" />
-              Move to workspace
-            </Button>
-          )}
+          ) : null}
           {collaboration_enabled && (
             <CollaborationPresenceBar
               connection_status={collaboration_session.connection_status}
@@ -727,6 +624,7 @@ export function EditorPage() {
         </div>
       </div>
 
+      {/* Content row — editor + AI panel, both start below the full-width toolbar */}
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1 overflow-hidden">
           {pending_change !== null && (
@@ -746,6 +644,9 @@ export function EditorPage() {
               editor_ref.current = ed;
               set_editor_instance(ed);
             }}
+            paperSize={paper_size}
+            onPaperSizeChange={set_paper_size}
+            hideToolbar
           />
         </div>
 
@@ -944,25 +845,4 @@ function SaveStatusIndicator({ status }: SaveStatusIndicatorProps) {
       {label}
     </span>
   );
-}
-
-function build_folder_path(folders: FolderResponse[], folder_id: string | null) {
-  const by_id = new Map(folders.map((folder) => [folder.id, folder]));
-  const path: FolderResponse[] = [];
-  const visited_ids = new Set<string>();
-  let current_id = folder_id;
-
-  while (current_id && !visited_ids.has(current_id)) {
-    const folder = by_id.get(current_id);
-
-    if (!folder) {
-      break;
-    }
-
-    path.unshift(folder);
-    visited_ids.add(current_id);
-    current_id = folder.parent_folder_id;
-  }
-
-  return path;
 }

@@ -167,12 +167,19 @@ describe("DocumentList", () => {
     delete_folder_is_pending = false;
   });
 
+  function open_workspace(name: string) {
+    fireEvent.click(
+      screen.getByRole("button", { name: new RegExp(`open workspace ${name}`, "i") }),
+    );
+  }
+
   /** Verifies that the home screen preserves personal/shared/direct-share groupings. */
   it("groups personal documents separately from shared workspaces and direct shares", () => {
     // Arrange
     current_workspaces = [
       { id: "ws-personal", kind: "personal", name: "Personal" },
-      { id: "ws-shared", kind: "shared", name: "Team Space" },
+      { id: "ws-shared", kind: "shared", name: "Team Space", role: "owner" },
+      { id: "ws-external", kind: "shared", name: "Client Space", role: "member" },
     ];
     current_workspace_documents = {
       "ws-personal": [
@@ -191,6 +198,7 @@ describe("DocumentList", () => {
           updated_at: "2026-04-25T00:00:00.000Z",
         },
       ],
+      "ws-external": [],
     };
     current_shared_documents = [
       {
@@ -206,14 +214,20 @@ describe("DocumentList", () => {
 
     // Assert
     expect(screen.getByRole("heading", { name: /personal workspace/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /my workspaces/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /shared workspaces/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /directly shared documents/i })).toBeInTheDocument();
-    expect(screen.getByText("Private notes")).toBeInTheDocument();
-    expect(screen.getByText("Team brief")).toBeInTheDocument();
     expect(screen.getByText("Shared by email")).toBeInTheDocument();
+
+    open_workspace("Personal");
+    expect(screen.getByText("Private notes")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /move document private notes/i }),
     ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^caret$/i }));
+    open_workspace("Team Space");
+    expect(screen.getByText("Team brief")).toBeInTheDocument();
   });
 
   /** Verifies that shared workspaces and blank documents use their existing creation flows. */
@@ -334,6 +348,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Team Space");
     fireEvent.click(screen.getByRole("button", { name: /rename workspace team space/i }));
     fireEvent.change(screen.getByLabelText(/workspace name/i), { target: { value: "Studio" } });
     fireEvent.click(screen.getByRole("button", { name: /save workspace/i }));
@@ -366,6 +381,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Team Space");
     fireEvent.click(screen.getByRole("button", { name: /share workspace team space/i }));
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "teammate@caret.page" },
@@ -389,6 +405,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /rename workspace personal/i }));
     fireEvent.change(screen.getByLabelText(/workspace name/i), {
       target: { value: "Private Studio" },
@@ -422,6 +439,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /delete private notes/i }));
     fireEvent.click(screen.getByRole("button", { name: /confirm delete document/i }));
 
@@ -447,6 +465,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /rename private notes/i }));
     fireEvent.change(screen.getByLabelText(/document name/i), {
       target: { value: "Project notes" },
@@ -481,6 +500,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /rename private notes/i }));
     fireEvent.change(screen.getByLabelText(/document name/i), {
       target: { value: "Project notes" },
@@ -506,6 +526,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Team Space");
     fireEvent.click(screen.getByRole("button", { name: /delete workspace team space/i }));
 
     // Assert
@@ -531,6 +552,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /delete workspace personal/i }));
     fireEvent.click(screen.getByRole("button", { name: /confirm delete workspace/i }));
 
@@ -554,6 +576,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Team Space");
     fireEvent.click(screen.getByRole("button", { name: /rename workspace team space/i }));
     fireEvent.change(screen.getByLabelText(/workspace name/i), { target: { value: "Personal" } });
     fireEvent.click(screen.getByRole("button", { name: /save workspace/i }));
@@ -632,6 +655,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /move document private notes/i }));
     fireEvent.click(screen.getByRole("button", { name: /^move document$/i }));
 
@@ -691,6 +715,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /move document private notes/i }));
     fireEvent.click(screen.getByRole("radio", { name: /studio/i }));
     fireEvent.click(screen.getByRole("radio", { name: /archive/i }));
@@ -724,6 +749,7 @@ describe("DocumentList", () => {
     render(<DocumentList />);
 
     // Act
+    open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /move document private notes/i }));
 
     // Assert
@@ -752,6 +778,7 @@ describe("DocumentList", () => {
     const { rerender } = render(<DocumentList />);
 
     // Act
+    open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /move document private notes/i }));
     expect(screen.getByRole("button", { name: /^move document$/i })).toBeEnabled();
 
@@ -771,6 +798,7 @@ describe("DocumentList", () => {
     current_workspace_documents = { "ws-personal": [] };
 
     render(<DocumentList />);
+    open_workspace("Personal");
 
     const rename_button = screen.getByRole("button", { name: /rename workspace personal/i });
 
@@ -799,6 +827,7 @@ describe("DocumentList", () => {
     current_workspace_documents = { "ws-personal": [] };
 
     render(<DocumentList />);
+    open_workspace("Personal");
 
     // Act
     fireEvent.click(screen.getByRole("button", { name: /rename workspace personal/i }));
@@ -857,6 +886,7 @@ describe("DocumentList", () => {
     const { rerender } = render(<DocumentList />);
     rerender_document_list = rerender;
 
+    open_workspace("Personal");
     const delete_button = screen.getByRole("button", { name: /delete private notes/i });
 
     // Act
@@ -876,6 +906,7 @@ describe("DocumentList", () => {
     mock_create_folder.mockResolvedValueOnce({ id: "folder-new", workspace_id: "ws-personal" });
 
     render(<DocumentList />);
+    open_workspace("Personal");
 
     // Act
     fireEvent.click(screen.getByRole("button", { name: /new folder/i }));
@@ -930,6 +961,7 @@ describe("DocumentList", () => {
     };
 
     render(<DocumentList />);
+    open_workspace("Personal");
 
     // Assert
     expect(screen.getByText("Root doc")).toBeInTheDocument();
@@ -964,6 +996,7 @@ describe("DocumentList", () => {
     };
 
     render(<DocumentList />);
+    open_workspace("Personal");
 
     // Act
     fireEvent.click(screen.getByRole("button", { name: /projects folder/i }));
@@ -1001,6 +1034,7 @@ describe("DocumentList", () => {
     };
 
     render(<DocumentList />);
+    open_workspace("Personal");
 
     // Act
     fireEvent.click(screen.getByRole("button", { name: /projects folder/i }));
@@ -1039,6 +1073,7 @@ describe("DocumentList", () => {
     mock_create_document.mockResolvedValueOnce({ id: "doc-folder-new" });
 
     render(<DocumentList />);
+    open_workspace("Personal");
     const workspace_section = screen.getByRole("heading", { name: "Personal" }).closest("section");
 
     if (!workspace_section) {
@@ -1076,21 +1111,30 @@ describe("DocumentList", () => {
 
     // Act
     render(<DocumentList />);
+    open_workspace("Personal");
     const personal_workspace_section = screen
       .getByRole("heading", { name: "Personal" })
       .closest("section");
-    const shared_workspace_section = screen
-      .getByRole("heading", { name: "Team Space" })
-      .closest("section");
 
-    if (!personal_workspace_section || !shared_workspace_section) {
-      throw new Error("Expected workspace sections were not rendered");
+    if (!personal_workspace_section) {
+      throw new Error("Expected personal workspace section to render");
     }
 
     // Assert
     expect(
       within(personal_workspace_section).getByRole("button", { name: /new folder/i }),
     ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^caret$/i }));
+    open_workspace("Team Space");
+    const shared_workspace_section = screen
+      .getByRole("heading", { name: "Team Space" })
+      .closest("section");
+
+    if (!shared_workspace_section) {
+      throw new Error("Expected shared workspace section to render");
+    }
+
     expect(
       within(shared_workspace_section).queryByRole("button", { name: /new folder/i }),
     ).not.toBeInTheDocument();
@@ -1132,6 +1176,7 @@ describe("DocumentList", () => {
     };
 
     render(<DocumentList />);
+    fireEvent.click(screen.getByRole("button", { name: /open workspace team space/i }));
     const shared_workspace_section = screen
       .getByRole("heading", { name: "Team Space" })
       .closest("section");

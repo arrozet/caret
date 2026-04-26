@@ -104,7 +104,7 @@ export class FolderRepository {
       SELECT id FROM folder_tree
     `);
 
-    return result.rows.map((row) => row.id);
+    return result.map((row) => row.id as string);
   }
 
   async find_descendant_ids(folderId: string) {

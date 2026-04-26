@@ -21,6 +21,18 @@ interface CaretEditorProps {
   onEditorReady?: (editor: Editor) => void;
   /** Shared Y.js document for real-time collaboration mode. */
   collaborationDocument?: Y.Doc | null;
+  /**
+   * Controlled paper size. When provided the toolbar is not rendered
+   * internally — the parent is responsible for rendering EditorToolbar.
+   */
+  paperSize?: PaperSize;
+  /** Called when the user changes the paper size via the internal toolbar. */
+  onPaperSizeChange?: (size: PaperSize) => void;
+  /**
+   * When true, the built-in toolbar is hidden. Use this when the parent
+   * renders EditorToolbar externally (e.g. as a full-width bar).
+   */
+  hideToolbar?: boolean;
 }
 
 /**
@@ -40,8 +52,15 @@ export function CaretEditor({
   editable = true,
   onEditorReady,
   collaborationDocument = null,
+  paperSize: externalPaperSize,
+  onPaperSizeChange,
+  hideToolbar = false,
 }: CaretEditorProps) {
-  const [paperSize, setPaperSize] = useState<PaperSize>("a4");
+  const [internalPaperSize, setInternalPaperSize] = useState<PaperSize>("a4");
+
+  // Use external paper size when controlled, otherwise internal state.
+  const paperSize = externalPaperSize ?? internalPaperSize;
+  const setPaperSize = onPaperSizeChange ?? setInternalPaperSize;
 
   const editor = useEditor(
     {
@@ -90,8 +109,8 @@ export function CaretEditor({
 
   return (
     <div className="flex flex-col h-full w-full bg-app">
-      {/* Formatting Toolbar - Fixed at the top, full width */}
-      {editable && editor && (
+      {/* Internal toolbar — rendered only when not controlled externally */}
+      {editable && editor && !hideToolbar && (
         <div className="shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle flex justify-center">
           <div className="w-full max-w-[var(--max-width-document-wide)]">
             <EditorToolbar editor={editor} paperSize={paperSize} setPaperSize={setPaperSize} />

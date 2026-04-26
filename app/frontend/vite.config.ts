@@ -10,6 +10,11 @@ export default defineConfig({
     // Accept connections from outside the container (required for Docker)
     host: true,
     port: 5173,
+    watch: {
+      // Docker Desktop on Windows often misses filesystem events on bind mounts.
+      usePolling: true,
+      interval: 100,
+    },
   },
   test: {
     globals: true,
