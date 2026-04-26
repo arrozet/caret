@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
+  ChevronLeft,
   ArrowRightLeft,
   ChevronDown,
   ChevronRight,
@@ -410,15 +411,27 @@ export function DocumentList() {
               </p>
             </div>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handle_new_workspace}
-              isLoading={create_workspace_mutation.isPending}
-            >
-              <Plus className="h-4 w-4" />
-              New workspace
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handle_blank_document}
+                isLoading={blank_document_pending}
+                disabled={blank_document_pending}
+              >
+                <FileText className="h-4 w-4" />
+                Blank document
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handle_new_workspace}
+                isLoading={create_workspace_mutation.isPending}
+              >
+                <Plus className="h-4 w-4" />
+                New workspace
+              </Button>
+            </div>
           </div>
         ) : null}
 
@@ -432,6 +445,20 @@ export function DocumentList() {
               <WorkspaceSection
                 key={selected_workspace.id}
                 workspace={selected_workspace}
+                onBackToWorkspaces={() => {
+                  set_selected_workspace_id(null);
+                  navigate(location.pathname, { replace: true, state: null });
+                }}
+                onRequestRenameWorkspace={(workspace, trigger_element) =>
+                  set_rename_workspace({
+                    workspace,
+                    name: workspace.name,
+                    return_focus_to: trigger_element,
+                  })
+                }
+                onRequestDeleteWorkspace={(workspace, trigger_element) =>
+                  set_delete_workspace({ workspace, return_focus_to: trigger_element })
+                }
                 initial_folder_id={
                   location_state?.workspace_id === selected_workspace.id
                     ? (location_state?.folder_id ?? null)
@@ -642,6 +669,15 @@ export function DocumentList() {
 interface WorkspaceSectionProps {
   workspace: WorkspaceResponse;
   onLocationChange?: (folder_id: string | null) => void;
+  onBackToWorkspaces?: () => void;
+  onRequestRenameWorkspace?: (
+    workspace: WorkspaceResponse,
+    trigger_element: HTMLElement | null,
+  ) => void;
+  onRequestDeleteWorkspace?: (
+    workspace: WorkspaceResponse,
+    trigger_element: HTMLElement | null,
+  ) => void;
   onOpenDocument: (document_id: string) => void;
   onRequestMove?: (document: DocumentResponse, trigger_element: HTMLElement | null) => void;
   onRequestRenameDocument?: (
@@ -889,6 +925,9 @@ interface ShareWorkspaceState {
 function WorkspaceSection({
   workspace,
   onLocationChange,
+  onBackToWorkspaces,
+  onRequestRenameWorkspace,
+  onRequestDeleteWorkspace,
   onOpenDocument,
   onRequestMove,
   onRequestRenameDocument,
@@ -1109,6 +1148,17 @@ function WorkspaceSection({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle pb-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
+            {onBackToWorkspaces ? (
+              <button
+                type="button"
+                onClick={onBackToWorkspaces}
+                className="rounded-[4px] p-1.5 text-text-secondary transition hover:bg-border-subtle/50 hover:text-text-primary"
+                aria-label="Caret"
+                title="Back to workspace list"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ) : null}
             <div
               className={`h-4 w-[3px] rounded-full ${workspace_is_personal ? "bg-accent-caret" : "bg-accent-main"}`}
               aria-hidden="true"
@@ -1156,10 +1206,36 @@ function WorkspaceSection({
                 })
               }
               className="rounded-[4px] p-2 text-text-secondary transition hover:bg-border-subtle/50 hover:text-text-primary"
-              aria-label="Invite collaborator"
+              aria-label={`Share workspace ${workspace.name}`}
               title="Invite collaborator"
             >
               <UserPlus className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
+          {can_manage_workspace && onRequestRenameWorkspace ? (
+            <button
+              type="button"
+              onClick={(event) =>
+                onRequestRenameWorkspace(workspace, event.currentTarget as HTMLElement)
+              }
+              className="rounded-[4px] p-2 text-text-secondary transition hover:bg-border-subtle/50 hover:text-text-primary"
+              aria-label={`Rename workspace ${workspace.name}`}
+              title="Rename workspace"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
+          {can_manage_workspace && onRequestDeleteWorkspace ? (
+            <button
+              type="button"
+              onClick={(event) =>
+                onRequestDeleteWorkspace(workspace, event.currentTarget as HTMLElement)
+              }
+              className="rounded-[4px] p-2 text-text-secondary transition hover:bg-border-subtle/50 hover:text-text-primary"
+              aria-label={`Delete workspace ${workspace.name}`}
+              title="Delete workspace"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
             </button>
           ) : null}
         </div>
@@ -1507,7 +1583,7 @@ function DocumentCard({
                 onRequestRename(event.currentTarget as HTMLElement);
               }}
               className="rounded-[4px] bg-surface p-1.5 text-text-secondary shadow-sm transition hover:bg-app hover:text-text-primary"
-              aria-label={`Rename document ${document.title || "Untitled"}`}
+              aria-label={`Rename ${document.title || "Untitled"}`}
             >
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -1520,7 +1596,7 @@ function DocumentCard({
                 onRequestDelete(event.currentTarget as HTMLElement);
               }}
               className="rounded-[4px] bg-surface p-1.5 text-text-secondary shadow-sm transition hover:bg-app hover:text-text-primary"
-              aria-label={`Delete document ${document.title || "Untitled"}`}
+              aria-label={`Delete ${document.title || "Untitled"}`}
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
