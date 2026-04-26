@@ -516,6 +516,13 @@ export function EditorPage() {
     set_share_scope("workspace");
   }
 
+  function openMoveDialog() {
+    const default_workspace_id = shared_workspaces[0]?.id ?? "";
+    set_move_workspace_id(default_workspace_id);
+    set_move_error(null);
+    set_is_move_dialog_open(true);
+  }
+
   function closeShareDialog() {
     set_is_invite_dialog_open(false);
     set_invite_error(null);
@@ -611,6 +618,11 @@ export function EditorPage() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {current_workspace_kind === "personal" && shared_workspaces.length > 0 ? (
+            <Button variant="ghost" size="sm" onClick={openMoveDialog} className="inline-flex">
+              Move to workspace
+            </Button>
+          ) : null}
           {current_workspace_kind === "shared" ? (
             <Button variant="secondary" size="sm" onClick={openShareDialog} className="inline-flex">
               <UserPlus className="h-4 w-4" />

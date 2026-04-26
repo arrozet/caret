@@ -99,6 +99,7 @@ vi.mock("../../collaboration", () => ({
     provider: null,
     connection_status: "connected",
     users: [],
+    is_synced: false,
     is_ready: true,
   }),
   useCollaborationPresence: () => ({

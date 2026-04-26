@@ -527,7 +527,7 @@ export function DocumentList() {
               <section className="space-y-2">
                 <div className="flex items-baseline gap-2">
                   <h2 className="text-ui-sm font-medium uppercase tracking-widest text-text-secondary">
-                    Direct shares
+                    Directly shared documents
                   </h2>
                   <span className="text-ui-sm text-text-secondary/50">
                     Documents shared with you outside a workspace.
@@ -1435,7 +1435,7 @@ function FolderCard({
                 onRequestMove(e.currentTarget);
               }}
               className="rounded-[4px] p-1.5 text-text-secondary transition hover:bg-app hover:text-text-primary"
-              aria-label={`Move ${folder.name}`}
+              aria-label={`Move folder ${folder.name}`}
               title="Move folder"
             >
               <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1449,7 +1449,7 @@ function FolderCard({
                 onRequestRename(e.currentTarget);
               }}
               className="rounded-[4px] p-1.5 text-text-secondary transition hover:bg-app hover:text-text-primary"
-              aria-label={`Rename ${folder.name}`}
+              aria-label={`Rename folder ${folder.name}`}
             >
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -1462,7 +1462,7 @@ function FolderCard({
                 onRequestDelete(e.currentTarget);
               }}
               className="rounded-[4px] p-1.5 text-text-secondary transition hover:bg-app hover:text-text-primary"
-              aria-label={`Delete ${folder.name}`}
+              aria-label={`Delete folder ${folder.name}`}
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -1493,7 +1493,7 @@ function DocumentCard({
                 onRequestMove(document, event.currentTarget as HTMLElement);
               }}
               className="rounded-[4px] bg-surface p-1.5 text-text-secondary shadow-sm transition hover:bg-app hover:text-text-primary"
-              aria-label={`Move ${document.title || "Untitled"}`}
+              aria-label={`Move document ${document.title || "Untitled"}`}
               title="Move document"
             >
               <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1507,7 +1507,7 @@ function DocumentCard({
                 onRequestRename(event.currentTarget as HTMLElement);
               }}
               className="rounded-[4px] bg-surface p-1.5 text-text-secondary shadow-sm transition hover:bg-app hover:text-text-primary"
-              aria-label={`Rename ${document.title || "Untitled"}`}
+              aria-label={`Rename document ${document.title || "Untitled"}`}
             >
               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -1520,7 +1520,7 @@ function DocumentCard({
                 onRequestDelete(event.currentTarget as HTMLElement);
               }}
               className="rounded-[4px] bg-surface p-1.5 text-text-secondary shadow-sm transition hover:bg-app hover:text-text-primary"
-              aria-label={`Delete ${document.title || "Untitled"}`}
+              aria-label={`Delete document ${document.title || "Untitled"}`}
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>

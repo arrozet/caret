@@ -16,10 +16,17 @@ const set_local_state_field_mock = vi.fn();
 const awareness_on_mock = vi.fn();
 const awareness_off_mock = vi.fn();
 
-const extract_presence_users_mock = vi.fn(() => []);
-const bootstrap_collaboration_document_mock = vi.fn();
-const has_bootstrap_content_mock = vi.fn((content: unknown) => Boolean(content));
-const is_collaboration_document_empty_mock = vi.fn(() => true);
+const {
+  extract_presence_users_mock,
+  bootstrap_collaboration_document_mock,
+  has_bootstrap_content_mock,
+  is_collaboration_document_empty_mock,
+} = vi.hoisted(() => ({
+  extract_presence_users_mock: vi.fn(() => []),
+  bootstrap_collaboration_document_mock: vi.fn(),
+  has_bootstrap_content_mock: vi.fn((content: unknown) => Boolean(content)),
+  is_collaboration_document_empty_mock: vi.fn(() => true),
+}));
 
 vi.mock("../utils", () => ({
   LOCAL_COLLAB_WS_BASE_URL: "ws://localhost:3003/document",
