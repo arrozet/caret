@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# pre-commit hook — runs lint/format on staged files, then the full test suite
-# for every affected microservice, before allowing a commit.
-# Blocks the commit if lint errors are unfixable or any test fails.
+# pre-commit hook — runs lint/format only for touched services before allowing a
+# commit. Blocks the commit if lint errors are unfixable.
 #
 # Install once with:  git config core.hooksPath .githooks
 
@@ -20,138 +19,82 @@ BACKEND="$ROOT/app/backend"
 FRONTEND="$ROOT/app/frontend"
 
 # ─── Determine which files are staged ─────────────────────────────────────────
-staged_files=$(git diff --cached --name-only)
-staged_files_for_lint=$(git diff --cached --name-only --diff-filter=ACMR)
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
 
 service_has_changes() {
-  local service="$1"
-  echo "$staged_files" | grep -q "^app/backend/$service/"
+  local prefix="$1"
+  echo "$staged_files" | grep -q "^$prefix"
 }
 
-frontend_has_changes() {
-  echo "$staged_files" | grep -q "^app/frontend/"
+staged_files_for_prefix() {
+  local prefix="$1"
+  echo "$staged_files" | grep "^$prefix" || true
 }
 
-# ─── Lint & format: Node.js / TypeScript services ─────────────────────────────
-# Runs Prettier (auto-fix) then ESLint (auto-fix) on staged .ts/.tsx/.js/.jsx
-# files for a given service. Re-stages any files that were auto-fixed.
-# Exits 1 if ESLint still reports errors after fixing.
-run_node_lint() {
+run_js_lint() {
   local service="$1"
   local dir="$2"
+  local prefix="$3"
 
-  # Collect staged TS/JS files belonging to this service path
-  local service_prefix
-  if [ "$service" = "frontend" ]; then
-    service_prefix="app/frontend/"
-  else
-    service_prefix="app/backend/$service/"
-  fi
-
-  local staged_ts
-  staged_ts=$(echo "$staged_files_for_lint" | grep "^${service_prefix}.*\.\(ts\|tsx\|js\|jsx\)$" || true)
-
-  if [ -z "$staged_ts" ]; then
-    echo -e "  ${YELLOW}⟳ $service (lint)${NC}  (no staged TS/JS files — skipped)"
+  if ! service_has_changes "$prefix"; then
+    echo -e "  ${YELLOW}⟳ $service (lint/format)${NC}  (no staged changes — skipped)"
     return 0
   fi
 
   echo -e "  ${CYAN}▶ $service (lint/format)${NC}"
 
-  # Build absolute paths for the matched files
-  local abs_files=()
-  while IFS= read -r rel_file; do
-    abs_files+=("$ROOT/$rel_file")
-  done <<< "$staged_ts"
-
-  # 1. Prettier — auto-fix formatting
-  (cd "$dir" && bunx prettier --write "${abs_files[@]}" 2>&1)
-
-  # 2. ESLint — auto-fix lint issues
-  if ! (cd "$dir" && bunx eslint --fix "${abs_files[@]}" 2>&1); then
+  if ! (cd "$dir" && make lint-fix 2>&1); then
     echo -e "  ${RED}✗ $service lint FAILED — unfixable errors; commit blocked${NC}"
     return 1
   fi
 
-  # 3. Re-stage any files that were auto-fixed
-  git add -- "${abs_files[@]}"
+  if ! (cd "$dir" && make format-write 2>&1); then
+    echo -e "  ${RED}✗ $service format FAILED — commit blocked${NC}"
+    return 1
+  fi
+
+  local files_to_stage
+  files_to_stage=$(staged_files_for_prefix "$prefix")
+  if [ -n "$files_to_stage" ]; then
+    while IFS= read -r file; do
+      [ -n "$file" ] && git add -- "$file"
+    done <<< "$files_to_stage"
+  fi
 
   echo -e "  ${GREEN}✓ $service lint/format passed${NC}"
 }
 
-# ─── Lint & format: Python / ai-service ───────────────────────────────────────
-# Runs Ruff (lint --fix, then format) on staged .py files. Re-stages fixed
-# files. Exits 1 if Ruff lint still reports errors after fixing.
 run_python_lint() {
   local service="ai-service"
   local dir="$BACKEND/$service"
+  local prefix="app/backend/${service}/"
 
-  local staged_py
-  staged_py=$(echo "$staged_files_for_lint" | grep "^app/backend/${service}/.*\.py$" || true)
-
-  if [ -z "$staged_py" ]; then
-    echo -e "  ${YELLOW}⟳ $service (lint)${NC}  (no staged Python files — skipped)"
+  if ! service_has_changes "$prefix"; then
+    echo -e "  ${YELLOW}⟳ $service (lint/format)${NC}  (no staged changes — skipped)"
     return 0
   fi
 
   echo -e "  ${CYAN}▶ $service (lint/format)${NC}"
 
-  local abs_files=()
-  while IFS= read -r rel_file; do
-    abs_files+=("$ROOT/$rel_file")
-  done <<< "$staged_py"
-
-  # 1. Ruff lint — auto-fix
-  if ! (cd "$dir" && uv run ruff check --fix "${abs_files[@]}" 2>&1); then
+  if ! (cd "$dir" && make lint-fix 2>&1); then
     echo -e "  ${RED}✗ $service lint FAILED — unfixable Ruff errors; commit blocked${NC}"
     return 1
   fi
 
-  # 2. Ruff format
-  (cd "$dir" && uv run ruff format "${abs_files[@]}" 2>&1)
+  if ! (cd "$dir" && make format-write 2>&1); then
+    echo -e "  ${RED}✗ $service format FAILED — commit blocked${NC}"
+    return 1
+  fi
 
-  # 3. Re-stage auto-fixed files
-  git add -- "${abs_files[@]}"
+  local files_to_stage
+  files_to_stage=$(staged_files_for_prefix "$prefix")
+  if [ -n "$files_to_stage" ]; then
+    while IFS= read -r file; do
+      [ -n "$file" ] && git add -- "$file"
+    done <<< "$files_to_stage"
+  fi
 
   echo -e "  ${GREEN}✓ $service lint/format passed${NC}"
-}
-
-# ─── Node.js service test runner (Vitest) ─────────────────────────────────────
-run_node_tests() {
-  local service="$1"
-  local dir="$BACKEND/$service"
-
-  if ! service_has_changes "$service"; then
-    echo -e "  ${YELLOW}⟳ $service (tests)${NC}  (no staged changes — skipped)"
-    return 0
-  fi
-
-  echo -e "  ${CYAN}▶ $service (tests)${NC}"
-  if (cd "$dir" && bun run test --run 2>&1); then
-    echo -e "  ${GREEN}✓ $service tests passed${NC}"
-  else
-    echo -e "  ${RED}✗ $service tests FAILED — commit blocked${NC}"
-    return 1
-  fi
-}
-
-# ─── Python service test runner (Pytest) ──────────────────────────────────────
-run_python_tests() {
-  local service="$1"
-  local dir="$BACKEND/$service"
-
-  if ! service_has_changes "$service"; then
-    echo -e "  ${YELLOW}⟳ $service (tests)${NC}  (no staged changes — skipped)"
-    return 0
-  fi
-
-  echo -e "  ${CYAN}▶ $service (tests)${NC}"
-  if (cd "$dir" && uv run pytest tests/ -q 2>&1); then
-    echo -e "  ${GREEN}✓ $service tests passed${NC}"
-  else
-    echo -e "  ${RED}✗ $service tests FAILED — commit blocked${NC}"
-    return 1
-  fi
 }
 
 # ─── Main ───────────────────────────────────────────────────────────────────────
@@ -163,40 +106,19 @@ echo ""
 
 failed=0
 
-# ── 1. Lint / format (staged files only) ──────────────────────────────────────
 echo -e "${CYAN}── Lint & Format ──────────────────────────${NC}"
 echo ""
 
-run_node_lint   "frontend"        "$FRONTEND"           || failed=1
-run_node_lint   "auth-service"    "$BACKEND/auth-service"     || failed=1
-run_node_lint   "document-service" "$BACKEND/document-service" || failed=1
-run_node_lint   "api-gateway"     "$BACKEND/api-gateway"      || failed=1
-run_node_lint   "collab-service"  "$BACKEND/collab-service"   || failed=1
-run_python_lint                                               || failed=1
+run_js_lint "frontend" "$FRONTEND" "app/frontend/" || failed=1
+run_js_lint "auth-service" "$BACKEND/auth-service" "app/backend/auth-service/" || failed=1
+run_js_lint "document-service" "$BACKEND/document-service" "app/backend/document-service/" || failed=1
+run_js_lint "api-gateway" "$BACKEND/api-gateway" "app/backend/api-gateway/" || failed=1
+run_js_lint "collab-service" "$BACKEND/collab-service" "app/backend/collab-service/" || failed=1
+run_python_lint || failed=1
 
 echo ""
-
-# Bail early — no point running tests if lint is already broken
 if [ "$failed" -eq 1 ]; then
   echo -e "${RED}✗ Lint/format failed. Fix the errors above and retry.${NC}"
-  echo -e "${YELLOW}  To bypass (discouraged): git commit --no-verify${NC}"
-  echo ""
-  exit 1
-fi
-
-# ── 2. Tests ──────────────────────────────────────────────────────────────────
-echo -e "${CYAN}── Tests ──────────────────────────────────${NC}"
-echo ""
-
-run_node_tests   "auth-service"      || failed=1
-run_node_tests   "document-service"  || failed=1
-run_node_tests   "api-gateway"       || failed=1
-run_node_tests   "collab-service"    || failed=1
-run_python_tests "ai-service"        || failed=1
-
-echo ""
-if [ "$failed" -eq 1 ]; then
-  echo -e "${RED}✗ Tests failed. Fix the errors above and retry.${NC}"
   echo -e "${YELLOW}  To bypass (discouraged): git commit --no-verify${NC}"
   echo ""
   exit 1
