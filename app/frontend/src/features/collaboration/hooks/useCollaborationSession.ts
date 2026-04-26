@@ -34,6 +34,7 @@ export interface UseCollaborationSessionResult {
   provider: WebsocketProvider | null;
   connection_status: CollaborationConnectionStatus;
   users: CollaborationPresenceUser[];
+  is_synced: boolean;
   is_ready: boolean;
 }
 
@@ -54,6 +55,7 @@ export function useCollaborationSession({
   const [connection_status, setConnectionStatus] =
     useState<CollaborationConnectionStatus>("disconnected");
   const [users, setUsers] = useState<CollaborationPresenceUser[]>([]);
+  const [is_synced, set_is_synced] = useState(false);
   const initial_content_ref = useRef<JSONContent | null>(initial_content);
   const has_synced_ref = useRef(false);
 
@@ -95,10 +97,12 @@ export function useCollaborationSession({
       setProvider(null);
       setConnectionStatus("disconnected");
       setUsers([]);
+      set_is_synced(false);
       return;
     }
 
     has_synced_ref.current = false;
+    set_is_synced(false);
 
     const session = createCollaborationSession({
       document_id,
@@ -127,6 +131,7 @@ export function useCollaborationSession({
 
     const handle_sync = (is_synced: boolean) => {
       has_synced_ref.current = is_synced;
+      set_is_synced(is_synced);
 
       if (!is_synced) {
         return;
@@ -146,6 +151,7 @@ export function useCollaborationSession({
       session.provider.off("sync", handle_sync);
       session.provider.awareness.off("change", handle_awareness_change);
       has_synced_ref.current = false;
+      set_is_synced(false);
       setConnectionStatus("disconnected");
       setUsers([]);
       setProvider(null);
@@ -160,8 +166,9 @@ export function useCollaborationSession({
       provider,
       connection_status,
       users,
+      is_synced,
       is_ready: provider !== null && ydoc !== null,
     }),
-    [ydoc, provider, connection_status, users],
+    [ydoc, provider, connection_status, users, is_synced],
   );
 }

@@ -55,6 +55,7 @@ let latest_caret_editor_calls: Record<string, unknown>[] = [];
 let current_panel_open = false;
 let should_report_editor_ready = true;
 let current_collaboration_document: Record<string, unknown> | null = { id: "collab-doc" };
+let current_collaboration_synced = true;
 let current_workspaces: Array<Record<string, unknown>> = [];
 let current_folders: Array<Record<string, unknown>> = [];
 
@@ -109,6 +110,26 @@ const mock_set_content = vi.fn((content: JSONContent | string) => {
   return true;
 });
 
+const chain_proxy_target = {
+  run: vi.fn(() => true),
+};
+
+const chain_proxy = new Proxy(chain_proxy_target, {
+  get(target, property) {
+    if (property in target) {
+      return target[property as keyof typeof target];
+    }
+    return vi.fn(() => chain_proxy);
+  },
+});
+
+const can_proxy = new Proxy(
+  {},
+  {
+    get: () => vi.fn(() => true),
+  },
+);
+
 const fake_editor = {
   isDestroyed: false,
   state: {
@@ -117,13 +138,16 @@ const fake_editor = {
       textBetween: vi.fn(() => "Texto"),
     },
   },
-  chain: vi.fn(() => fake_editor),
-  focus: vi.fn(() => fake_editor),
-  selectAll: vi.fn(() => fake_editor),
-  insertContent: vi.fn(() => fake_editor),
-  deleteRange: vi.fn(() => fake_editor),
-  insertContentAt: vi.fn(() => fake_editor),
+  chain: vi.fn(() => chain_proxy),
+  focus: vi.fn(() => chain_proxy),
+  selectAll: vi.fn(() => chain_proxy),
+  insertContent: vi.fn(() => chain_proxy),
+  deleteRange: vi.fn(() => chain_proxy),
+  insertContentAt: vi.fn(() => chain_proxy),
   run: vi.fn(() => true),
+  can: vi.fn(() => can_proxy),
+  isActive: vi.fn(() => false),
+  getAttributes: vi.fn(() => ({})),
   commands: {
     setContent: mock_set_content,
   },
@@ -255,6 +279,7 @@ vi.mock("../../collaboration", () => ({
     provider: null,
     connection_status: "connected",
     users: [{ id: "user-1", name: "Ada", color: "#123456" }],
+    is_synced: current_collaboration_synced,
     is_ready: true,
   }),
   useCollaborationPresence: (users: unknown[]) => ({
@@ -333,6 +358,7 @@ describe("EditorPage", () => {
     current_panel_open = false;
     should_report_editor_ready = true;
     current_collaboration_document = { id: "collab-doc" };
+    current_collaboration_synced = true;
     current_workspaces = [{ id: "ws-1", kind: "personal", name: "My Documents" }];
     current_folders = [];
     mock_set_content.mockClear();

@@ -241,6 +241,10 @@ export function EditorPage() {
   });
 
   const collaboration_presence = useCollaborationPresence(collaboration_session.users);
+  const collaboration_document =
+    collaboration_session.is_synced && collaboration_session.ydoc !== null
+      ? collaboration_session.ydoc
+      : null;
 
   const { addTab, updateTabTitle } = useTabsStore();
 
@@ -639,7 +643,7 @@ export function EditorPage() {
           <CaretEditor
             content={document.content_json as JSONContent | undefined}
             onUpdate={handleUpdate}
-            collaborationDocument={collaboration_session.ydoc}
+            collaborationDocument={collaboration_document}
             onEditorReady={(ed) => {
               editor_ref.current = ed;
               set_editor_instance(ed);
