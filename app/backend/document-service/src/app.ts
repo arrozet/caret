@@ -41,7 +41,12 @@ const documentService = new DocumentService(
   workspaceRepository,
 );
 const workspaceService = new WorkspaceService(workspaceRepository);
-const folderService = new FolderService(folderRepository, workspaceRepository);
+const folderService = new FolderService(
+  folderRepository,
+  workspaceRepository,
+  documentRepository,
+  documentMemberRepository,
+);
 
 /* ============================================================
    Routes

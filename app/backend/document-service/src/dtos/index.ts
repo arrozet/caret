@@ -9,6 +9,7 @@ export type { CreateDocumentDto } from "./create_document_dto.js";
 export type { UpdateDocumentDto } from "./update_document_dto.js";
 export type { DocumentResponseDto } from "./document_response_dto.js";
 export type { CreateWorkspaceDto } from "./create_workspace_dto.js";
+export type { UpdateWorkspaceDto } from "./update_workspace_dto.js";
 export type { WorkspaceResponseDto } from "./workspace_response_dto.js";
 export type { InviteWorkspaceMemberDto } from "./invite_workspace_member_dto.js";
 export type { InviteWorkspaceMemberResponseDto } from "./invite_workspace_member_response_dto.js";

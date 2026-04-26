@@ -1,7 +1,12 @@
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, isNull, ne, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 import type { PaginationParams } from "../lib/validation.js";
+import { FolderRepository } from "./folder_repository.js";
+import { DocumentRepository } from "./document_repository.js";
+import { DocumentMemberRepository } from "./document_member_repository.js";
+
+const WORKSPACE_ADVISORY_LOCK_NAMESPACE = 4127;
 
 /**
  * Repository for workspace and workspace membership operations.
@@ -14,6 +19,85 @@ export class WorkspaceRepository {
 
   constructor(db: PostgresJsDatabase<typeof schema>) {
     this.db = db;
+  }
+
+  /**
+   * Execute a callback inside a transaction after acquiring advisory locks.
+   */
+  async withAdvisoryLock<T>(
+    keys: string[],
+    callback: (repository: WorkspaceRepository) => Promise<T>,
+  ) {
+    return this.withAdvisoryLockContext(keys, async ({ workspaceRepository }) =>
+      callback(workspaceRepository),
+    );
+  }
+
+  /**
+   * Execute a callback inside a transaction after acquiring advisory locks,
+   * exposing transaction-scoped repositories for all workspace delete cascade steps.
+   */
+  async withAdvisoryLockContext<T>(
+    keys: string[],
+    callback: (repositories: {
+      workspaceRepository: WorkspaceRepository;
+      folderRepository: FolderRepository;
+      documentRepository: DocumentRepository;
+      documentMemberRepository: DocumentMemberRepository;
+    }) => Promise<T>,
+  ) {
+    return this.db.transaction(async (tx) => {
+      const transactionDb = tx as PostgresJsDatabase<typeof schema>;
+      const workspaceRepository = new WorkspaceRepository(transactionDb);
+
+      await workspaceRepository.acquireAdvisoryLocks(keys);
+
+      return callback({
+        workspaceRepository,
+        folderRepository: new FolderRepository(transactionDb),
+        documentRepository: new DocumentRepository(transactionDb),
+        documentMemberRepository: new DocumentMemberRepository(transactionDb),
+      });
+    });
+  }
+
+  async with_advisory_lock<T>(
+    keys: string[],
+    callback: (repository: WorkspaceRepository) => Promise<T>,
+  ) {
+    return this.withAdvisoryLock(keys, callback);
+  }
+
+  async with_advisory_lock_context<T>(
+    keys: string[],
+    callback: (repositories: {
+      workspaceRepository: WorkspaceRepository;
+      folderRepository: FolderRepository;
+      documentRepository: DocumentRepository;
+      documentMemberRepository: DocumentMemberRepository;
+    }) => Promise<T>,
+  ) {
+    return this.withAdvisoryLockContext(keys, callback);
+  }
+
+  /**
+   * Acquire transaction-scoped advisory locks for the provided keys.
+   */
+  async acquireAdvisoryLocks(keys: string[]): Promise<void> {
+    const lockKeys = [...new Set(keys)].sort();
+
+    for (const key of lockKeys) {
+      await this.db.execute(sql`
+        SELECT pg_advisory_xact_lock(
+          ${WORKSPACE_ADVISORY_LOCK_NAMESPACE},
+          hashtext(${key})
+        )
+      `);
+    }
+  }
+
+  async acquire_advisory_locks(keys: string[]): Promise<void> {
+    return this.acquireAdvisoryLocks(keys);
   }
 
   /**
@@ -96,6 +180,36 @@ export class WorkspaceRepository {
   }
 
   /**
+   * Find active workspaces with the same visible name for a given user.
+   * Optionally excludes a workspace id to support in-place rename checks.
+   */
+  async findVisibleByUserAndName(userId: string, name: string, excludeWorkspaceId?: string) {
+    const conditions = [
+      eq(schema.workspace_members.user_id, userId),
+      eq(schema.workspaces.name, name),
+      isNull(schema.workspace_members.revoked_at),
+      isNull(schema.workspaces.deleted_at),
+    ];
+
+    if (excludeWorkspaceId) {
+      conditions.push(ne(schema.workspaces.id, excludeWorkspaceId));
+    }
+
+    return this.db
+      .select({
+        id: schema.workspaces.id,
+        name: schema.workspaces.name,
+      })
+      .from(schema.workspace_members)
+      .innerJoin(schema.workspaces, eq(schema.workspace_members.workspace_id, schema.workspaces.id))
+      .where(and(...conditions));
+  }
+
+  async find_visible_by_user_and_name(userId: string, name: string, excludeWorkspaceId?: string) {
+    return this.findVisibleByUserAndName(userId, name, excludeWorkspaceId);
+  }
+
+  /**
    * List all workspaces the given user is a non-revoked member of, with pagination.
    * @param user_id - User UUID.
    * @param pagination - Limit and offset for pagination.
@@ -149,6 +263,45 @@ export class WorkspaceRepository {
   }
 
   /**
+   * List active members for a workspace.
+   */
+  async listActiveMembersByWorkspace(workspaceId: string) {
+    return this.db
+      .select({
+        user_id: schema.workspace_members.user_id,
+        role: schema.workspace_members.role,
+      })
+      .from(schema.workspace_members)
+      .where(
+        and(
+          eq(schema.workspace_members.workspace_id, workspaceId),
+          isNull(schema.workspace_members.revoked_at),
+        ),
+      );
+  }
+
+  async list_active_members_by_workspace(workspaceId: string) {
+    return this.listActiveMembersByWorkspace(workspaceId);
+  }
+
+  /**
+   * Update a non-deleted workspace and return the updated row.
+   */
+  async update(id: string, data: Partial<typeof schema.workspaces.$inferInsert>) {
+    const rows = await this.db
+      .update(schema.workspaces)
+      .set({ ...data, updated_at: new Date() })
+      .where(and(eq(schema.workspaces.id, id), isNull(schema.workspaces.deleted_at)))
+      .returning();
+
+    return rows[0] ?? null;
+  }
+
+  async update_workspace(id: string, data: Partial<typeof schema.workspaces.$inferInsert>) {
+    return this.update(id, data);
+  }
+
+  /**
    * Add a member to a workspace.
    * @param data - Membership row values.
    * @returns The inserted membership row.
@@ -160,6 +313,49 @@ export class WorkspaceRepository {
 
   async add_member(data: typeof schema.workspace_members.$inferInsert) {
     return this.addMember(data);
+  }
+
+  /**
+   * Soft-delete a workspace row.
+   */
+  async softDeleteWorkspace(workspaceId: string) {
+    const rows = await this.db
+      .update(schema.workspaces)
+      .set({
+        deleted_at: new Date(),
+        updated_at: new Date(),
+      })
+      .where(and(eq(schema.workspaces.id, workspaceId), isNull(schema.workspaces.deleted_at)))
+      .returning();
+
+    return rows[0] ?? null;
+  }
+
+  async soft_delete_workspace(workspaceId: string) {
+    return this.softDeleteWorkspace(workspaceId);
+  }
+
+  /**
+   * Revoke all active members in a workspace.
+   */
+  async revokeMembersByWorkspace(workspaceId: string, revokedByUserId: string) {
+    return this.db
+      .update(schema.workspace_members)
+      .set({
+        revoked_at: new Date(),
+        revoked_by_user_id: revokedByUserId,
+      })
+      .where(
+        and(
+          eq(schema.workspace_members.workspace_id, workspaceId),
+          isNull(schema.workspace_members.revoked_at),
+        ),
+      )
+      .returning();
+  }
+
+  async revoke_members_by_workspace(workspaceId: string, revokedByUserId: string) {
+    return this.revokeMembersByWorkspace(workspaceId, revokedByUserId);
   }
 
   /**

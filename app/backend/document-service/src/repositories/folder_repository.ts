@@ -1,7 +1,11 @@
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 import type { PaginationParams } from "../lib/validation.js";
+import { DocumentRepository } from "./document_repository.js";
+import { DocumentMemberRepository } from "./document_member_repository.js";
+
+type DatabaseExecutor = PostgresJsDatabase<typeof schema>;
 
 /**
  * Repository for folder CRUD operations.
@@ -10,10 +14,43 @@ import type { PaginationParams } from "../lib/validation.js";
  */
 export class FolderRepository {
   /** Drizzle ORM database client. */
-  private db: PostgresJsDatabase<typeof schema>;
+  private db: DatabaseExecutor;
 
-  constructor(db: PostgresJsDatabase<typeof schema>) {
+  constructor(db: DatabaseExecutor) {
     this.db = db;
+  }
+
+  /**
+   * Run a callback inside a single database transaction and expose transaction-scoped repositories.
+   * @param callback - Unit of work to execute atomically.
+   * @returns Callback result.
+   */
+  async withTransaction<T>(
+    callback: (repositories: {
+      folderRepository: FolderRepository;
+      documentRepository: DocumentRepository;
+      documentMemberRepository: DocumentMemberRepository;
+    }) => Promise<T>,
+  ): Promise<T> {
+    return this.db.transaction(async (transaction) => {
+      const transactionDb = transaction as DatabaseExecutor;
+
+      return callback({
+        folderRepository: new FolderRepository(transactionDb),
+        documentRepository: new DocumentRepository(transactionDb),
+        documentMemberRepository: new DocumentMemberRepository(transactionDb),
+      });
+    });
+  }
+
+  async with_transaction<T>(
+    callback: (repositories: {
+      folderRepository: FolderRepository;
+      documentRepository: DocumentRepository;
+      documentMemberRepository: DocumentMemberRepository;
+    }) => Promise<T>,
+  ) {
+    return this.withTransaction(callback);
   }
 
   /**
@@ -41,6 +78,55 @@ export class FolderRepository {
 
   async find_by_id(id: string) {
     return this.findById(id);
+  }
+
+  /**
+   * Find the IDs of a folder subtree, including the root folder itself.
+   * Deleted folders are excluded from the traversal.
+   * @param folderId - Root folder UUID.
+   * @returns Ordered list of active folder IDs in the subtree.
+   */
+  async findDescendantIds(folderId: string): Promise<string[]> {
+    const result = await this.db.execute(sql<{ id: string }>`
+      WITH RECURSIVE folder_tree AS (
+        SELECT id, parent_folder_id
+        FROM ${schema.folders}
+        WHERE ${schema.folders.id} = ${folderId}
+          AND ${schema.folders.deleted_at} IS NULL
+
+        UNION ALL
+
+        SELECT child.id, child.parent_folder_id
+        FROM ${schema.folders} AS child
+        INNER JOIN folder_tree ON child.parent_folder_id = folder_tree.id
+        WHERE child.deleted_at IS NULL
+      )
+      SELECT id FROM folder_tree
+    `);
+
+    return result.rows.map((row) => row.id);
+  }
+
+  async find_descendant_ids(folderId: string) {
+    return this.findDescendantIds(folderId);
+  }
+
+  /**
+   * Find active folder IDs that belong to the provided workspace.
+   * @param workspaceId - Workspace UUID.
+   * @returns Folder UUIDs.
+   */
+  async findIdsByWorkspaceId(workspaceId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: schema.folders.id })
+      .from(schema.folders)
+      .where(and(eq(schema.folders.workspace_id, workspaceId), isNull(schema.folders.deleted_at)));
+
+    return rows.map((row) => row.id);
+  }
+
+  async find_ids_by_workspace_id(workspaceId: string) {
+    return this.findIdsByWorkspaceId(workspaceId);
   }
 
   /**
@@ -165,5 +251,31 @@ export class FolderRepository {
 
   async soft_delete(id: string) {
     return this.softDelete(id);
+  }
+
+  /**
+   * Soft-delete multiple folders in one operation.
+   * @param folderIds - Folder UUIDs to mark as deleted.
+   * @returns Number of folders updated.
+   */
+  async softDeleteMany(folderIds: string[]): Promise<number> {
+    if (folderIds.length === 0) {
+      return 0;
+    }
+
+    const rows = await this.db
+      .update(schema.folders)
+      .set({
+        deleted_at: new Date(),
+        updated_at: new Date(),
+      })
+      .where(and(inArray(schema.folders.id, folderIds), isNull(schema.folders.deleted_at)))
+      .returning({ id: schema.folders.id });
+
+    return rows.length;
+  }
+
+  async soft_delete_many(folderIds: string[]) {
+    return this.softDeleteMany(folderIds);
   }
 }

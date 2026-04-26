@@ -1,4 +1,6 @@
 import type { FolderRepository } from "../repositories/folder_repository.js";
+import type { DocumentRepository } from "../repositories/document_repository.js";
+import type { DocumentMemberRepository } from "../repositories/document_member_repository.js";
 import type { WorkspaceRepository } from "../repositories/workspace_repository.js";
 import type { CreateFolderDto } from "../dtos/create_folder_dto.js";
 import type { UpdateFolderDto } from "../dtos/update_folder_dto.js";
@@ -18,10 +20,21 @@ export class FolderService {
   private folderRepository: FolderRepository;
   /** Workspace membership repository (for authorization checks). */
   private workspaceRepository: WorkspaceRepository;
+  /** Document repository used for subtree delete cascades. */
+  private documentRepository: DocumentRepository;
+  /** Document membership repository used for subtree delete cascades. */
+  private documentMemberRepository: DocumentMemberRepository;
 
-  constructor(folderRepository: FolderRepository, workspaceRepository: WorkspaceRepository) {
+  constructor(
+    folderRepository: FolderRepository,
+    workspaceRepository: WorkspaceRepository,
+    documentRepository: DocumentRepository,
+    documentMemberRepository: DocumentMemberRepository,
+  ) {
     this.folderRepository = folderRepository;
     this.workspaceRepository = workspaceRepository;
+    this.documentRepository = documentRepository;
+    this.documentMemberRepository = documentMemberRepository;
   }
 
   /**
@@ -204,10 +217,27 @@ export class FolderService {
       updateFields.name = dto.name;
     }
     if (dto.parent_folder_id !== undefined) {
-      /* Prevent circular references: a folder cannot be its own parent */
-      if (dto.parent_folder_id === folderId) {
-        throw new ForbiddenError("A folder cannot be its own parent");
+      if (dto.parent_folder_id !== null) {
+        /* Prevent circular references and cross-workspace reparenting. */
+        if (dto.parent_folder_id === folderId) {
+          throw new ForbiddenError("A folder cannot be its own parent");
+        }
+
+        const parentFolder = await this.folderRepository.findById(dto.parent_folder_id);
+        if (!parentFolder) {
+          throw new NotFoundError("Parent folder not found");
+        }
+
+        if (parentFolder.workspace_id !== folder.workspace_id) {
+          throw new ForbiddenError("Parent folder does not belong to the same workspace");
+        }
+
+        const descendantIds = await this.folderRepository.findDescendantIds(folderId);
+        if (descendantIds.includes(dto.parent_folder_id)) {
+          throw new ForbiddenError("A folder cannot be moved under its own descendant");
+        }
       }
+
       updateFields.parent_folder_id = dto.parent_folder_id;
     }
     if (dto.sort_order !== undefined) {
@@ -247,7 +277,19 @@ export class FolderService {
       throw new ForbiddenError("You are not a member of this workspace");
     }
 
-    await this.folderRepository.softDelete(folderId);
+    await this.folderRepository.withTransaction(
+      async ({ folderRepository, documentRepository, documentMemberRepository }) => {
+        const folderIds = await folderRepository.findDescendantIds(folderId);
+        const documentIds = await documentRepository.findIdsByFolderIds(folderIds);
+
+        if (documentIds.length > 0) {
+          await documentMemberRepository.removeByDocumentIds(documentIds);
+          await documentRepository.softDeleteMany(documentIds, userId);
+        }
+
+        await folderRepository.softDeleteMany(folderIds);
+      },
+    );
   }
 
   async delete_folder(folderId: string, userId: string): Promise<void> {

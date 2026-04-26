@@ -1,4 +1,4 @@
-import { eq, and, isNull, sql, desc } from "drizzle-orm";
+import { eq, and, inArray, isNull, sql, desc } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 import type { PaginationParams } from "../lib/validation.js";
@@ -85,5 +85,27 @@ export class DocumentMemberRepository {
     ]);
 
     return { data, total: countResult[0].count };
+  }
+
+  /**
+   * Remove direct memberships for multiple documents.
+   * @param documentIds - Document UUIDs whose memberships should be removed.
+   * @returns Number of memberships removed.
+   */
+  async removeByDocumentIds(documentIds: string[]): Promise<number> {
+    if (documentIds.length === 0) {
+      return 0;
+    }
+
+    const rows = await this.db
+      .delete(schema.document_members)
+      .where(inArray(schema.document_members.document_id, documentIds))
+      .returning({ document_id: schema.document_members.document_id });
+
+    return rows.length;
+  }
+
+  async remove_by_document_ids(documentIds: string[]) {
+    return this.removeByDocumentIds(documentIds);
   }
 }

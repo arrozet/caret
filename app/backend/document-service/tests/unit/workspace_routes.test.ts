@@ -16,6 +16,8 @@ describe("workspace_routes", () => {
     create_workspace: ReturnType<typeof vi.fn>;
     get_workspace: ReturnType<typeof vi.fn>;
     list_workspaces: ReturnType<typeof vi.fn>;
+    update_workspace: ReturnType<typeof vi.fn>;
+    delete_workspace: ReturnType<typeof vi.fn>;
     invite_workspace_collaborator: ReturnType<typeof vi.fn>;
   };
 
@@ -108,7 +110,8 @@ describe("workspace_routes", () => {
       const route_path = layer.route.path;
       const matches_path =
         route_path === path ||
-        (route_path === "/:id" && path.startsWith("/") && path.split("/").length === 2);
+        (route_path === "/:id" && path.startsWith("/") && path.split("/").length === 2) ||
+        route_path === "/:id/invite";
 
       if (!matches_path) continue;
 
@@ -133,12 +136,16 @@ describe("workspace_routes", () => {
       create_workspace: vi.fn(),
       get_workspace: vi.fn(),
       list_workspaces: vi.fn(),
+      update_workspace: vi.fn(),
+      delete_workspace: vi.fn(),
       invite_workspace_collaborator: vi.fn(),
     };
 
     workspace_service.createWorkspace = workspace_service.create_workspace;
     workspace_service.getWorkspace = workspace_service.get_workspace;
     workspace_service.listWorkspaces = workspace_service.list_workspaces;
+    workspace_service.updateWorkspace = workspace_service.update_workspace;
+    workspace_service.deleteWorkspace = workspace_service.delete_workspace;
     workspace_service.inviteWorkspaceCollaborator = workspace_service.invite_workspace_collaborator;
 
     router = create_workspace_routes(workspace_service as never);
@@ -349,6 +356,111 @@ describe("workspace_routes", () => {
       });
 
       // Assert
+      expect(next_error).toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  describe("PATCH /:id", () => {
+    it("should_rename_workspace_and_return_200", async () => {
+      workspace_service.update_workspace.mockResolvedValue(make_workspace_dto({ name: "Studio" }));
+
+      const { status_code, body, next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: WORKSPACE_ID },
+        body: { name: "Studio" },
+      });
+
+      expect(next_error).toBeUndefined();
+      expect(status_code).toBe(200);
+      expect(body).toMatchObject({ id: WORKSPACE_ID, name: "Studio" });
+      expect(workspace_service.update_workspace).toHaveBeenCalledWith(
+        WORKSPACE_ID,
+        { name: "Studio" },
+        USER_ID,
+      );
+    });
+
+    it("should_trim_patch_name_before_calling_service", async () => {
+      workspace_service.update_workspace.mockResolvedValue(make_workspace_dto({ name: "Studio" }));
+
+      const { next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: WORKSPACE_ID },
+        body: { name: "  Studio  " },
+      });
+
+      expect(next_error).toBeUndefined();
+      expect(workspace_service.update_workspace).toHaveBeenCalledWith(
+        WORKSPACE_ID,
+        { name: "Studio" },
+        USER_ID,
+      );
+    });
+
+    it("should_call_next_with_ValidationError_for_empty_patch_name", async () => {
+      const { next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: WORKSPACE_ID },
+        body: { name: "   " },
+      });
+
+      expect(next_error).toBeInstanceOf(ValidationError);
+      expect(workspace_service.update_workspace).not.toHaveBeenCalled();
+    });
+
+    it("should_pass_NotFoundError_from_patch_service_to_next", async () => {
+      workspace_service.update_workspace.mockRejectedValue(
+        new NotFoundError("Workspace not found"),
+      );
+
+      const { next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: WORKSPACE_ID },
+        body: { name: "Studio" },
+      });
+
+      expect(next_error).toBeInstanceOf(NotFoundError);
+    });
+
+    it("should_pass_ForbiddenError_from_patch_service_to_next", async () => {
+      workspace_service.update_workspace.mockRejectedValue(new ForbiddenError("Forbidden"));
+
+      const { next_error } = await call_route_handler(router, "patch", "/:id", {
+        params: { id: WORKSPACE_ID },
+        body: { name: "Studio" },
+      });
+
+      expect(next_error).toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  describe("DELETE /:id", () => {
+    it("should_delete_workspace_and_return_204", async () => {
+      const { status_code, body, next_error } = await call_route_handler(router, "delete", "/:id", {
+        params: { id: WORKSPACE_ID },
+      });
+
+      expect(next_error).toBeUndefined();
+      expect(status_code).toBe(204);
+      expect(body).toBe(null);
+      expect(workspace_service.delete_workspace).toHaveBeenCalledWith(WORKSPACE_ID, USER_ID);
+    });
+
+    it("should_pass_NotFoundError_from_delete_service_to_next", async () => {
+      workspace_service.delete_workspace.mockRejectedValue(
+        new NotFoundError("Workspace not found"),
+      );
+
+      const { next_error } = await call_route_handler(router, "delete", "/:id", {
+        params: { id: WORKSPACE_ID },
+      });
+
+      expect(next_error).toBeInstanceOf(NotFoundError);
+    });
+
+    it("should_pass_ForbiddenError_from_delete_service_to_next", async () => {
+      workspace_service.delete_workspace.mockRejectedValue(new ForbiddenError("Forbidden"));
+
+      const { next_error } = await call_route_handler(router, "delete", "/:id", {
+        params: { id: WORKSPACE_ID },
+      });
+
       expect(next_error).toBeInstanceOf(ForbiddenError);
     });
   });
