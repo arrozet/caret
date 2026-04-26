@@ -367,7 +367,11 @@ export function EditorPage() {
     }
   }, [editor_instance]);
 
-  useGhostText({ editor: editor_instance, conversationId: activeConversationId });
+  useGhostText({
+    editor: editor_instance,
+    conversationId: activeConversationId,
+    documentId: document_id ?? null,
+  });
   useFocusMode(true);
 
   useEffect(() => {

@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
  */
 const supabase_url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabase_anon_key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-const is_test_environment = typeof process !== "undefined" && process.env.NODE_ENV === "test";
+const is_test_environment = import.meta.env.MODE === "test" || import.meta.env.VITEST === true;
 
 if (!supabase_url || !supabase_anon_key) {
   if (!is_test_environment) {

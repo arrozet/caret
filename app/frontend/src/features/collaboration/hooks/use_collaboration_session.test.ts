@@ -44,11 +44,9 @@ vi.mock("../utils", () => ({
 }));
 
 vi.mock("../../editor/utils", () => ({
-  bootstrap_collaboration_document: (...args: unknown[]) =>
-    bootstrap_collaboration_document_mock(...args),
-  has_bootstrap_content: (...args: unknown[]) => has_bootstrap_content_mock(...args),
-  is_collaboration_document_empty: (...args: unknown[]) =>
-    is_collaboration_document_empty_mock(...args),
+  bootstrap_collaboration_document: bootstrap_collaboration_document_mock,
+  has_bootstrap_content: has_bootstrap_content_mock,
+  is_collaboration_document_empty: is_collaboration_document_empty_mock,
 }));
 
 /** Unit tests for collaboration session lifecycle hook. */
