@@ -19,9 +19,13 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-dummy-key-for-unit-tests")
 
 from unittest.mock import MagicMock  # noqa: E402
 
+from pydantic_ai.messages import ModelResponse, TextPart  # noqa: E402
+from pydantic_ai.models.function import FunctionModel  # noqa: E402
+
 from agents.general_agent import (  # noqa: E402
     GeneralAgent,
     GeneralAgentDeps,
+    build_general_agent,
     get_document_content,
     propose_document_replacement,
 )
@@ -193,3 +197,31 @@ class TestGeneralAgentRegistration:
         """GeneralAgent must have GeneralAgentDeps as its deps_type."""
         # PydanticAI exposes _deps_type on Agent
         assert GeneralAgent._deps_type is GeneralAgentDeps
+
+    def test_build_general_agent_registers_metric_tools(self) -> None:
+        """The general agent should expose the metric tool pack on the single agent instance."""
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")]))
+        )
+
+        tool_names = set(agent._function_toolset.tools.keys())
+
+        assert "count_words" in tool_names
+        assert "count_characters" in tool_names
+        assert "count_paragraphs" in tool_names
+        assert "count_sentences" in tool_names
+        assert "estimate_reading_time" in tool_names
+
+    def test_system_prompt_requires_automatic_metric_tool_usage(self) -> None:
+        """The prompt should force internal metric-tool selection for metric intents."""
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")]))
+        )
+
+        system_prompt = agent._system_prompts[0]
+
+        assert "When the user asks for document metrics" in system_prompt
+        assert "MUST call the relevant metric tool(s) automatically" in system_prompt
+        assert "Do not ask the user which tool to use" in system_prompt

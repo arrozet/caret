@@ -2,9 +2,10 @@
 General-purpose agentic document assistant.
 
 This module defines the PydanticAI agent factory for the "general" agent type.
-The general agent has access to two tools:
+The general agent has access to document-editing and deterministic metric tools:
   1. get_document_content           — reads the current document text from deps
   2. propose_document_replacement   — queues a full-document replacement proposal
+  3. metrics tools                  — compute document counts and reading time
 
 A new Agent instance is created per request via build_general_agent() so the
 correct per-request model (resolved from the catalog) is used every time.
@@ -20,6 +21,14 @@ from typing import Any
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
+
+from agents.metrics_tools import (
+    count_characters,
+    count_paragraphs,
+    count_sentences,
+    count_words,
+    estimate_reading_time,
+)
 
 # ---------------------------------------------------------------------------
 # Dependency injection container
@@ -123,10 +132,15 @@ def propose_document_replacement(
 _SYSTEM_PROMPT = (
     "You are Caret AI, an agentic writing assistant embedded in the Caret document editor.\n\n"
     "## CRITICAL: HOW TO USE YOUR TOOLS\n\n"
-    "You have three tools:\n"
+    "You have eight tools:\n"
     "  1. get_document_content — reads the current document text\n"
     "  2. get_selection_content — reads the active editor selection when present\n"
-    "  3. propose_document_replacement — proposes a full document replacement\n\n"
+    "  3. propose_document_replacement — proposes a full document replacement\n"
+    "  4. count_words — counts total words\n"
+    "  5. count_characters — counts characters with and without spaces\n"
+    "  6. count_paragraphs — counts paragraphs\n"
+    "  7. count_sentences — counts sentences\n"
+    "  8. estimate_reading_time — estimates reading time\n\n"
     "### MANDATORY RULES — NEVER BREAK THESE:\n\n"
     "RULE 1: Whenever the user asks you to WRITE, EDIT, IMPROVE, REWRITE, TRANSLATE, or "
     "MODIFY the document in ANY way — you MUST call propose_document_replacement with "
@@ -144,6 +158,11 @@ _SYSTEM_PROMPT = (
     "lists, blockquotes, code, links, and emphasis. If you need richer structures such "
     "as tables or task lists, you may emit valid HTML fragments inside the replacement "
     "text because the editor will parse them.\n\n"
+    "RULE 7: When the user asks for document metrics such as words, characters, paragraphs, "
+    "sentences, or reading time, you MUST call the relevant metric tool(s) automatically. "
+    "Do not ask the user which tool to use. Decide internally.\n\n"
+    "RULE 8: For metric-only requests, do NOT call propose_document_replacement. Just return "
+    "the metric results clearly in the reply.\n\n"
     "### General guidelines:\n"
     "- Respond in the same language as the user's message.\n"
     "- Be concise. No padding.\n"
@@ -171,7 +190,16 @@ def build_general_agent(model: Model) -> "Agent[GeneralAgentDeps, str]":
         deps_type=GeneralAgentDeps,
         output_type=str,
         system_prompt=_SYSTEM_PROMPT,
-        tools=[get_document_content, get_selection_content, propose_document_replacement],
+        tools=[
+            get_document_content,
+            get_selection_content,
+            propose_document_replacement,
+            count_words,
+            count_characters,
+            count_paragraphs,
+            count_sentences,
+            estimate_reading_time,
+        ],
     )
     return agent
 
@@ -203,7 +231,16 @@ def _make_sentinel_agent() -> "Agent[GeneralAgentDeps, str]":
         deps_type=GeneralAgentDeps,
         output_type=str,
         system_prompt=_SYSTEM_PROMPT,
-        tools=[get_document_content, get_selection_content, propose_document_replacement],
+        tools=[
+            get_document_content,
+            get_selection_content,
+            propose_document_replacement,
+            count_words,
+            count_characters,
+            count_paragraphs,
+            count_sentences,
+            estimate_reading_time,
+        ],
     )
 
 

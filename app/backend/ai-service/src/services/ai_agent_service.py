@@ -486,6 +486,7 @@ class AiAgentService:
 
         full_text = ""
         token_count = 0
+        tool_call_names: list[str] = []
 
         if agent_type == "general":
             from agents.general_agent import (  # noqa: PLC0415
@@ -535,6 +536,7 @@ class AiAgentService:
                         continue
 
                     if isinstance(event, FunctionToolCallEvent):
+                        tool_call_names.append(event.part.tool_name)
                         tool_chunk = StreamChunk(
                             type="tool_call",
                             content="",
@@ -638,6 +640,7 @@ class AiAgentService:
             role=AiMessageRole.assistant,
             content=full_text,
             token_count=token_count,
+            tool_calls=tool_call_names,
         )
         await self._conv_repo.touch_updated_at(conversation_id)
 

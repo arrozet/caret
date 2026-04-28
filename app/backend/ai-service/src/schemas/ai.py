@@ -111,6 +111,7 @@ class MessageResponse(_TimestampedResponse):
     role: AiMessageRole
     content: str
     token_count: int | None
+    tool_calls: list[str] = Field(default_factory=list)
 
 
 class MessageListResponse(BaseModel):

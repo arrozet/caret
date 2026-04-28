@@ -52,7 +52,6 @@ export interface ConversationListResponse {
   total: number;
 }
 
-/** A single chat message within a conversation. */
 export interface MessageResponse {
   /** Message UUID. */
   id: string;
@@ -62,6 +61,8 @@ export interface MessageResponse {
   role: "user" | "assistant";
   /** Message text content. */
   content: string;
+  /** Ordered tool names used by the assistant for this reply. */
+  tool_calls: string[];
   /** ISO 8601 creation timestamp. */
   created_at: string;
 }

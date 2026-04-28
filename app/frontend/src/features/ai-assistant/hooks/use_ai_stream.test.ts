@@ -54,10 +54,11 @@ import { createConversation, listMessages, streamAiResponse } from "../api/aiApi
 
 async function* make_stream(
   chunks: Array<{
-    type: "delta" | "done" | "error";
+    type: "delta" | "done" | "error" | "tool_call";
     content?: string;
     error?: string;
     message_id?: string;
+    tool_name?: string;
   }>,
 ): AsyncGenerator<(typeof chunks)[number]> {
   for (const chunk of chunks) {
@@ -85,12 +86,20 @@ describe("use_ai_stream", () => {
 
   it("loads messages from an existing conversation", async () => {
     const mock_messages = [
-      { id: "m1", conversation_id: "c1", role: "user" as const, content: "Hello", created_at: "" },
+      {
+        id: "m1",
+        conversation_id: "c1",
+        role: "user" as const,
+        content: "Hello",
+        tool_calls: [],
+        created_at: "",
+      },
       {
         id: "m2",
         conversation_id: "c1",
         role: "assistant" as const,
         content: "Hi!",
+        tool_calls: ["count_words"],
         created_at: "",
       },
     ];
@@ -109,6 +118,7 @@ describe("use_ai_stream", () => {
       id: "m2",
       role: "assistant",
       content: "Hi!",
+      tool_calls: ["count_words"],
     });
     expect(listMessages).toHaveBeenCalledWith("c1");
   });
@@ -190,6 +200,30 @@ describe("use_ai_stream", () => {
 
     // After streaming completes, loading should be false.
     expect(result.current.is_loading).toBe(false);
+  });
+
+  it("attaches streamed tool calls to the current assistant message", async () => {
+    mock_conversation_id = "convo-tools";
+
+    vi.mocked(streamAiResponse).mockReturnValueOnce(
+      make_stream([
+        { type: "tool_call", tool_name: "get_document_content" },
+        { type: "tool_call", tool_name: "count_words" },
+        { type: "done", message_id: "final-id" },
+      ]),
+    );
+
+    const { result } = renderHook(() => useAiStream());
+
+    await act(async () => {
+      await result.current.send_message("Hi", "doc1");
+    });
+
+    const assistant_message = result.current.messages.find(
+      (message) => message.role === "assistant",
+    );
+
+    expect(assistant_message?.tool_calls).toEqual(["get_document_content", "count_words"]);
   });
 
   it("forwards a structured document context to streamAiResponse", async () => {

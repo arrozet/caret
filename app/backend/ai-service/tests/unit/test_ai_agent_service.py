@@ -59,6 +59,7 @@ def _make_mock_message(
     conversation_id: uuid.UUID | None = None,
     role: AiMessageRole = AiMessageRole.user,
     content: str = "Hello",
+    tool_calls: list[str] | None = None,
 ) -> MagicMock:
     """Build a mock AiMessage model."""
     msg = MagicMock()
@@ -67,6 +68,7 @@ def _make_mock_message(
     msg.role = role
     msg.content = content
     msg.token_count = None
+    msg.tool_calls = list(tool_calls or [])
     msg.created_at = datetime.now(UTC)
     msg.updated_at = datetime.now(UTC)
     return msg
@@ -235,7 +237,10 @@ class TestAiAgentServiceConversations:
         mock_msgs = [
             _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user, content="Hi"),
             _make_mock_message(
-                conversation_id=conv_id, role=AiMessageRole.assistant, content="Hello!"
+                conversation_id=conv_id,
+                role=AiMessageRole.assistant,
+                content="Hello!",
+                tool_calls=["get_document_content", "count_words"],
             ),
         ]
 
@@ -252,6 +257,7 @@ class TestAiAgentServiceConversations:
         assert result.total == 2
         assert result.items[0].role == AiMessageRole.user
         assert result.items[1].role == AiMessageRole.assistant
+        assert result.items[1].tool_calls == ["get_document_content", "count_words"]
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +411,80 @@ class TestAiAgentServiceStreaming:
         document_change_chunks = [c for c in chunks if c.get("type") == "document_change"]
         assert len(document_change_chunks) == 1
         assert document_change_chunks[0]["document_change"]["proposed_text"] == repeated_text
+
+    @pytest.mark.asyncio
+    async def test_stream_response_general_emits_metric_tool_call_without_document_change(
+        self,
+    ) -> None:
+        """Metric tool calls should surface without entering document replacement flow."""
+        # Arrange
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="El documento tiene 4 palabras.",
+        )
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.run_stream_events = MagicMock(
+            return_value=_make_event_stream(
+                [
+                    FunctionToolCallEvent(
+                        part=ToolCallPart(
+                            tool_name="count_words",
+                            args={},
+                        )
+                    ),
+                    PartStartEvent(
+                        index=0,
+                        part=TextPart(content="El documento tiene 4 palabras."),
+                    ),
+                    AgentRunResultEvent(result=MagicMock(output="El documento tiene 4 palabras.")),
+                ]
+            )
+        )
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ) as create_message,
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "agents.general_agent.build_general_agent",
+                return_value=mock_agent_instance,
+            ),
+        ):
+            # Act
+            service = AiAgentService(session)
+            chunks = []
+            async for chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Cuantas palabras tiene el documento?",
+                document_context="uno dos tres cuatro",
+                agent_type="general",
+            ):
+                chunks.append(json.loads(chunk.removeprefix("data: ").strip()))
+
+        # Assert
+        tool_call_chunks = [c for c in chunks if c.get("type") == "tool_call"]
+        document_change_chunks = [c for c in chunks if c.get("type") == "document_change"]
+        done_chunks = [c for c in chunks if c.get("type") == "done"]
+
+        assert len(tool_call_chunks) == 1
+        assert tool_call_chunks[0]["tool_name"] == "count_words"
+        assert document_change_chunks == []
+        assert len(done_chunks) == 1
+        assert create_message.await_args_list[1].kwargs["tool_calls"] == ["count_words"]
 
     @pytest.mark.asyncio
     async def test_stream_response_yields_delta_and_done(self) -> None:

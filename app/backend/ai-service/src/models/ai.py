@@ -30,7 +30,7 @@ from sqlalchemy import (
 # documents.id are enforced at the database level (via Alembic migrations)
 # but must NOT appear in the ORM model here — SQLAlchemy would try to resolve
 # them against the local metadata and raise NoReferencedTableError at startup.
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.types import TIMESTAMP
@@ -161,6 +161,12 @@ class AiMessage(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tool_calls: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
 
     created_at: Mapped[TIMESTAMP] = mapped_column(
         TIMESTAMP(timezone=True),

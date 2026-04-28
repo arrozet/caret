@@ -25,6 +25,7 @@ let mock_messages: Array<{
   id: string;
   role: "user" | "assistant";
   content: string;
+  tool_calls: string[];
   is_streaming?: boolean;
 }> = [];
 let mock_is_loading = false;
@@ -43,7 +44,6 @@ vi.mock("../hooks/useAiStream", () => ({
       return mock_error;
     },
     pending_change: null,
-    tool_calls: [],
     send_message: mock_send_message,
     stop_generating: mock_stop_generating,
     load_messages: mock_load_messages,
@@ -147,15 +147,15 @@ describe("ChatPanel", () => {
   });
 
   it("does not render the empty state when messages exist", () => {
-    mock_messages = [{ id: "m1", role: "user", content: "Hello" }];
+    mock_messages = [{ id: "m1", role: "user", content: "Hello", tool_calls: [] }];
     render(<ChatPanel document_id="doc-1" />);
     expect(screen.queryByText("empty_state")).not.toBeInTheDocument();
   });
 
   it("renders user and assistant messages", () => {
     mock_messages = [
-      { id: "m1", role: "user", content: "My question" },
-      { id: "m2", role: "assistant", content: "My answer" },
+      { id: "m1", role: "user", content: "My question", tool_calls: [] },
+      { id: "m2", role: "assistant", content: "My answer", tool_calls: [] },
     ];
     render(<ChatPanel document_id="doc-1" />);
     expect(screen.getByText("My question")).toBeInTheDocument();
@@ -164,7 +164,12 @@ describe("ChatPanel", () => {
 
   it("renders assistant markdown content", () => {
     mock_messages = [
-      { id: "m1", role: "assistant", content: "**Bold** and [link](https://example.com)" },
+      {
+        id: "m1",
+        role: "assistant",
+        content: "**Bold** and [link](https://example.com)",
+        tool_calls: [],
+      },
     ];
 
     render(<ChatPanel document_id="doc-1" />);
@@ -183,6 +188,7 @@ describe("ChatPanel", () => {
         id: "m1",
         role: "assistant",
         content: "<think>Internal note</think>Final answer",
+        tool_calls: [],
       },
     ];
 
@@ -250,5 +256,50 @@ describe("ChatPanel", () => {
     render(<ChatPanel document_id="doc-1" />);
     const log = screen.getByRole("log");
     expect(log).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("renders an inline assistant tool trace for persisted history", () => {
+    mock_ai_mode = "agent";
+    mock_messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: "My answer",
+        tool_calls: ["get_document_content", "count_words"],
+      },
+    ];
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    expect(
+      screen.getByText("I read the document and counted the words before answering."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByText("I read the document and counted the words before answering."),
+    );
+
+    expect(screen.getByText("Read document")).toBeInTheDocument();
+    expect(screen.getByText("Counted words")).toBeInTheDocument();
+  });
+
+  it("renders pending inline tool trace while streaming", () => {
+    mock_ai_mode = "agent";
+    mock_is_loading = true;
+    mock_messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: "",
+        tool_calls: ["count_words"],
+        is_streaming: true,
+      },
+    ];
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    expect(screen.getByText("Let me count the words first...")).toBeInTheDocument();
+    expect(screen.getByText("Counting words...")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
   });
 });

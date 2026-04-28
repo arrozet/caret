@@ -17,6 +17,8 @@ export interface ChatMessage {
   role: "user" | "assistant";
   /** Full message text content. */
   content: string;
+  /** Ordered tool names used by the assistant for this reply. */
+  tool_calls: string[];
   /** Whether this message is currently being streamed (partial). */
   is_streaming?: boolean;
 }
@@ -31,8 +33,6 @@ export interface UseAiStreamReturn {
   error: string | null;
   /** A pending document change proposed by the agent (null if none). */
   pending_change: DocumentChangePayload | null;
-  /** List of tool names called during the current/last agent run. */
-  tool_calls: string[];
   /**
    * Send a user message and stream the AI response into `messages`.
    * Creates a new conversation for the document if none is active.
@@ -82,7 +82,6 @@ export function useAiStream(): UseAiStreamReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [toolCalls, setToolCalls] = useState<string[]>([]);
 
   /** Ref to the AbortController so stop_generating can cancel inflight requests. */
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -105,6 +104,7 @@ export function useAiStream(): UseAiStreamReturn {
           id: m.id,
           role: m.role,
           content: m.content,
+          tool_calls: m.tool_calls ?? [],
         })),
       );
     } catch (err) {
@@ -136,7 +136,6 @@ export function useAiStream(): UseAiStreamReturn {
 
       setError(null);
       setIsLoading(true);
-      setToolCalls([]);
 
       // Ensure we have an active conversation.
       let conversationId = activeConversationId;
@@ -156,14 +155,23 @@ export function useAiStream(): UseAiStreamReturn {
 
       // Append the user's message to the local chat history.
       const userMsgId = `user-${Date.now()}`;
-      setMessages((prev) => [...prev, { id: userMsgId, role: "user", content: user_message }]);
+      setMessages((prev) => [
+        ...prev,
+        { id: userMsgId, role: "user", content: user_message, tool_calls: [] },
+      ]);
 
       // Append a streaming placeholder for the assistant reply.
       const assistantPlaceholderId = `assistant-streaming-${Date.now()}`;
       streamingIdRef.current = assistantPlaceholderId;
       setMessages((prev) => [
         ...prev,
-        { id: assistantPlaceholderId, role: "assistant", content: "", is_streaming: true },
+        {
+          id: assistantPlaceholderId,
+          role: "assistant",
+          content: "",
+          tool_calls: [],
+          is_streaming: true,
+        },
       ]);
 
       // Set up cancellation.
@@ -192,8 +200,17 @@ export function useAiStream(): UseAiStreamReturn {
               ),
             );
           } else if (chunk.type === "tool_call" && chunk.tool_name) {
-            // Accumulate tool names invoked during the agent run.
-            setToolCalls((prev) => [...prev, chunk.tool_name!]);
+            const currentStreamingId = streamingIdRef.current;
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === currentStreamingId
+                  ? {
+                      ...msg,
+                      tool_calls: [...msg.tool_calls, chunk.tool_name!],
+                    }
+                  : msg,
+              ),
+            );
           } else if (chunk.type === "document_change" && chunk.document_change) {
             // Store the proposed document edit for the accept/reject diff viewer.
             setPendingDocumentChange(chunk.document_change);
@@ -261,7 +278,6 @@ export function useAiStream(): UseAiStreamReturn {
     setError(null);
     setIsLoading(false);
     setPendingDocumentChange(null);
-    setToolCalls([]);
     streamingIdRef.current = null;
   }, [setPendingDocumentChange]);
 
@@ -277,7 +293,6 @@ export function useAiStream(): UseAiStreamReturn {
     is_loading: isLoading,
     error,
     pending_change: pendingDocumentChange,
-    tool_calls: toolCalls,
     send_message,
     stop_generating,
     load_messages,

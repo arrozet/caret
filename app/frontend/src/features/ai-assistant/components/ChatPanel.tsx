@@ -12,7 +12,15 @@ import {
   Clock3,
   Search,
   ChevronsUpDown,
+  FileText,
+  LoaderCircle,
+  PencilLine,
+  Pilcrow,
+  Sigma,
+  Type,
+  Wrench,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { useAiStore } from "../../../stores/aiStore";
 import { useAiStream } from "../hooks/useAiStream";
@@ -23,35 +31,54 @@ import type { DocumentContextSnapshot, ModelInfo } from "../api/aiApi";
 /** Offline / error fallback only — order is arbitrary; server `default_model_id` wins after fetch. */
 const FALLBACK_MODELS: ModelInfo[] = [
   {
-    id: "google/gemma-4-31b-it:free",
-    name: "Gemma 4 31B",
-    provider: "Google",
-    gateway: "openrouter",
-    is_free: true,
-    is_stealth: false,
-    context_window: 262_144,
-    description: "Instruction-tuned Gemma with native function calling and long context.",
-  },
-  {
-    id: "z-ai/glm-4.5-air:free",
-    name: "GLM-4.5 Air",
-    provider: "Z.AI",
-    gateway: "openrouter",
-    is_free: true,
-    is_stealth: false,
-    context_window: 128_000,
-    description: "Lightweight, fast general-purpose model from Z.AI.",
-  },
-  {
-    id: "x-ai/grok-4.1-fast",
-    name: "Grok 4.1 Fast",
-    provider: "xAI",
+    id: "deepseek/deepseek-v4-flash",
+    name: "DeepSeek V4 Flash",
+    provider: "DeepSeek",
     gateway: "openrouter",
     is_free: false,
     is_stealth: false,
-    context_window: 2_000_000,
-    description:
-      "Agentic tool-calling model for support, research, and long context (via OpenRouter).",
+    context_window: 1_048_576,
+    description: "Primary model for fast, high-throughput general and coding workloads.",
+  },
+  {
+    id: "minimax/minimax-m2.7",
+    name: "MiniMax M2.7",
+    provider: "MiniMax",
+    gateway: "openrouter",
+    is_free: false,
+    is_stealth: false,
+    context_window: 196_608,
+    description: "First fallback model with strong agentic and planning capabilities.",
+  },
+  {
+    id: "xiaomi/mimo-v2.5",
+    name: "MiMo-V2.5",
+    provider: "Xiaomi",
+    gateway: "openrouter",
+    is_free: false,
+    is_stealth: false,
+    context_window: 1_048_576,
+    description: "Second fallback model optimized for multimodal and long-context tasks.",
+  },
+  {
+    id: "xiaomi/mimo-v2.5-pro",
+    name: "MiMo-V2.5-Pro",
+    provider: "Xiaomi",
+    gateway: "openrouter",
+    is_free: false,
+    is_stealth: false,
+    context_window: 1_048_576,
+    description: "Third fallback model focused on stronger complex reasoning performance.",
+  },
+  {
+    id: "moonshotai/kimi-k2.6",
+    name: "Kimi K2.6",
+    provider: "Moonshot AI",
+    gateway: "openrouter",
+    is_free: false,
+    is_stealth: false,
+    context_window: 256_000,
+    description: "Final fallback model for long-horizon coding and orchestration tasks.",
   },
 ];
 
@@ -69,6 +96,8 @@ interface MessageBubbleProps {
   is_agent_mode: boolean;
   /** Translated label for the thought block. */
   think_label: string;
+  /** Active locale code used for inline assistant UI copy. */
+  language: string;
 }
 
 /**
@@ -188,7 +217,7 @@ function ThinkBlock({
  * Renders a single chat message bubble.
  * User messages are right-aligned; assistant messages are left-aligned.
  */
-function MessageBubble({ message, is_agent_mode, think_label }: MessageBubbleProps) {
+function MessageBubble({ message, is_agent_mode, think_label, language }: MessageBubbleProps) {
   const is_user = message.role === "user";
 
   // Parse <think>...</think> if present (common in models like DeepSeek-R1)
@@ -202,6 +231,7 @@ function MessageBubble({ message, is_agent_mode, think_label }: MessageBubblePro
   }
 
   const is_animating = message.role === "assistant" && message.is_streaming === true;
+  const has_tool_trace = message.tool_calls.length > 0;
 
   return (
     <div className={`flex w-full ${is_user ? "justify-end" : "justify-start"} mb-4`}>
@@ -226,14 +256,21 @@ function MessageBubble({ message, is_agent_mode, think_label }: MessageBubblePro
         <div className={is_user ? "whitespace-pre-wrap break-words" : "break-words"}>
           {is_user ? (
             main_content
-          ) : (
+          ) : main_content ? (
             <MarkdownContent
               content={main_content || ""}
               className="break-words text-text-primary"
             />
+          ) : null}
+          {!is_user && has_tool_trace && (
+            <ToolCallInlineTrace
+              toolCalls={message.tool_calls}
+              isCompleted={!message.is_streaming}
+              language={language}
+            />
           )}
           {/* Animated typing cursor */}
-          {is_animating && (
+          {is_animating && (main_content || !has_tool_trace) && (
             <div className="mt-1">
               <span
                 className="ml-1.5 inline-block h-2 w-2 rounded-full bg-current opacity-60 animate-[pulse_1s_cubic-bezier(0.4,0,0.6,1)_infinite] align-middle shadow-sm"
@@ -248,50 +285,454 @@ function MessageBubble({ message, is_agent_mode, think_label }: MessageBubblePro
 }
 
 // ---------------------------------------------------------------------------
-// Tool call badge
+// Tool call trace
 // ---------------------------------------------------------------------------
 
 /**
- * Props for a single tool call badge shown during/after an agent run.
+ * Props for a single tool call item shown during/after an agent run.
  */
-interface ToolCallBadgeProps {
+interface ToolCallTraceItemProps {
   /** The name of the tool that was called. */
   toolName: string;
   /** Whether the agent run has finished and this tool call is resolved. */
   isCompleted?: boolean;
 }
 
-/**
- * Displays a small pill badge showing a tool name called by the agent.
- * Shows a pulsing dot while the agent is still running, and a checkmark
- * once the run completes.
- */
-function ToolCallBadge({ toolName, isCompleted = false }: ToolCallBadgeProps) {
-  const label_map_pending: Record<string, string> = {
-    get_document_content: "Reading document...",
-    propose_document_replacement: "Proposing edit...",
-  };
-  const label_map_done: Record<string, string> = {
-    get_document_content: "Read document",
-    propose_document_replacement: "Proposed edit",
-  };
+interface ToolCallPresentation {
+  pendingLabel: string;
+  completedLabel: string;
+  categoryLabel: string;
+  description: string;
+  icon: LucideIcon;
+}
 
-  const label = isCompleted
-    ? (label_map_done[toolName] ?? `Tool: ${toolName}`)
-    : (label_map_pending[toolName] ?? `Tool: ${toolName}...`);
+const TOOL_CALL_ICONS: Record<string, LucideIcon> = {
+  get_document_content: FileText,
+  get_selection_content: FileText,
+  count_words: Sigma,
+  count_characters: Type,
+  count_paragraphs: Pilcrow,
+  count_sentences: Sigma,
+  estimate_reading_time: Clock3,
+  propose_document_replacement: PencilLine,
+};
+
+const TOOL_CALL_COPY = {
+  en: {
+    get_document_content: {
+      pendingLabel: "Reading document...",
+      completedLabel: "Read document",
+      categoryLabel: "Document context",
+      description: "Reads the current document content before responding.",
+    },
+    get_selection_content: {
+      pendingLabel: "Reading selection...",
+      completedLabel: "Read selection",
+      categoryLabel: "Selected text",
+      description: "Reads the current text selection to focus the answer.",
+    },
+    count_words: {
+      pendingLabel: "Counting words...",
+      completedLabel: "Counted words",
+      categoryLabel: "Document metric",
+      description: "Counts words deterministically from the document snapshot.",
+    },
+    count_characters: {
+      pendingLabel: "Counting characters...",
+      completedLabel: "Counted characters",
+      categoryLabel: "Document metric",
+      description: "Counts characters with and without spaces.",
+    },
+    count_paragraphs: {
+      pendingLabel: "Counting paragraphs...",
+      completedLabel: "Counted paragraphs",
+      categoryLabel: "Document metric",
+      description: "Counts non-empty paragraph blocks in the document.",
+    },
+    count_sentences: {
+      pendingLabel: "Counting sentences...",
+      completedLabel: "Counted sentences",
+      categoryLabel: "Document metric",
+      description: "Counts sentence-like spans using punctuation boundaries.",
+    },
+    estimate_reading_time: {
+      pendingLabel: "Estimating reading time...",
+      completedLabel: "Estimated reading time",
+      categoryLabel: "Document metric",
+      description: "Estimates reading time from the current word count.",
+    },
+    propose_document_replacement: {
+      pendingLabel: "Preparing edit...",
+      completedLabel: "Prepared edit",
+      categoryLabel: "Document update",
+      description: "Builds a proposed replacement for review in the editor.",
+    },
+  },
+  es: {
+    get_document_content: {
+      pendingLabel: "Leyendo documento...",
+      completedLabel: "Documento leído",
+      categoryLabel: "Contexto del documento",
+      description: "Lee el contenido actual del documento antes de responder.",
+    },
+    get_selection_content: {
+      pendingLabel: "Leyendo selección...",
+      completedLabel: "Selección leída",
+      categoryLabel: "Texto seleccionado",
+      description: "Lee la selección actual para centrar mejor la respuesta.",
+    },
+    count_words: {
+      pendingLabel: "Contando palabras...",
+      completedLabel: "Palabras contadas",
+      categoryLabel: "Métrica del documento",
+      description: "Cuenta las palabras de forma determinista sobre el documento.",
+    },
+    count_characters: {
+      pendingLabel: "Contando caracteres...",
+      completedLabel: "Caracteres contados",
+      categoryLabel: "Métrica del documento",
+      description: "Cuenta caracteres con y sin espacios.",
+    },
+    count_paragraphs: {
+      pendingLabel: "Contando párrafos...",
+      completedLabel: "Párrafos contados",
+      categoryLabel: "Métrica del documento",
+      description: "Cuenta los bloques de párrafo no vacíos del documento.",
+    },
+    count_sentences: {
+      pendingLabel: "Contando frases...",
+      completedLabel: "Frases contadas",
+      categoryLabel: "Métrica del documento",
+      description: "Cuenta frases usando límites de puntuación.",
+    },
+    estimate_reading_time: {
+      pendingLabel: "Estimando tiempo de lectura...",
+      completedLabel: "Tiempo de lectura estimado",
+      categoryLabel: "Métrica del documento",
+      description: "Estima el tiempo de lectura a partir del conteo de palabras.",
+    },
+    propose_document_replacement: {
+      pendingLabel: "Preparando edición...",
+      completedLabel: "Edición preparada",
+      categoryLabel: "Actualización del documento",
+      description: "Prepara una propuesta de reemplazo para revisarla en el editor.",
+    },
+  },
+} satisfies Record<"en" | "es", Record<string, Omit<ToolCallPresentation, "icon">>>;
+
+const INLINE_ONLY_TOOLS = new Set(["get_document_content", "get_selection_content"]);
+
+function getLanguageBucket(language: string): "en" | "es" {
+  return language.toLowerCase().startsWith("es") ? "es" : "en";
+}
+
+function getToolPresentation(toolName: string, language: string): ToolCallPresentation {
+  const languageBucket = getLanguageBucket(language);
+  const localizedCopy = TOOL_CALL_COPY[languageBucket] as Record<
+    string,
+    Omit<ToolCallPresentation, "icon">
+  >;
+  const copy = localizedCopy[toolName];
+
+  return {
+    pendingLabel: copy?.pendingLabel ?? `${humanizeToolName(toolName)}...`,
+    completedLabel: copy?.completedLabel ?? humanizeToolName(toolName),
+    categoryLabel: copy?.categoryLabel ?? (languageBucket === "es" ? "Herramienta" : "Tool call"),
+    description:
+      copy?.description ??
+      (languageBucket === "es"
+        ? "La IA ha usado esta herramienta como parte de la respuesta."
+        : "The assistant used this tool while producing the answer."),
+    icon: TOOL_CALL_ICONS[toolName] ?? Wrench,
+  };
+}
+
+function humanizeToolName(toolName: string) {
+  return toolName
+    .split("_")
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+/**
+ * Displays a visible trace row for a tool used by the agent.
+ * Shows a spinner while the run is active and a checkmark once completed.
+ */
+function ToolCallTraceItem({
+  toolName,
+  isCompleted = false,
+  language,
+}: ToolCallTraceItemProps & { language: string }) {
+  const presentation = getToolPresentation(toolName, language);
+  const Icon = presentation.icon;
+  const label = isCompleted ? presentation.completedLabel : presentation.pendingLabel;
+  const categoryLabel = presentation.categoryLabel;
+  const stateLabel =
+    getLanguageBucket(language) === "es"
+      ? isCompleted
+        ? "Completada"
+        : "En curso"
+      : isCompleted
+        ? "Completed"
+        : "Running";
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1 mb-2 rounded-lg bg-accent-ai/10 border border-accent-ai/25 w-fit text-ui-xs text-accent-ai">
-      {isCompleted ? (
-        <Check className="h-2.5 w-2.5 shrink-0" aria-hidden="true" strokeWidth={2.5} />
-      ) : (
-        <span
-          className="inline-block h-1.5 w-1.5 rounded-full bg-accent-ai/70 animate-pulse shrink-0"
-          aria-hidden="true"
-        />
-      )}
-      {label}
+    <div className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-text-secondary">
+      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-ai/8 text-accent-ai">
+        {isCompleted ? (
+          <Check className="h-3 w-3" aria-hidden="true" strokeWidth={2.5} />
+        ) : (
+          <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" strokeWidth={2.25} />
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <Icon className="h-3 w-3 shrink-0 text-accent-ai" aria-hidden="true" strokeWidth={2} />
+          <p className="truncate text-ui-xs font-medium text-text-primary">{label}</p>
+        </div>
+        <div className="mt-1 flex items-center gap-2 text-[10px] text-text-secondary/90">
+          <span>{categoryLabel}</span>
+          <span aria-hidden="true" className="h-1 w-1 rounded-full bg-accent-ai/45" />
+          <span>{stateLabel}</span>
+        </div>
+        <p className="mt-1 text-[11px] leading-relaxed text-text-secondary/80">
+          {presentation.description}
+        </p>
+      </div>
     </div>
+  );
+}
+
+function getToolTraceSummary(toolCalls: string[], isCompleted: boolean, language: string) {
+  const languageBucket = getLanguageBucket(language);
+  const primaryTool =
+    [...toolCalls]
+      .reverse()
+      .find(
+        (toolName) => toolName !== "get_document_content" && toolName !== "get_selection_content",
+      ) ?? toolCalls[toolCalls.length - 1];
+  const hasDocumentRead = toolCalls.includes("get_document_content");
+  const hasSelectionRead = toolCalls.includes("get_selection_content");
+
+  if (toolCalls.length > 2) {
+    if (languageBucket === "es") {
+      return isCompleted
+        ? `He usado ${toolCalls.length} herramientas antes de responder.`
+        : `Déjame ejecutar ${toolCalls.length} herramientas antes de responder...`;
+    }
+
+    return isCompleted
+      ? `I used ${toolCalls.length} tools before answering.`
+      : `Let me run ${toolCalls.length} tools before answering...`;
+  }
+
+  switch (primaryTool) {
+    case "count_words":
+      if (languageBucket === "es") {
+        return isCompleted
+          ? hasDocumentRead
+            ? "He leído el documento y he contado las palabras antes de responder."
+            : "He contado las palabras antes de responder."
+          : hasDocumentRead
+            ? "Déjame leer primero el documento y contar las palabras..."
+            : "Déjame contar primero las palabras...";
+      }
+      return isCompleted
+        ? hasDocumentRead
+          ? "I read the document and counted the words before answering."
+          : "I counted the words before answering."
+        : hasDocumentRead
+          ? "Let me read the document and count the words first..."
+          : "Let me count the words first...";
+    case "count_sentences":
+      if (languageBucket === "es") {
+        return isCompleted
+          ? hasDocumentRead
+            ? "He leído el documento y he contado las frases antes de responder."
+            : "He contado las frases antes de responder."
+          : hasDocumentRead
+            ? "Déjame leer primero el documento y contar las frases..."
+            : "Déjame contar primero las frases...";
+      }
+      return isCompleted
+        ? hasDocumentRead
+          ? "I read the document and counted the sentences before answering."
+          : "I counted the sentences before answering."
+        : hasDocumentRead
+          ? "Let me read the document and count the sentences first..."
+          : "Let me count the sentences first...";
+    case "count_characters":
+      if (languageBucket === "es") {
+        return isCompleted
+          ? hasDocumentRead
+            ? "He leído el documento y he contado los caracteres antes de responder."
+            : "He contado los caracteres antes de responder."
+          : hasDocumentRead
+            ? "Déjame leer primero el documento y contar los caracteres..."
+            : "Déjame contar primero los caracteres...";
+      }
+      return isCompleted
+        ? hasDocumentRead
+          ? "I read the document and counted the characters before answering."
+          : "I counted the characters before answering."
+        : hasDocumentRead
+          ? "Let me read the document and count the characters first..."
+          : "Let me count the characters first...";
+    case "count_paragraphs":
+      if (languageBucket === "es") {
+        return isCompleted
+          ? hasDocumentRead
+            ? "He leído el documento y he contado los párrafos antes de responder."
+            : "He contado los párrafos antes de responder."
+          : hasDocumentRead
+            ? "Déjame leer primero el documento y contar los párrafos..."
+            : "Déjame contar primero los párrafos...";
+      }
+      return isCompleted
+        ? hasDocumentRead
+          ? "I read the document and counted the paragraphs before answering."
+          : "I counted the paragraphs before answering."
+        : hasDocumentRead
+          ? "Let me read the document and count the paragraphs first..."
+          : "Let me count the paragraphs first...";
+    case "estimate_reading_time":
+      return languageBucket === "es"
+        ? isCompleted
+          ? "He estimado el tiempo de lectura antes de responder."
+          : "Déjame estimar primero el tiempo de lectura..."
+        : isCompleted
+          ? "I estimated the reading time before answering."
+          : "Let me estimate the reading time first...";
+    case "propose_document_replacement":
+      if (languageBucket === "es") {
+        return isCompleted
+          ? hasSelectionRead
+            ? "He revisado la selección y he preparado la edición para tu petición."
+            : hasDocumentRead
+              ? "He revisado el documento y he preparado la edición para tu petición."
+              : "He preparado la edición para tu petición."
+          : hasSelectionRead
+            ? "Voy a revisar la selección y preparar la edición..."
+            : hasDocumentRead
+              ? "Voy a revisar el documento y preparar la edición..."
+              : "Voy a preparar la edición para tu petición...";
+      }
+      return isCompleted
+        ? hasSelectionRead
+          ? "I reviewed the selection and prepared the edit for your request."
+          : hasDocumentRead
+            ? "I reviewed the document and prepared the edit for your request."
+            : "I prepared the edit for your request."
+        : hasSelectionRead
+          ? "Let me review the selection and prepare the edit..."
+          : hasDocumentRead
+            ? "Let me review the document and prepare the edit..."
+            : "Let me prepare the edit for your request...";
+    case "get_selection_content":
+      return languageBucket === "es"
+        ? isCompleted
+          ? "He revisado la selección antes de responder."
+          : "Déjame revisar primero la selección..."
+        : isCompleted
+          ? "I reviewed the selection before answering."
+          : "Let me review the selection first...";
+    case "get_document_content":
+      return languageBucket === "es"
+        ? isCompleted
+          ? "He revisado el documento antes de responder."
+          : "Déjame leer primero el documento..."
+        : isCompleted
+          ? "I reviewed the document before answering."
+          : "Let me read the document first...";
+    default:
+      return languageBucket === "es"
+        ? isCompleted
+          ? `He usado ${toolCalls.length} herramienta${toolCalls.length === 1 ? "" : "s"} antes de responder.`
+          : "Déjame usar una herramienta antes de responder..."
+        : isCompleted
+          ? `I used ${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"} before answering.`
+          : "Let me use a tool before answering...";
+  }
+}
+
+function ToolCallInlineTrace({
+  toolCalls,
+  isCompleted,
+  language,
+}: {
+  toolCalls: string[];
+  isCompleted: boolean;
+  language: string;
+}) {
+  const languageBucket = getLanguageBucket(language);
+  const [isExpanded, setIsExpanded] = useState(!isCompleted);
+  const isOpen = !isCompleted || isExpanded;
+
+  const summaryText = getToolTraceSummary(toolCalls, isCompleted, language);
+  const countLabel =
+    languageBucket === "es"
+      ? `${toolCalls.length} herramienta${toolCalls.length === 1 ? "" : "s"}`
+      : `${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"}`;
+  const isExpandable =
+    toolCalls.length > 1 || !toolCalls.every((toolName) => INLINE_ONLY_TOOLS.has(toolName));
+
+  const summaryContent = (
+    <>
+      <div className="flex min-w-0 items-center gap-2">
+        {isCompleted ? (
+          <Check
+            className="h-3.5 w-3.5 shrink-0 text-accent-ai"
+            aria-hidden="true"
+            strokeWidth={2.5}
+          />
+        ) : (
+          <LoaderCircle
+            className="h-3.5 w-3.5 shrink-0 animate-spin text-accent-ai"
+            aria-hidden="true"
+            strokeWidth={2.25}
+          />
+        )}
+        <span className="truncate text-ui-xs font-medium text-text-secondary">{summaryText}</span>
+      </div>
+      <div className="ml-3 flex shrink-0 items-center gap-1.5 text-[10px] text-text-secondary/80">
+        <span>{countLabel}</span>
+        {isExpandable && <ChevronsUpDown className="h-3 w-3" aria-hidden="true" strokeWidth={2} />}
+      </div>
+    </>
+  );
+
+  if (!isExpandable) {
+    return (
+      <div className="mt-2 rounded-xl border border-border-subtle/70 bg-ai-highlight/35 px-3 py-2">
+        <div className="flex items-center justify-between gap-2">{summaryContent}</div>
+      </div>
+    );
+  }
+
+  return (
+    <details
+      open={isOpen}
+      onToggle={(event) => setIsExpanded(event.currentTarget.open)}
+      className="mt-2 rounded-xl border border-border-subtle/70 bg-ai-highlight/35 px-3 py-2"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+        {summaryContent}
+      </summary>
+      <div className="mt-2 border-t border-border-subtle/70 pt-2">
+        <div className="space-y-1">
+          {toolCalls.map((toolName: string, idx: number) => (
+            <ToolCallTraceItem
+              key={`${toolName}-${idx}`}
+              toolName={toolName}
+              isCompleted={isCompleted}
+              language={language}
+            />
+          ))}
+        </div>
+      </div>
+    </details>
   );
 }
 
@@ -341,7 +782,7 @@ export function ChatPanel({
   get_document_context,
   resolve_pending_change_token,
 }: ChatPanelProps) {
-  const { t } = useTranslation("ai");
+  const { t, i18n } = useTranslation("ai");
 
   const {
     closePanel,
@@ -359,7 +800,6 @@ export function ChatPanel({
     is_loading,
     error,
     pending_change,
-    tool_calls,
     send_message,
     stop_generating,
     load_messages,
@@ -739,20 +1179,9 @@ export function ChatPanel({
                 message={msg}
                 is_agent_mode={is_agent_mode}
                 think_label={think_label}
+                language={i18n.language}
               />
             ))}
-            {/* Tool call trace — shown in agent mode during/after an agentic run */}
-            {aiMode === "agent" && tool_calls.length > 0 && (
-              <div className="px-2 py-1 mb-1">
-                {tool_calls.map((toolName: string, idx: number) => (
-                  <ToolCallBadge
-                    key={`${toolName}-${idx}`}
-                    toolName={toolName}
-                    isCompleted={!is_loading}
-                  />
-                ))}
-              </div>
-            )}
             {/* Anchor element for auto-scroll */}
             <div ref={messagesEndRef} />
           </div>
