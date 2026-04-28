@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Unit tests for DocumentList. Validates workspace/document home actions and user-visible feedback. */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { cleanup, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { DocumentList } from "./DocumentList";
 
 const mock_navigate = vi.fn();
@@ -157,6 +157,8 @@ describe("DocumentList", () => {
   /** Resets hook state and mutation spies between tests. */
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     current_workspaces = [];
     current_shared_documents = [];
     current_workspace_documents = {};
@@ -166,6 +168,11 @@ describe("DocumentList", () => {
     create_folder_is_pending = false;
     update_folder_is_pending = false;
     delete_folder_is_pending = false;
+  });
+
+  /** Ensures every test tears down DOM, listeners, and pending effects. */
+  afterEach(() => {
+    cleanup();
   });
 
   function open_workspace(name: string) {

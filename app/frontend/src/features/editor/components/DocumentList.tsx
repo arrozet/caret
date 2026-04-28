@@ -2498,7 +2498,7 @@ function close_with_focus<T>(
 ) {
   setter(null);
 
-  setTimeout(() => {
+  queueMicrotask(() => {
     if (return_focus_to && return_focus_to.isConnected) {
       return_focus_to.focus();
       return;
@@ -2507,7 +2507,7 @@ function close_with_focus<T>(
     if (fallback_focus_to?.current?.isConnected) {
       fallback_focus_to.current.focus();
     }
-  }, 0);
+  });
 }
 
 function get_folder_subtree_ids(folders: FolderResponse[], folder_id: string) {
