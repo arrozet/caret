@@ -5,6 +5,10 @@ import { cleanup, render, screen, fireEvent, waitFor, within } from "@testing-li
 import { DocumentList } from "./DocumentList";
 
 const mock_navigate = vi.fn();
+const mock_location: {
+  pathname: string;
+  state: { workspace_id?: string; folder_id?: string | null } | null;
+} = { pathname: "/documents", state: null };
 const mock_create_workspace = vi.fn();
 const mock_create_document = vi.fn();
 const mock_move_document = vi.fn();
@@ -23,6 +27,9 @@ let create_folder_is_pending = false;
 let update_folder_is_pending = false;
 let delete_folder_is_pending = false;
 
+// Keep empty hook results referentially stable to avoid render loops in dialog effects.
+const empty_collection: Array<Record<string, unknown>> = [];
+
 let current_workspaces: Array<Record<string, unknown>> = [];
 let current_shared_documents: Array<Record<string, unknown>> = [];
 let current_workspace_documents: Record<string, Array<Record<string, unknown>>> = {};
@@ -30,7 +37,7 @@ let current_workspace_folders: Record<string, Array<Record<string, unknown>>> = 
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => mock_navigate,
-  useLocation: () => ({ pathname: "/documents", state: null }),
+  useLocation: () => mock_location,
 }));
 
 vi.mock("../../../components/ui/Button", () => ({
@@ -58,7 +65,9 @@ vi.mock("../hooks/useWorkspaces", () => ({
 
 vi.mock("../hooks/useDocuments", () => ({
   useDocuments: (workspaceId?: string) => ({
-    data: workspaceId ? (current_workspace_documents[workspaceId] ?? []) : [],
+    data: workspaceId
+      ? (current_workspace_documents[workspaceId] ?? empty_collection)
+      : empty_collection,
     isLoading: false,
     error: null,
   }),
@@ -78,7 +87,9 @@ vi.mock("../hooks/useCreateDocument", () => ({
 
 vi.mock("../hooks/useFolders", () => ({
   useFolders: (workspaceId?: string) => ({
-    data: workspaceId ? (current_workspace_folders[workspaceId] ?? []) : [],
+    data: workspaceId
+      ? (current_workspace_folders[workspaceId] ?? empty_collection)
+      : empty_collection,
     isLoading: false,
     error: null,
   }),
@@ -156,9 +167,22 @@ vi.mock("../api/documentApi", () => ({
 describe("DocumentList", () => {
   /** Resets hook state and mutation spies between tests. */
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     window.localStorage.clear();
     window.sessionStorage.clear();
+    mock_location.pathname = "/documents";
+    mock_location.state = null;
+    mock_create_workspace.mockResolvedValue({ id: "ws-default" });
+    mock_create_document.mockResolvedValue({ id: "doc-default" });
+    mock_move_document.mockResolvedValue(undefined);
+    mock_update_document.mockResolvedValue(undefined);
+    mock_update_workspace.mockResolvedValue(undefined);
+    mock_delete_workspace.mockResolvedValue(undefined);
+    mock_delete_document.mockResolvedValue(undefined);
+    mock_create_folder.mockResolvedValue({ id: "folder-default", workspace_id: "ws-default" });
+    mock_update_folder.mockResolvedValue(undefined);
+    mock_delete_folder.mockResolvedValue(undefined);
+    mock_invite_workspace.mockResolvedValue(undefined);
     current_workspaces = [];
     current_shared_documents = [];
     current_workspace_documents = {};
@@ -278,13 +302,15 @@ describe("DocumentList", () => {
   /** Verifies that the bootstrap path surfaces failures and blocks duplicate clicks while pending. */
   it("shows a toast and guards duplicate bootstrap clicks when creating a blank document without a personal workspace", async () => {
     // Arrange
-    let resolve_workspace_creation: ((value: { id: string }) => void) | null = null;
+    const resolve_workspace_creation_ref: {
+      current: ((value: { id: string }) => void) | null;
+    } = { current: null };
     current_workspaces = [];
     current_workspace_documents = {};
     mock_create_workspace.mockImplementationOnce(
       () =>
         new Promise<{ id: string }>((resolve) => {
-          resolve_workspace_creation = resolve;
+          resolve_workspace_creation_ref.current = resolve;
         }),
     );
 
@@ -306,13 +332,17 @@ describe("DocumentList", () => {
 
       // Act
       mock_create_document.mockRejectedValueOnce(new Error("Document bootstrap failed"));
-      resolve_workspace_creation?.({ id: "ws-personal" });
+      if (resolve_workspace_creation_ref.current) {
+        resolve_workspace_creation_ref.current({ id: "ws-personal" });
+      }
 
       // Assert
       expect(await screen.findByRole("status")).toHaveTextContent(/document bootstrap failed/i);
     } finally {
       // Never leak pending deferred work into the next test.
-      resolve_workspace_creation?.({ id: "ws-personal-finalize" });
+      if (resolve_workspace_creation_ref.current) {
+        resolve_workspace_creation_ref.current({ id: "ws-personal-finalize" });
+      }
     }
   });
 
@@ -552,6 +582,9 @@ describe("DocumentList", () => {
 
     // Assert
     await waitFor(() => expect(mock_delete_workspace).toHaveBeenCalledWith("ws-shared"));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /delete workspace/i })).not.toBeInTheDocument(),
+    );
   });
 
   /** Verifies that a personal workspace can also be deleted from the list. */
@@ -571,6 +604,9 @@ describe("DocumentList", () => {
 
     // Assert
     await waitFor(() => expect(mock_delete_workspace).toHaveBeenCalledWith("ws-personal"));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /delete workspace/i })).not.toBeInTheDocument(),
+    );
   });
 
   /** Verifies that backend rename conflicts are shown to the user. */
@@ -596,6 +632,7 @@ describe("DocumentList", () => {
 
     // Assert
     expect(await screen.findByRole("status")).toHaveTextContent(/workspace name already exists/i);
+    expect(screen.getByRole("dialog", { name: /rename workspace/i })).toBeInTheDocument();
   });
 
   /** Verifies that shared workspaces hide destructive actions for non-owner roles. */
@@ -730,8 +767,10 @@ describe("DocumentList", () => {
     // Act
     open_workspace("Personal");
     fireEvent.click(screen.getByRole("button", { name: /move document private notes/i }));
-    fireEvent.click(screen.getByRole("radio", { name: /studio/i }));
-    fireEvent.click(screen.getByRole("radio", { name: /archive/i }));
+    fireEvent.change(screen.getByRole("combobox", { name: /destination workspace/i }), {
+      target: { value: "ws-shared-2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /archive/i }));
     fireEvent.click(screen.getByRole("button", { name: /^move document$/i }));
 
     // Assert
@@ -744,8 +783,8 @@ describe("DocumentList", () => {
     );
   });
 
-  /** Verifies that the empty move dialog still places initial focus on a control inside the modal. */
-  it("keeps initial focus inside the move dialog when there are no shared workspaces", () => {
+  /** Verifies that the move dialog defaults to the current workspace destination. */
+  it("defaults move destination to the current workspace when there are no shared workspaces", () => {
     // Arrange
     current_workspaces = [{ id: "ws-personal", kind: "personal", name: "Personal", role: "owner" }];
     current_workspace_documents = {
@@ -766,7 +805,10 @@ describe("DocumentList", () => {
     fireEvent.click(screen.getByRole("button", { name: /move document private notes/i }));
 
     // Assert
-    expect(screen.getByRole("radio", { name: /personal/i })).toHaveFocus();
+    expect(screen.getByRole("combobox", { name: /destination workspace/i })).toHaveValue(
+      "ws-personal",
+    );
+    expect(screen.getByRole("button", { name: /^move document$/i })).toBeEnabled();
   });
 
   /** Verifies that stale move selections reset safely when the shared workspace list changes. */
@@ -800,8 +842,10 @@ describe("DocumentList", () => {
 
     // Assert
     expect(screen.getByRole("button", { name: /^move document$/i })).toBeEnabled();
-    expect(screen.getByRole("radio", { name: /personal/i })).toBeChecked();
-    expect(screen.queryByRole("radio", { name: /team space/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /destination workspace/i })).toHaveValue(
+      "ws-personal",
+    );
+    expect(screen.queryByRole("option", { name: /team space/i })).not.toBeInTheDocument();
   });
 
   /** Verifies that dialogs expose modal semantics, initial focus, escape close, and focus return. */
@@ -869,8 +913,8 @@ describe("DocumentList", () => {
     expect(cancel_button).not.toHaveFocus();
   });
 
-  /** Verifies that successful destructive actions fall back to a stable focus target when the trigger disappears. */
-  it("falls back to the page heading when the original delete trigger is removed", async () => {
+  /** Verifies that deleting the selected document keeps the workspace view stable when the trigger disappears. */
+  it("keeps a stable workspace view when the original delete trigger is removed", async () => {
     // Arrange
     current_workspaces = [{ id: "ws-personal", kind: "personal", name: "Personal", role: "owner" }];
     current_workspace_documents = {
@@ -903,7 +947,11 @@ describe("DocumentList", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm delete document/i }));
 
     // Assert
-    await waitFor(() => expect(screen.getByRole("heading", { name: /documents/i })).toHaveFocus());
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: /delete document/i })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(/document deleted: private notes/i);
+    expect(screen.getByRole("heading", { name: /personal/i })).toBeInTheDocument();
   });
 
   /** Verifies that folder creation uses the selected workspace and current root context. */
@@ -1008,7 +1056,6 @@ describe("DocumentList", () => {
     open_workspace("Personal");
 
     // Act
-    fireEvent.click(screen.getByRole("button", { name: /projects folder/i }));
     fireEvent.click(screen.getByRole("button", { name: /rename folder projects/i }));
     fireEvent.change(screen.getByLabelText(/folder name/i), { target: { value: "Archive" } });
     fireEvent.click(screen.getByRole("button", { name: /save folder/i }));
@@ -1046,7 +1093,6 @@ describe("DocumentList", () => {
     open_workspace("Personal");
 
     // Act
-    fireEvent.click(screen.getByRole("button", { name: /projects folder/i }));
     fireEvent.click(screen.getByRole("button", { name: /delete folder projects/i }));
     fireEvent.click(screen.getByRole("button", { name: /confirm delete folder/i }));
 
