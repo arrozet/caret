@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pre-push hook — runs the FULL test suite across ALL microservices
+# pre-push hook — runs unit and integration tests only for touched services
 # before every push to any remote. Blocks the push if any test fails.
 #
 # Install once with:  git config core.hooksPath .githooks
@@ -9,39 +9,67 @@ set -euo pipefail
 # ─── Colour helpers ────────────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
 # ─── Paths ─────────────────────────────────────────────────────────────────────
 ROOT="$(git rev-parse --show-toplevel)"
 BACKEND="$ROOT/app/backend"
+FRONTEND="$ROOT/app/frontend"
 
-# ─── Node.js service runner (Vitest) ───────────────────────────────────────────
-run_node_tests() {
-  local service="$1"
-  local dir="$BACKEND/$service"
+is_zero_sha() {
+  [ "$1" = "0000000000000000000000000000000000000000" ]
+}
 
-  echo -e "  ${CYAN}▶ $service${NC}"
-  if (cd "$dir" && bun run test --run 2>&1); then
-    echo -e "  ${GREEN}✓ $service passed${NC}"
+range_has_changes() {
+  local start_sha="$1"
+  local end_sha="$2"
+  local prefix="$3"
+
+  if is_zero_sha "$start_sha"; then
+    git ls-tree -r --name-only "$end_sha" | grep -q "^$prefix"
   else
-    echo -e "  ${RED}✗ $service FAILED — push blocked${NC}"
-    return 1
+    git diff --name-only "$start_sha" "$end_sha" | grep -q "^$prefix"
   fi
 }
 
-# ─── Python service runner (Pytest) ────────────────────────────────────────────
-run_python_tests() {
+run_js_tests() {
   local service="$1"
-  local dir="$BACKEND/$service"
+  local dir="$2"
 
-  echo -e "  ${CYAN}▶ $service${NC}"
-  if (cd "$dir" && uv run pytest tests/ -q 2>&1); then
-    echo -e "  ${GREEN}✓ $service passed${NC}"
-  else
-    echo -e "  ${RED}✗ $service FAILED — push blocked${NC}"
+  echo -e "  ${CYAN}▶ $service (unit)${NC}"
+  if ! (cd "$dir" && make test-unit 2>&1); then
+    echo -e "  ${RED}✗ $service unit tests FAILED — push blocked${NC}"
     return 1
   fi
+
+  echo -e "  ${CYAN}▶ $service (integration)${NC}"
+  if ! (cd "$dir" && make test-integration 2>&1); then
+    echo -e "  ${RED}✗ $service integration tests FAILED — push blocked${NC}"
+    return 1
+  fi
+
+  echo -e "  ${GREEN}✓ $service passed${NC}"
+}
+
+run_python_tests() {
+  local service="$1"
+  local dir="$2"
+
+  echo -e "  ${CYAN}▶ $service (unit)${NC}"
+  if ! (cd "$dir" && make test-unit 2>&1); then
+    echo -e "  ${RED}✗ $service unit tests FAILED — push blocked${NC}"
+    return 1
+  fi
+
+  echo -e "  ${CYAN}▶ $service (integration)${NC}"
+  if ! (cd "$dir" && make test-integration 2>&1); then
+    echo -e "  ${RED}✗ $service integration tests FAILED — push blocked${NC}"
+    return 1
+  fi
+
+  echo -e "  ${GREEN}✓ $service passed${NC}"
 }
 
 # ─── Main ───────────────────────────────────────────────────────────────────────
@@ -49,21 +77,85 @@ echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║          pre-push · Caret tests          ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════╝${NC}"
-echo -e "  Running full suite before push…"
+echo ""
+
+front_end_touched=0
+auth_touched=0
+document_touched=0
+api_touched=0
+collab_touched=0
+ai_touched=0
+
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+  if [ -z "${local_ref:-}" ]; then
+    continue
+  fi
+
+  if range_has_changes "$remote_sha" "$local_sha" "app/frontend/"; then
+    front_end_touched=1
+  fi
+  if range_has_changes "$remote_sha" "$local_sha" "app/backend/auth-service/"; then
+    auth_touched=1
+  fi
+  if range_has_changes "$remote_sha" "$local_sha" "app/backend/document-service/"; then
+    document_touched=1
+  fi
+  if range_has_changes "$remote_sha" "$local_sha" "app/backend/api-gateway/"; then
+    api_touched=1
+  fi
+  if range_has_changes "$remote_sha" "$local_sha" "app/backend/collab-service/"; then
+    collab_touched=1
+  fi
+  if range_has_changes "$remote_sha" "$local_sha" "app/backend/ai-service/"; then
+    ai_touched=1
+  fi
+done
+
+echo -e "  Routing tests for touched services only"
 echo ""
 
 failed=0
 
-run_node_tests   "auth-service"      || failed=1
-run_node_tests   "document-service"  || failed=1
-run_node_tests   "api-gateway"       || failed=1
-run_node_tests   "collab-service"    || failed=1
-run_python_tests "ai-service"        || failed=1
+if [ "$front_end_touched" -eq 1 ]; then
+  run_js_tests "frontend" "$FRONTEND" || failed=1
+else
+  echo -e "  ${YELLOW}⟳ frontend${NC}  (no pushed changes — skipped)"
+fi
+
+if [ "$auth_touched" -eq 1 ]; then
+  run_js_tests "auth-service" "$BACKEND/auth-service" || failed=1
+else
+  echo -e "  ${YELLOW}⟳ auth-service${NC}  (no pushed changes — skipped)"
+fi
+
+if [ "$document_touched" -eq 1 ]; then
+  run_js_tests "document-service" "$BACKEND/document-service" || failed=1
+else
+  echo -e "  ${YELLOW}⟳ document-service${NC}  (no pushed changes — skipped)"
+fi
+
+if [ "$api_touched" -eq 1 ]; then
+  run_js_tests "api-gateway" "$BACKEND/api-gateway" || failed=1
+else
+  echo -e "  ${YELLOW}⟳ api-gateway${NC}  (no pushed changes — skipped)"
+fi
+
+if [ "$collab_touched" -eq 1 ]; then
+  run_js_tests "collab-service" "$BACKEND/collab-service" || failed=1
+else
+  echo -e "  ${YELLOW}⟳ collab-service${NC}  (no pushed changes — skipped)"
+fi
+
+if [ "$ai_touched" -eq 1 ]; then
+  run_python_tests "ai-service" "$BACKEND/ai-service" || failed=1
+else
+  echo -e "  ${YELLOW}⟳ ai-service${NC}  (no pushed changes — skipped)"
+fi
 
 echo ""
 if [ "$failed" -eq 1 ]; then
   echo -e "${RED}✗ Push blocked. Fix the failing tests first.${NC}"
-  echo -e "  To bypass (discouraged): git push --no-verify"
+  echo -e "  To bypass (discouraged): git push --no-verify${NC}"
   echo ""
   exit 1
 fi

@@ -1,6 +1,8 @@
 import type { WorkspaceRepository } from "../repositories/workspace_repository.js";
 import type { CreateWorkspaceDto } from "../dtos/create_workspace_dto.js";
+import type { UpdateWorkspaceDto } from "../dtos/update_workspace_dto.js";
 import type { WorkspaceResponseDto } from "../dtos/workspace_response_dto.js";
+import type { InviteWorkspaceMemberResponseDto } from "../dtos/invite_workspace_member_response_dto.js";
 import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
 import { NotFoundError, ForbiddenError, ConflictError } from "../lib/errors.js";
 
@@ -24,38 +26,50 @@ export class WorkspaceService {
    * If no slug is provided, one is auto-generated from the name.
    * When the slug collides with an existing active workspace,
    * a numeric suffix is appended (e.g. "my-project-2", "my-project-3").
-   * @param dto - Creation payload from the controller.
-   * @param user_id - Authenticated user's UUID.
-   * @returns The created workspace as a response DTO.
    */
   async createWorkspace(dto: CreateWorkspaceDto, userId: string): Promise<WorkspaceResponseDto> {
-    const base_slug = dto.slug ?? dto.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const normalizedName = this.normalizeWorkspaceName(dto.name);
+    const kind = dto.kind ?? "shared";
 
-    const slug = await this.resolveUniqueSlug(base_slug);
+    return this.workspaceRepository.withAdvisoryLock(
+      [this.workspaceNameLockKey(userId, normalizedName)],
+      async (repository) => {
+        if (kind === "personal") {
+          const existingPersonal = await repository.findPersonalByUser(userId);
+          if (existingPersonal) {
+            return this.toResponseDto(existingPersonal, "owner");
+          }
+        }
 
-    let workspace;
-    try {
-      workspace = await this.workspaceRepository.create({
-        name: dto.name,
-        slug,
-        created_by_user_id: userId,
-      });
-    } catch (err: unknown) {
-      /* Safety net: race condition where slug was taken between check and insert */
-      if (isUniqueViolation(err)) {
-        throw new ConflictError(`Workspace slug "${slug}" is already taken`);
-      }
-      throw err;
-    }
+        await this.assertWorkspaceNameAvailableToUser(repository, userId, normalizedName);
 
-    /* Add creator as owner */
-    await this.workspaceRepository.addMember({
-      workspace_id: workspace.id,
-      user_id: userId,
-      role: "owner",
-    });
+        const baseSlug = dto.slug ?? normalizedName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        const slug = await this.resolveUniqueSlug(repository, baseSlug);
 
-    return this.toResponseDto(workspace, "owner");
+        let workspace;
+        try {
+          workspace = await repository.create({
+            name: normalizedName,
+            slug,
+            created_by_user_id: userId,
+            settings: { kind },
+          });
+        } catch (err: unknown) {
+          if (isUniqueViolation(err)) {
+            throw new ConflictError(`Workspace slug "${slug}" is already taken`);
+          }
+          throw err;
+        }
+
+        await repository.addMember({
+          workspace_id: workspace.id,
+          user_id: userId,
+          role: "owner",
+        });
+
+        return this.toResponseDto(workspace, "owner");
+      },
+    );
   }
 
   async create_workspace(dto: CreateWorkspaceDto, userId: string): Promise<WorkspaceResponseDto> {
@@ -64,16 +78,16 @@ export class WorkspaceService {
 
   /**
    * Find a slug that does not collide with any active workspace.
-   * Tries the base slug first, then appends -2, -3, … up to a limit.
-   * @param base_slug - The desired slug before deduplication.
-   * @returns A slug guaranteed to not exist among active workspaces.
    */
-  private async resolveUniqueSlug(baseSlug: string): Promise<string> {
+  private async resolveUniqueSlug(
+    repository: WorkspaceRepository,
+    baseSlug: string,
+  ): Promise<string> {
     const maxAttempts = 100;
     let candidate = baseSlug;
 
     for (let i = 1; i <= maxAttempts; i++) {
-      const existing = await this.workspaceRepository.findBySlug(candidate);
+      const existing = await repository.findBySlug(candidate);
       if (!existing) return candidate;
       candidate = `${baseSlug}-${i + 1}`;
     }
@@ -86,9 +100,6 @@ export class WorkspaceService {
   /**
    * Get a single workspace by ID.
    * The caller must be an active member.
-   * @param workspace_id - Workspace UUID.
-   * @param user_id - Authenticated user's UUID.
-   * @returns The workspace as a response DTO.
    */
   async getWorkspace(workspaceId: string, userId: string): Promise<WorkspaceResponseDto> {
     const workspace = await this.workspaceRepository.findById(workspaceId);
@@ -110,15 +121,24 @@ export class WorkspaceService {
 
   /**
    * List all workspaces the authenticated user belongs to, with pagination.
-   * @param user_id - Authenticated user's UUID.
-   * @param pagination - Limit and offset for pagination.
-   * @returns Paginated array of workspace response DTOs.
    */
   async listWorkspaces(
     userId: string,
     pagination: PaginationParams,
   ): Promise<PaginatedResponse<WorkspaceResponseDto>> {
     const { data: rows, total } = await this.workspaceRepository.listByUser(userId, pagination);
+    const sharedWithByWorkspaceId = new Map<string, string[]>();
+    await Promise.all(
+      rows.map(async (row) => {
+        const memberRows = await this.workspaceRepository.listActiveMemberEmailsByWorkspace(
+          row.id,
+          userId,
+        );
+        const uniqueEmails = Array.from(new Set(memberRows.map((member) => member.email)));
+        sharedWithByWorkspaceId.set(row.id, uniqueEmails);
+      }),
+    );
+
     return {
       data: rows.map((row) =>
         this.toResponseDto(
@@ -127,10 +147,12 @@ export class WorkspaceService {
             slug: row.slug,
             name: row.name,
             created_by_user_id: row.created_by_user_id,
+            settings: row.settings,
             created_at: row.created_at,
             updated_at: row.updated_at,
           },
           row.role,
+          sharedWithByWorkspaceId.get(row.id) ?? [],
         ),
       ),
       pagination: {
@@ -149,10 +171,191 @@ export class WorkspaceService {
   }
 
   /**
+   * Rename a workspace.
+   * Only owners can rename workspaces.
+   */
+  async updateWorkspace(
+    workspaceId: string,
+    dto: UpdateWorkspaceDto,
+    userId: string,
+  ): Promise<WorkspaceResponseDto> {
+    return this.workspaceRepository.withAdvisoryLock(
+      [this.workspaceMutationLockKey(workspaceId)],
+      async (repository) => {
+        const workspace = await repository.findById(workspaceId);
+        if (!workspace) {
+          throw new NotFoundError("Workspace not found");
+        }
+
+        const membership = await repository.findMembership(workspaceId, userId);
+        if (!membership) {
+          throw new ForbiddenError("You are not a member of this workspace");
+        }
+        if (membership.role !== "owner") {
+          throw new ForbiddenError("Only workspace owners can rename this workspace");
+        }
+
+        const nextName = dto.name ? this.normalizeWorkspaceName(dto.name) : workspace.name;
+        const currentName = this.normalizeWorkspaceName(workspace.name);
+
+        if (nextName !== currentName) {
+          const activeMembers = await repository.listActiveMembersByWorkspace(workspaceId);
+          await repository.acquireAdvisoryLocks(
+            activeMembers.map((member) => this.workspaceNameLockKey(member.user_id, nextName)),
+          );
+          await this.assertWorkspaceNameAvailableToUsers(
+            repository,
+            activeMembers.map((member) => member.user_id),
+            nextName,
+            workspaceId,
+          );
+        }
+
+        const updatedWorkspace = await repository.update(workspaceId, { name: nextName });
+        if (!updatedWorkspace) {
+          throw new NotFoundError("Workspace not found");
+        }
+
+        return this.toResponseDto(updatedWorkspace, membership.role);
+      },
+    );
+  }
+
+  async update_workspace(
+    workspaceId: string,
+    dto: UpdateWorkspaceDto,
+    userId: string,
+  ): Promise<WorkspaceResponseDto> {
+    return this.updateWorkspace(workspaceId, dto, userId);
+  }
+
+  /**
+   * Soft-delete a workspace and revoke all active memberships.
+   * Only owners can delete workspaces.
+   */
+  async deleteWorkspace(workspaceId: string, userId: string): Promise<void> {
+    await this.workspaceRepository.withAdvisoryLockContext(
+      [this.workspaceMutationLockKey(workspaceId)],
+      async ({
+        workspaceRepository,
+        folderRepository,
+        documentRepository,
+        documentMemberRepository,
+      }) => {
+        const workspace = await workspaceRepository.findById(workspaceId);
+        if (!workspace) {
+          throw new NotFoundError("Workspace not found");
+        }
+
+        const membership = await workspaceRepository.findMembership(workspaceId, userId);
+        if (!membership) {
+          throw new ForbiddenError("You are not a member of this workspace");
+        }
+        if (membership.role !== "owner") {
+          throw new ForbiddenError("Only workspace owners can delete this workspace");
+        }
+
+        const folderIds = await folderRepository.findIdsByWorkspaceId(workspaceId);
+        const documentIds = await documentRepository.findIdsByWorkspaceId(workspaceId);
+
+        if (documentIds.length > 0) {
+          await documentMemberRepository.removeByDocumentIds(documentIds);
+          await documentRepository.softDeleteMany(documentIds, userId);
+        }
+
+        if (folderIds.length > 0) {
+          await folderRepository.softDeleteMany(folderIds);
+        }
+
+        await workspaceRepository.softDeleteWorkspace(workspaceId);
+        await workspaceRepository.revokeMembersByWorkspace(workspaceId, userId);
+      },
+    );
+  }
+
+  async delete_workspace(workspaceId: string, userId: string): Promise<void> {
+    return this.deleteWorkspace(workspaceId, userId);
+  }
+
+  /**
+   * Invite an existing user (resolved by email) to a workspace.
+   * Personal workspaces cannot be shared.
+   */
+  async inviteWorkspaceCollaborator(
+    workspaceId: string,
+    invitedEmail: string,
+    inviterUserId: string,
+  ): Promise<InviteWorkspaceMemberResponseDto> {
+    return this.workspaceRepository.withAdvisoryLock(
+      [this.workspaceMutationLockKey(workspaceId)],
+      async (repository) => {
+        const workspace = await repository.findById(workspaceId);
+        if (!workspace) {
+          throw new NotFoundError("Workspace not found");
+        }
+
+        if (this.getWorkspaceKind(workspace.settings) === "personal") {
+          throw new ForbiddenError("Personal workspaces cannot be shared");
+        }
+
+        const inviterMembership = await repository.findMembership(workspaceId, inviterUserId);
+        if (!inviterMembership) {
+          throw new ForbiddenError("You are not a member of this workspace");
+        }
+
+        const invitedUserId = await repository.findAuthUserIdByEmail(invitedEmail);
+        if (!invitedUserId) {
+          throw new NotFoundError("User with this email does not exist in Caret");
+        }
+
+        const existingActive = await repository.findMembership(workspaceId, invitedUserId);
+        if (existingActive) {
+          return {
+            workspace_id: workspaceId,
+            user_id: invitedUserId,
+            email: invitedEmail,
+            role: "member",
+          };
+        }
+
+        const normalizedName = this.normalizeWorkspaceName(workspace.name);
+        await repository.acquireAdvisoryLocks([
+          this.workspaceNameLockKey(invitedUserId, normalizedName),
+        ]);
+        await this.assertWorkspaceNameAvailableToUser(repository, invitedUserId, normalizedName);
+
+        const existingAny = await repository.findMembershipAny(workspaceId, invitedUserId);
+        if (existingAny) {
+          await repository.reactivateMember(workspaceId, invitedUserId, inviterUserId);
+        } else {
+          await repository.addMember({
+            workspace_id: workspaceId,
+            user_id: invitedUserId,
+            role: "member",
+            invited_by_user_id: inviterUserId,
+          });
+        }
+
+        return {
+          workspace_id: workspaceId,
+          user_id: invitedUserId,
+          email: invitedEmail,
+          role: "member",
+        };
+      },
+    );
+  }
+
+  async invite_workspace_collaborator(
+    workspaceId: string,
+    invitedEmail: string,
+    inviterUserId: string,
+  ): Promise<InviteWorkspaceMemberResponseDto> {
+    return this.inviteWorkspaceCollaborator(workspaceId, invitedEmail, inviterUserId);
+  }
+
+  /**
    * Map a raw workspace row to a WorkspaceResponseDto.
-   * @param workspace - Database workspace row.
-   * @param role - Caller's role within the workspace (optional).
-   * @returns Formatted response DTO.
    */
   private toResponseDto(
     workspace: {
@@ -160,20 +363,96 @@ export class WorkspaceService {
       slug: string | null;
       name: string;
       created_by_user_id: string | null;
+      settings?: unknown;
       created_at: Date;
       updated_at: Date;
     },
     role?: string,
+    sharedWith?: string[],
   ): WorkspaceResponseDto {
     return {
       id: workspace.id,
+      kind: this.getWorkspaceKind(workspace.settings),
       slug: workspace.slug,
       name: workspace.name,
       created_by_user_id: workspace.created_by_user_id,
       role,
+      shared_with: sharedWith,
       created_at: workspace.created_at.toISOString(),
       updated_at: workspace.updated_at.toISOString(),
     };
+  }
+
+  /**
+   * Resolve a workspace kind from its JSON settings blob.
+   */
+  private getWorkspaceKind(settings: unknown): "personal" | "shared" {
+    if (typeof settings === "object" && settings !== null && "kind" in settings) {
+      const kind = (settings as { kind?: unknown }).kind;
+      if (kind === "personal") return "personal";
+    }
+
+    return "shared";
+  }
+
+  /**
+   * Apply the workspace-name normalization rule used across writes and checks.
+   */
+  private normalizeWorkspaceName(name: string): string {
+    return name.trim();
+  }
+
+  /**
+   * Build a stable advisory-lock key for one visible user/name pair.
+   */
+  private workspaceNameLockKey(userId: string, workspaceName: string): string {
+    return `workspace-name:${userId}:${workspaceName}`;
+  }
+
+  /**
+   * Build a stable advisory-lock key for workspace-scoped mutations.
+   */
+  private workspaceMutationLockKey(workspaceId: string): string {
+    return `workspace:${workspaceId}`;
+  }
+
+  /**
+   * Ensure a user does not already see another active workspace with the same name.
+   */
+  private async assertWorkspaceNameAvailableToUser(
+    repository: WorkspaceRepository,
+    userId: string,
+    workspaceName: string,
+    excludeWorkspaceId?: string,
+  ): Promise<void> {
+    const duplicates = await repository.findVisibleByUserAndName(
+      userId,
+      workspaceName,
+      excludeWorkspaceId,
+    );
+
+    if (duplicates.length > 0) {
+      throw new ConflictError(`Workspace name "${workspaceName}" already exists`);
+    }
+  }
+
+  /**
+   * Ensure none of the visible users would see a duplicate active workspace name.
+   */
+  private async assertWorkspaceNameAvailableToUsers(
+    repository: WorkspaceRepository,
+    userIds: string[],
+    workspaceName: string,
+    excludeWorkspaceId?: string,
+  ): Promise<void> {
+    for (const userId of [...new Set(userIds)]) {
+      await this.assertWorkspaceNameAvailableToUser(
+        repository,
+        userId,
+        workspaceName,
+        excludeWorkspaceId,
+      );
+    }
   }
 }
 

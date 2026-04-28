@@ -4,14 +4,17 @@ import { createClient } from "@supabase/supabase-js";
  * Environment variables exposed by Vite at build time.
  * Prefixed with VITE_ so they are available in the browser bundle.
  */
-const supabase_url = import.meta.env.VITE_SUPABASE_URL as string;
-const supabase_anon_key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const supabase_url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabase_anon_key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const is_test_environment = import.meta.env.MODE === "test" || import.meta.env.VITEST === true;
 
 if (!supabase_url || !supabase_anon_key) {
-  throw new Error(
-    "Missing Supabase environment variables. " +
-      "Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.",
-  );
+  if (!is_test_environment) {
+    throw new Error(
+      "Missing Supabase environment variables. " +
+        "Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.",
+    );
+  }
 }
 
 /**
@@ -23,13 +26,17 @@ if (!supabase_url || !supabase_anon_key) {
  *
  * All other data fetching goes through the API Gateway.
  */
-export const supabase_client = createClient(supabase_url, supabase_anon_key, {
-  auth: {
-    /* Persist session in localStorage (default behavior) */
-    persistSession: true,
-    /* Automatically refresh the token before it expires */
-    autoRefreshToken: true,
-    /* Detect session from URL hash (for OAuth redirects) */
-    detectSessionInUrl: true,
+export const supabase_client = createClient(
+  supabase_url ?? "http://127.0.0.1",
+  supabase_anon_key ?? "test",
+  {
+    auth: {
+      /* Persist session in localStorage (default behavior) */
+      persistSession: true,
+      /* Automatically refresh the token before it expires */
+      autoRefreshToken: true,
+      /* Detect session from URL hash (for OAuth redirects) */
+      detectSessionInUrl: true,
+    },
   },
-});
+);

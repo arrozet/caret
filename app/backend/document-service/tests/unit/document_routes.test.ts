@@ -17,6 +17,7 @@ describe("document_routes", () => {
     create_document: ReturnType<typeof vi.fn>;
     get_document: ReturnType<typeof vi.fn>;
     list_documents: ReturnType<typeof vi.fn>;
+    list_shared_documents: ReturnType<typeof vi.fn>;
     update_document: ReturnType<typeof vi.fn>;
     delete_document: ReturnType<typeof vi.fn>;
     invite_document_collaborator: ReturnType<typeof vi.fn>;
@@ -149,6 +150,7 @@ describe("document_routes", () => {
       create_document: vi.fn(),
       get_document: vi.fn(),
       list_documents: vi.fn(),
+      list_shared_documents: vi.fn(),
       update_document: vi.fn(),
       delete_document: vi.fn(),
       invite_document_collaborator: vi.fn(),
@@ -157,6 +159,7 @@ describe("document_routes", () => {
     document_service.createDocument = document_service.create_document;
     document_service.getDocument = document_service.get_document;
     document_service.listDocuments = document_service.list_documents;
+    document_service.listSharedDocuments = document_service.list_shared_documents;
     document_service.updateDocument = document_service.update_document;
     document_service.deleteDocument = document_service.delete_document;
     document_service.inviteDocumentCollaborator = document_service.invite_document_collaborator;
@@ -318,6 +321,31 @@ describe("document_routes", () => {
 
       // Assert
       expect(next_error).toBeInstanceOf(ValidationError);
+    });
+  });
+
+  /* ── GET /shared ───────────────────────────────────── */
+
+  describe("GET /shared", () => {
+    it("should_return_shared_documents_for_current_user", async () => {
+      // Arrange
+      document_service.list_shared_documents.mockResolvedValue({
+        data: [make_doc_dto({ id: "shared-doc" })],
+        pagination: { total: 1, limit: 50, offset: 0 },
+      });
+
+      // Act
+      const { body, next_error } = await call_route_handler(router, "get", "/shared", {
+        query: {},
+      });
+
+      // Assert
+      expect(next_error).toBeUndefined();
+      expect(Array.isArray(body)).toBe(true);
+      expect(document_service.list_shared_documents).toHaveBeenCalledWith(USER_ID, {
+        limit: 50,
+        offset: 0,
+      });
     });
   });
 

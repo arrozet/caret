@@ -20,6 +20,7 @@ import {
  * Endpoints:
  *   POST   /          — create a document
  *   GET    /          — list documents by workspace (query: workspace_id)
+ *   GET    /shared    — list documents directly shared with the caller
  *   GET    /:id       — get a single document
  *   PATCH  /:id       — update a document (title / content)
  *   DELETE /:id       — soft-delete a document
@@ -67,6 +68,23 @@ export function createDocumentRoutes(documentService: DocumentService): Router {
       const userId = req.auth_user!.sub;
       const result = await documentService.listDocuments(workspaceId, userId, pagination);
       /* Backward compatibility: return flat array when no pagination params were sent */
+      const wantsPagination = rawLimit !== undefined || rawOffset !== undefined;
+      res.json(wantsPagination ? result : result.data);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * GET /shared — List documents directly shared with the authenticated user.
+   */
+  router.get("/shared", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const rawLimit = req.query.limit as string | undefined;
+      const rawOffset = req.query.offset as string | undefined;
+      const pagination = parsePagination(rawLimit, rawOffset);
+      const userId = req.auth_user!.sub;
+      const result = await documentService.listSharedDocuments(userId, pagination);
       const wantsPagination = rawLimit !== undefined || rawOffset !== undefined;
       res.json(wantsPagination ? result : result.data);
     } catch (err) {

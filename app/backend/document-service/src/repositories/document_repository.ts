@@ -1,4 +1,4 @@
-import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull, desc, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../db/schema.js";
 import type { PaginationParams } from "../lib/validation.js";
@@ -80,6 +80,96 @@ export class DocumentRepository {
   }
 
   /**
+   * List documents directly shared with a user, excluding workspace shares.
+   * @param userId - User UUID.
+   * @param pagination - Limit and offset for pagination.
+   */
+  async listSharedWithUser(userId: string, pagination: PaginationParams) {
+    const whereClause = and(
+      eq(schema.document_members.user_id, userId),
+      isNull(schema.documents.deleted_at),
+    );
+
+    const selectFields = {
+      id: schema.documents.id,
+      workspace_id: schema.documents.workspace_id,
+      folder_id: schema.documents.folder_id,
+      title: schema.documents.title,
+      status: schema.documents.status,
+      visibility: schema.documents.visibility,
+      owner_user_id: schema.documents.owner_user_id,
+      created_at: schema.documents.created_at,
+      updated_at: schema.documents.updated_at,
+      role: schema.document_members.role,
+    };
+
+    const [data, countResult] = await Promise.all([
+      this.db
+        .select(selectFields)
+        .from(schema.document_members)
+        .innerJoin(schema.documents, eq(schema.document_members.document_id, schema.documents.id))
+        .where(whereClause)
+        .limit(pagination.limit)
+        .offset(pagination.offset),
+      this.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.document_members)
+        .innerJoin(schema.documents, eq(schema.document_members.document_id, schema.documents.id))
+        .where(whereClause),
+    ]);
+
+    return { data, total: countResult[0].count };
+  }
+
+  async list_shared_with_user(userId: string, pagination: PaginationParams) {
+    return this.listSharedWithUser(userId, pagination);
+  }
+
+  /**
+   * Find active document IDs that belong to any of the provided folders.
+   * @param folderIds - Folder UUIDs.
+   * @returns Document UUIDs.
+   */
+  async findIdsByFolderIds(folderIds: string[]): Promise<string[]> {
+    if (folderIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db
+      .select({ id: schema.documents.id })
+      .from(schema.documents)
+      .where(
+        and(inArray(schema.documents.folder_id, folderIds), isNull(schema.documents.deleted_at)),
+      );
+
+    return rows.map((row) => row.id);
+  }
+
+  async find_ids_by_folder_ids(folderIds: string[]) {
+    return this.findIdsByFolderIds(folderIds);
+  }
+
+  /**
+   * Find active document IDs that belong to the provided workspace.
+   * @param workspaceId - Workspace UUID.
+   * @returns Document UUIDs.
+   */
+  async findIdsByWorkspaceId(workspaceId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: schema.documents.id })
+      .from(schema.documents)
+      .where(
+        and(eq(schema.documents.workspace_id, workspaceId), isNull(schema.documents.deleted_at)),
+      );
+
+    return rows.map((row) => row.id);
+  }
+
+  async find_ids_by_workspace_id(workspaceId: string) {
+    return this.findIdsByWorkspaceId(workspaceId);
+  }
+
+  /**
    * Update a document by ID and return the updated row.
    * @param id - Document UUID.
    * @param data - Partial column values to update.
@@ -115,5 +205,33 @@ export class DocumentRepository {
 
   async soft_delete(id: string, deletedByUserId: string) {
     return this.softDelete(id, deletedByUserId);
+  }
+
+  /**
+   * Soft-delete multiple documents in one operation.
+   * @param documentIds - Document UUIDs to mark as deleted.
+   * @param deletedByUserId - User performing the deletion.
+   * @returns Number of documents updated.
+   */
+  async softDeleteMany(documentIds: string[], deletedByUserId: string): Promise<number> {
+    if (documentIds.length === 0) {
+      return 0;
+    }
+
+    const rows = await this.db
+      .update(schema.documents)
+      .set({
+        deleted_at: new Date(),
+        deleted_by_user_id: deletedByUserId,
+        updated_at: new Date(),
+      })
+      .where(and(inArray(schema.documents.id, documentIds), isNull(schema.documents.deleted_at)))
+      .returning({ id: schema.documents.id });
+
+    return rows.length;
+  }
+
+  async soft_delete_many(documentIds: string[], deletedByUserId: string) {
+    return this.softDeleteMany(documentIds, deletedByUserId);
   }
 }

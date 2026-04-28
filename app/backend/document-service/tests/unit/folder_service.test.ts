@@ -15,6 +15,10 @@ describe("FolderService", () => {
     create: ReturnType<typeof vi.fn>;
     find_by_id: ReturnType<typeof vi.fn>;
     findById: ReturnType<typeof vi.fn>;
+    find_descendant_ids: ReturnType<typeof vi.fn>;
+    findDescendantIds: ReturnType<typeof vi.fn>;
+    with_transaction: ReturnType<typeof vi.fn>;
+    withTransaction: ReturnType<typeof vi.fn>;
     list_by_workspace: ReturnType<typeof vi.fn>;
     listByWorkspace: ReturnType<typeof vi.fn>;
     list_all_by_workspace: ReturnType<typeof vi.fn>;
@@ -22,11 +26,25 @@ describe("FolderService", () => {
     update: ReturnType<typeof vi.fn>;
     soft_delete: ReturnType<typeof vi.fn>;
     softDelete: ReturnType<typeof vi.fn>;
+    soft_delete_many: ReturnType<typeof vi.fn>;
+    softDeleteMany: ReturnType<typeof vi.fn>;
   };
 
   type MockWorkspaceRepo = {
     find_membership: ReturnType<typeof vi.fn>;
     findMembership: ReturnType<typeof vi.fn>;
+  };
+
+  type MockDocumentRepo = {
+    find_ids_by_folder_ids: ReturnType<typeof vi.fn>;
+    findIdsByFolderIds: ReturnType<typeof vi.fn>;
+    soft_delete_many: ReturnType<typeof vi.fn>;
+    softDeleteMany: ReturnType<typeof vi.fn>;
+  };
+
+  type MockDocumentMemberRepo = {
+    remove_by_document_ids: ReturnType<typeof vi.fn>;
+    removeByDocumentIds: ReturnType<typeof vi.fn>;
   };
 
   /* ── fixtures ───────────────────────────────────────── */
@@ -61,6 +79,8 @@ describe("FolderService", () => {
 
   let folder_repo: MockFolderRepo;
   let workspace_repo: MockWorkspaceRepo;
+  let document_repo: MockDocumentRepo;
+  let document_member_repo: MockDocumentMemberRepo;
   let service: FolderService;
 
   beforeEach(() => {
@@ -68,6 +88,10 @@ describe("FolderService", () => {
       create: vi.fn(),
       find_by_id: vi.fn(),
       findById: vi.fn(),
+      find_descendant_ids: vi.fn(),
+      findDescendantIds: vi.fn(),
+      with_transaction: vi.fn(),
+      withTransaction: vi.fn(),
       list_by_workspace: vi.fn(),
       listByWorkspace: vi.fn(),
       list_all_by_workspace: vi.fn(),
@@ -75,11 +99,16 @@ describe("FolderService", () => {
       update: vi.fn(),
       soft_delete: vi.fn(),
       softDelete: vi.fn(),
+      soft_delete_many: vi.fn(),
+      softDeleteMany: vi.fn(),
     };
     folder_repo.findById = folder_repo.find_by_id;
+    folder_repo.findDescendantIds = folder_repo.find_descendant_ids;
+    folder_repo.withTransaction = folder_repo.with_transaction;
     folder_repo.listByWorkspace = folder_repo.list_by_workspace;
     folder_repo.listAllByWorkspace = folder_repo.list_all_by_workspace;
     folder_repo.softDelete = folder_repo.soft_delete;
+    folder_repo.softDeleteMany = folder_repo.soft_delete_many;
 
     workspace_repo = {
       find_membership: vi.fn(),
@@ -87,7 +116,43 @@ describe("FolderService", () => {
     };
     workspace_repo.findMembership = workspace_repo.find_membership;
 
-    service = new FolderService(folder_repo as never, workspace_repo as never);
+    document_repo = {
+      find_ids_by_folder_ids: vi.fn(),
+      findIdsByFolderIds: vi.fn(),
+      soft_delete_many: vi.fn(),
+      softDeleteMany: vi.fn(),
+    };
+    document_repo.findIdsByFolderIds = document_repo.find_ids_by_folder_ids;
+    document_repo.softDeleteMany = document_repo.soft_delete_many;
+
+    document_member_repo = {
+      remove_by_document_ids: vi.fn(),
+      removeByDocumentIds: vi.fn(),
+    };
+    document_member_repo.removeByDocumentIds = document_member_repo.remove_by_document_ids;
+
+    folder_repo.with_transaction.mockImplementation(
+      async (
+        callback: (repositories: {
+          folderRepository: MockFolderRepo;
+          documentRepository: MockDocumentRepo;
+          documentMemberRepository: MockDocumentMemberRepo;
+        }) => Promise<unknown>,
+      ) => {
+        return callback({
+          folderRepository: folder_repo,
+          documentRepository: document_repo,
+          documentMemberRepository: document_member_repo,
+        });
+      },
+    );
+
+    service = new FolderService(
+      folder_repo as never,
+      workspace_repo as never,
+      document_repo as never,
+      document_member_repo as never,
+    );
   });
 
   /* ── create_folder ───────────────────────────────────── */
@@ -403,6 +468,57 @@ describe("FolderService", () => {
       ).rejects.toThrow(ForbiddenError);
     });
 
+    /** verifica que lanza NotFoundError cuando el nuevo parent no existe */
+    it("should_throw_NotFoundError_when_new_parent_folder_not_found", async () => {
+      // Arrange
+      folder_repo.find_by_id.mockResolvedValueOnce(make_folder()).mockResolvedValueOnce(null);
+      workspace_repo.find_membership.mockResolvedValue(make_membership());
+
+      // Act & Assert
+      await expect(
+        service.update_folder(FOLDER_ID, { parent_folder_id: PARENT_FOLDER_ID }, USER_ID),
+      ).rejects.toThrow(NotFoundError);
+      expect(folder_repo.update).not.toHaveBeenCalled();
+    });
+
+    /** verifica que lanza ForbiddenError cuando el nuevo parent pertenece a otro workspace */
+    it("should_throw_ForbiddenError_when_new_parent_folder_in_different_workspace", async () => {
+      // Arrange
+      folder_repo.find_by_id
+        .mockResolvedValueOnce(make_folder())
+        .mockResolvedValueOnce(
+          make_folder({ id: PARENT_FOLDER_ID, workspace_id: "other-workspace-id" }),
+        );
+      workspace_repo.find_membership.mockResolvedValue(make_membership());
+
+      // Act & Assert
+      await expect(
+        service.update_folder(FOLDER_ID, { parent_folder_id: PARENT_FOLDER_ID }, USER_ID),
+      ).rejects.toThrow(ForbiddenError);
+      expect(folder_repo.update).not.toHaveBeenCalled();
+    });
+
+    /** verifica que lanza ForbiddenError cuando el nuevo parent es un descendiente */
+    it("should_throw_ForbiddenError_when_setting_descendant_as_parent", async () => {
+      // Arrange
+      folder_repo.find_by_id
+        .mockResolvedValueOnce(make_folder())
+        .mockResolvedValueOnce(make_folder({ id: PARENT_FOLDER_ID, parent_folder_id: FOLDER_ID }));
+      folder_repo.find_descendant_ids.mockResolvedValue([
+        FOLDER_ID,
+        PARENT_FOLDER_ID,
+        "grandchild-id",
+      ]);
+      workspace_repo.find_membership.mockResolvedValue(make_membership());
+
+      // Act & Assert
+      await expect(
+        service.update_folder(FOLDER_ID, { parent_folder_id: PARENT_FOLDER_ID }, USER_ID),
+      ).rejects.toThrow(ForbiddenError);
+      expect(folder_repo.find_descendant_ids).toHaveBeenCalledWith(FOLDER_ID);
+      expect(folder_repo.update).not.toHaveBeenCalled();
+    });
+
     /** verifica que lanza NotFoundError cuando el folder no existe */
     it("should_throw_NotFoundError_when_folder_not_found", async () => {
       // Arrange
@@ -460,18 +576,108 @@ describe("FolderService", () => {
    * Tests de delete_folder: soft-delete exitoso y errores de autorización.
    */
   describe("delete_folder", () => {
-    /** verifica que hace soft-delete del folder */
-    it("should_soft_delete_folder", async () => {
+    /** verifica que hace soft-delete del subárbol y documentos relacionados */
+    it("should_soft_delete_folder_subtree_documents_and_memberships", async () => {
       // Arrange
       folder_repo.find_by_id.mockResolvedValue(make_folder());
       workspace_repo.find_membership.mockResolvedValue(make_membership());
-      folder_repo.soft_delete.mockResolvedValue(make_folder());
+      const find_descendant_ids = vi
+        .fn()
+        .mockResolvedValue([FOLDER_ID, "child-folder-id", "grandchild-folder-id"]);
+      folder_repo.find_descendant_ids = find_descendant_ids;
+      folder_repo.findDescendantIds = find_descendant_ids;
+
+      const find_ids_by_folder_ids = vi.fn().mockResolvedValue(["doc-1", "doc-2"]);
+      document_repo.find_ids_by_folder_ids = find_ids_by_folder_ids;
+      document_repo.findIdsByFolderIds = find_ids_by_folder_ids;
+
+      const remove_by_document_ids = vi.fn().mockResolvedValue(2);
+      document_member_repo.remove_by_document_ids = remove_by_document_ids;
+      document_member_repo.removeByDocumentIds = remove_by_document_ids;
+
+      const soft_delete_many_documents = vi.fn().mockResolvedValue(2);
+      document_repo.soft_delete_many = soft_delete_many_documents;
+      document_repo.softDeleteMany = soft_delete_many_documents;
+
+      const soft_delete_many_folders = vi.fn().mockResolvedValue(3);
+      folder_repo.soft_delete_many = soft_delete_many_folders;
+      folder_repo.softDeleteMany = soft_delete_many_folders;
 
       // Act
       await service.delete_folder(FOLDER_ID, USER_ID);
 
       // Assert
-      expect(folder_repo.soft_delete).toHaveBeenCalledWith(FOLDER_ID);
+      expect(folder_repo.with_transaction).toHaveBeenCalledTimes(1);
+      expect(folder_repo.find_descendant_ids).toHaveBeenCalledWith(FOLDER_ID);
+      expect(document_repo.find_ids_by_folder_ids).toHaveBeenCalledWith([
+        FOLDER_ID,
+        "child-folder-id",
+        "grandchild-folder-id",
+      ]);
+      expect(document_member_repo.remove_by_document_ids).toHaveBeenCalledWith(["doc-1", "doc-2"]);
+      expect(document_repo.soft_delete_many).toHaveBeenCalledWith(["doc-1", "doc-2"], USER_ID);
+      expect(folder_repo.soft_delete_many).toHaveBeenCalledWith([
+        FOLDER_ID,
+        "child-folder-id",
+        "grandchild-folder-id",
+      ]);
+    });
+
+    /** verifica que el cascade corre dentro de una transacción y aborta el resto ante un fallo */
+    it("should_abort_delete_cascade_when_transaction_step_fails", async () => {
+      // Arrange
+      const operation_order: string[] = [];
+      folder_repo.find_by_id.mockResolvedValue(make_folder());
+      workspace_repo.find_membership.mockResolvedValue(make_membership());
+      folder_repo.with_transaction.mockImplementation(
+        async (
+          callback: (repositories: {
+            folderRepository: MockFolderRepo;
+            documentRepository: MockDocumentRepo;
+            documentMemberRepository: MockDocumentMemberRepo;
+          }) => Promise<unknown>,
+        ) => {
+          operation_order.push("transaction:start");
+          try {
+            const result = await callback({
+              folderRepository: folder_repo,
+              documentRepository: document_repo,
+              documentMemberRepository: document_member_repo,
+            });
+            operation_order.push("transaction:commit");
+            return result;
+          } catch (error) {
+            operation_order.push("transaction:rollback");
+            throw error;
+          }
+        },
+      );
+      folder_repo.find_descendant_ids.mockImplementation(async () => {
+        operation_order.push("folders:descendants");
+        return [FOLDER_ID, "child-folder-id"];
+      });
+      document_repo.find_ids_by_folder_ids.mockImplementation(async () => {
+        operation_order.push("documents:lookup");
+        return ["doc-1", "doc-2"];
+      });
+      document_member_repo.remove_by_document_ids.mockImplementation(async () => {
+        operation_order.push("memberships:remove");
+        throw new Error("membership delete failed");
+      });
+
+      // Act & Assert
+      await expect(service.delete_folder(FOLDER_ID, USER_ID)).rejects.toThrow(
+        "membership delete failed",
+      );
+      expect(document_repo.soft_delete_many).not.toHaveBeenCalled();
+      expect(folder_repo.soft_delete_many).not.toHaveBeenCalled();
+      expect(operation_order).toEqual([
+        "transaction:start",
+        "folders:descendants",
+        "documents:lookup",
+        "memberships:remove",
+        "transaction:rollback",
+      ]);
     });
 
     /** verifica que lanza NotFoundError cuando el folder no existe */

@@ -24,6 +24,8 @@ interface UseGhostTextOptions {
   editor: Editor | null;
   /** Current AI conversation UUID (null if no conversation is active). */
   conversationId: string | null;
+  /** Active document UUID required by the streaming API. */
+  documentId: string | null;
 }
 
 /** Return type of the useGhostText hook. */
@@ -65,7 +67,11 @@ function getCursorContext(editor: Editor): string {
  * @param options - Configuration options.
  * @returns State and handlers for the ghost text feature.
  */
-export function useGhostText({ editor, conversationId }: UseGhostTextOptions): UseGhostTextReturn {
+export function useGhostText({
+  editor,
+  conversationId,
+  documentId,
+}: UseGhostTextOptions): UseGhostTextReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [suggestion, set_suggestion] = useState("");
 
@@ -105,7 +111,7 @@ export function useGhostText({ editor, conversationId }: UseGhostTextOptions): U
    * time so the user can preview the suggestion as it grows.
    */
   const trigger_suggestion = useCallback(async () => {
-    if (!editor || !conversationId) return;
+    if (!editor || !conversationId || !documentId) return;
 
     dismiss_suggestion();
 
@@ -119,6 +125,7 @@ export function useGhostText({ editor, conversationId }: UseGhostTextOptions): U
     try {
       const generator = streamAiResponse({
         conversation_id: conversationId,
+        document_id: documentId,
         message: `Continue the following text naturally (respond with only the continuation, no preamble): "${context}"`,
         document_context: context,
         signal: controller.signal,
@@ -148,7 +155,7 @@ export function useGhostText({ editor, conversationId }: UseGhostTextOptions): U
     } finally {
       setIsLoading(false);
     }
-  }, [editor, conversationId, dismiss_suggestion]);
+  }, [editor, conversationId, documentId, dismiss_suggestion]);
 
   /**
    * Register keyboard shortcuts on the editor DOM element.

@@ -1,5 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { inviteDocumentCollaborator, type InviteCollaboratorResponse } from "../api/documentApi";
+import {
+  inviteDocumentCollaborator,
+  type InviteDocumentCollaboratorResponse,
+} from "../api/documentApi";
 
 /**
  * Mutation hook to invite a collaborator to a document by email.
@@ -11,11 +14,12 @@ import { inviteDocumentCollaborator, type InviteCollaboratorResponse } from "../
 export function useInviteDocumentCollaborator(documentId: string) {
   const queryClient = useQueryClient();
 
-  return useMutation<InviteCollaboratorResponse, Error, { email: string }>({
+  return useMutation<InviteDocumentCollaboratorResponse, Error, { email: string }>({
     mutationFn: ({ email }) => inviteDocumentCollaborator(documentId, email),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["shared-documents"] });
     },
   });
 }

@@ -40,10 +40,37 @@ export interface WorkspaceResponse {
   slug: string | null;
   /** Display name. */
   name: string;
+  /** Workspace kind. */
+  kind: "personal" | "shared";
   /** User who created the workspace. */
   created_by_user_id: string | null;
   /** Caller's role within this workspace. */
   role?: string;
+  /** Other member emails this workspace is shared with (excluding caller). */
+  shared_with?: string[];
+  /** Row creation timestamp (ISO 8601). */
+  created_at: string;
+  /** Row last-update timestamp (ISO 8601). */
+  updated_at: string;
+}
+
+/**
+ * Shape of a folder as returned by the API.
+ * Mirrors the backend FolderResponseDto.
+ */
+export interface FolderResponse {
+  /** Folder UUID. */
+  id: string;
+  /** Workspace this folder belongs to. */
+  workspace_id: string;
+  /** Parent folder UUID (null = workspace root). */
+  parent_folder_id: string | null;
+  /** Folder display name. */
+  name: string;
+  /** Manual sort order (null = default ordering). */
+  sort_order: number | null;
+  /** User who created the folder. */
+  created_by_user_id: string | null;
   /** Row creation timestamp (ISO 8601). */
   created_at: string;
   /** Row last-update timestamp (ISO 8601). */
@@ -62,6 +89,22 @@ export interface InviteCollaboratorResponse {
   email: string;
   /** Assigned role for this MVP flow. */
   role: "member";
+}
+
+/**
+ * Response payload for a direct document share.
+ */
+export interface InviteDocumentCollaboratorResponse {
+  /** Document that now includes the invited member. */
+  document_id: string;
+  /** User id of the invited account. */
+  user_id: string;
+  /** Email used for the invite lookup. */
+  email: string;
+  /** Assigned document role for this MVP flow. */
+  role: "owner" | "editor" | "commenter" | "viewer";
+  /** Share scope for this response. */
+  scope: "document";
 }
 
 /**
@@ -114,6 +157,8 @@ export function updateDocument(
     title?: string;
     content_json?: Record<string, unknown>;
     content_text?: string;
+    workspace_id?: string;
+    folder_id?: string | null;
   },
 ): Promise<DocumentResponse> {
   return api_fetch<DocumentResponse>(`/documents/${documentId}`, {
@@ -138,10 +183,100 @@ export function deleteDocument(documentId: string): Promise<void> {
  * @param slug - Optional URL slug.
  * @returns The created workspace.
  */
-export function createWorkspace(name: string, slug?: string): Promise<WorkspaceResponse> {
+export function createWorkspace(
+  name: string,
+  slug?: string,
+  kind?: "personal" | "shared",
+): Promise<WorkspaceResponse> {
   return api_fetch<WorkspaceResponse>("/workspaces", {
     method: "POST",
-    body: JSON.stringify({ name, slug }),
+    body: JSON.stringify({ name, slug, kind }),
+  });
+}
+
+/**
+ * Create a new folder in a workspace.
+ * @param data - Folder creation fields.
+ * @returns The created folder.
+ */
+export function createFolder(data: {
+  workspaceId: string;
+  name: string;
+  parentFolderId?: string | null;
+  sortOrder?: number | null;
+}): Promise<FolderResponse> {
+  return api_fetch<FolderResponse>("/folders", {
+    method: "POST",
+    body: JSON.stringify({
+      workspace_id: data.workspaceId,
+      name: data.name,
+      parent_folder_id: data.parentFolderId ?? null,
+      sort_order: data.sortOrder ?? null,
+    }),
+  });
+}
+
+/**
+ * List folders under a specific parent in a workspace.
+ * @param workspaceId - Workspace UUID.
+ * @param parentFolderId - Optional parent folder UUID.
+ * @returns Array of folders.
+ */
+export function listFolders(
+  workspaceId: string,
+  parentFolderId?: string | null,
+): Promise<FolderResponse[]> {
+  const search_params = new URLSearchParams({ workspace_id: workspaceId });
+
+  if (parentFolderId) {
+    search_params.set("parent_folder_id", parentFolderId);
+  }
+
+  return api_fetch<FolderResponse[]>(`/folders?${search_params.toString()}`);
+}
+
+/**
+ * List all folders in a workspace as a flat collection for tree building.
+ * @param workspaceId - Workspace UUID.
+ * @returns Array of folders.
+ */
+export function listAllFolders(workspaceId: string): Promise<FolderResponse[]> {
+  return api_fetch<FolderResponse[]>(
+    `/folders/all?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+
+/**
+ * Update a folder's editable fields.
+ * @param folderId - Folder UUID.
+ * @param data - Partial update fields.
+ * @returns The updated folder.
+ */
+export function updateFolder(
+  folderId: string,
+  data: {
+    name?: string;
+    parentFolderId?: string | null;
+    sortOrder?: number | null;
+  },
+): Promise<FolderResponse> {
+  return api_fetch<FolderResponse>(`/folders/${folderId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: data.name,
+      parent_folder_id: data.parentFolderId,
+      sort_order: data.sortOrder,
+    }),
+  });
+}
+
+/**
+ * Soft-delete a folder.
+ * @param folderId - Folder UUID.
+ */
+export function deleteFolder(folderId: string): Promise<void> {
+  return api_fetch<void>(`/folders/${folderId}`, {
+    method: "DELETE",
   });
 }
 
@@ -154,6 +289,42 @@ export function listWorkspaces(): Promise<WorkspaceResponse[]> {
 }
 
 /**
+ * Update a workspace's editable fields.
+ * @param workspaceId - Workspace UUID.
+ * @param data - Partial workspace fields.
+ * @returns The updated workspace.
+ */
+export function updateWorkspace(
+  workspaceId: string,
+  data: {
+    name?: string;
+  },
+): Promise<WorkspaceResponse> {
+  return api_fetch<WorkspaceResponse>(`/workspaces/${workspaceId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Soft-delete a workspace.
+ * @param workspaceId - Workspace UUID.
+ */
+export function deleteWorkspace(workspaceId: string): Promise<void> {
+  return api_fetch<void>(`/workspaces/${workspaceId}`, {
+    method: "DELETE",
+  });
+}
+
+/**
+ * List documents shared directly with the current user.
+ * @returns Array of directly shared documents.
+ */
+export function listSharedDocuments(): Promise<DocumentResponse[]> {
+  return api_fetch<DocumentResponse[]>("/documents/shared");
+}
+
+/**
  * Invite an existing Caret user to the current document's workspace by email.
  * @param document_id - Document UUID.
  * @param email - Target user email.
@@ -162,8 +333,24 @@ export function listWorkspaces(): Promise<WorkspaceResponse[]> {
 export function inviteDocumentCollaborator(
   documentId: string,
   email: string,
+): Promise<InviteDocumentCollaboratorResponse> {
+  return api_fetch<InviteDocumentCollaboratorResponse>(`/documents/${documentId}/invite`, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+/**
+ * Invite a collaborator to an entire workspace by email.
+ * @param workspaceId - Workspace UUID.
+ * @param email - Target user email.
+ * @returns Invitation result.
+ */
+export function inviteWorkspaceCollaborator(
+  workspaceId: string,
+  email: string,
 ): Promise<InviteCollaboratorResponse> {
-  return api_fetch<InviteCollaboratorResponse>(`/documents/${documentId}/invite`, {
+  return api_fetch<InviteCollaboratorResponse>(`/workspaces/${workspaceId}/invite`, {
     method: "POST",
     body: JSON.stringify({ email }),
   });

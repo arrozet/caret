@@ -19,6 +19,12 @@ type MockDocumentRepo = {
   softDelete: ReturnType<typeof vi.fn>;
 };
 
+type MockDocumentMemberRepo = {
+  findMembership: ReturnType<typeof vi.fn>;
+  addMember: ReturnType<typeof vi.fn>;
+  listByUser: ReturnType<typeof vi.fn>;
+};
+
 type MockVersionRepo = {
   create: ReturnType<typeof vi.fn>;
   findLatest: ReturnType<typeof vi.fn>;
@@ -26,11 +32,10 @@ type MockVersionRepo = {
 };
 
 type MockWorkspaceRepo = {
+  findById: ReturnType<typeof vi.fn>;
   findMembership: ReturnType<typeof vi.fn>;
-  findMembershipAny: ReturnType<typeof vi.fn>;
   findAuthUserIdByEmail: ReturnType<typeof vi.fn>;
-  addMember: ReturnType<typeof vi.fn>;
-  reactivateMember: ReturnType<typeof vi.fn>;
+  findFolderById: ReturnType<typeof vi.fn>;
 };
 
 /* ── fixtures ───────────────────────────────────────── */
@@ -39,6 +44,20 @@ const USER_ID = "user-abc-123";
 const WORKSPACE_ID = "ws-def-456";
 const DOCUMENT_ID = "doc-ghi-789";
 const INVITED_USER_ID = "user-invited-999";
+
+/** Build a fake workspace row matching the shape the service expects. */
+function make_workspace(overrides: Record<string, unknown> = {}) {
+  return {
+    id: WORKSPACE_ID,
+    slug: "my-project",
+    name: "My Project",
+    created_by_user_id: USER_ID,
+    settings: { kind: "shared" },
+    created_at: new Date("2025-01-01T00:00:00Z"),
+    updated_at: new Date("2025-01-01T00:00:00Z"),
+    ...overrides,
+  };
+}
 
 /** Build a fake document row matching the shape the service expects. */
 function make_doc(overrides: Record<string, unknown> = {}) {
@@ -54,6 +73,11 @@ function make_doc(overrides: Record<string, unknown> = {}) {
     updated_at: new Date("2025-01-01T00:00:00Z"),
     ...overrides,
   };
+}
+
+/** Build a fake shared document row. */
+function make_shared_doc(overrides: Record<string, unknown> = {}) {
+  return make_doc({ visibility: "workspace", ...overrides });
 }
 
 /** Build a fake membership row. */
@@ -83,6 +107,7 @@ function make_version(version_number: number) {
 
 describe("DocumentService", () => {
   let document_repo: MockDocumentRepo;
+  let document_member_repo: MockDocumentMemberRepo;
   let version_repo: MockVersionRepo;
   let workspace_repo: MockWorkspaceRepo;
   let service: DocumentService;
@@ -95,34 +120,34 @@ describe("DocumentService", () => {
       update: vi.fn(),
       softDelete: vi.fn(),
     };
-    document_repo.find_by_id = document_repo.findById;
-    document_repo.list_by_workspace = document_repo.listByWorkspace;
-    document_repo.soft_delete = document_repo.softDelete;
+
+    document_member_repo = {
+      findMembership: vi.fn(),
+      addMember: vi.fn(),
+      listByUser: vi.fn(),
+    };
 
     version_repo = {
       create: vi.fn(),
       findLatest: vi.fn(),
       listByDocument: vi.fn(),
     };
-    version_repo.find_latest = version_repo.findLatest;
-    version_repo.list_by_document = version_repo.listByDocument;
 
     workspace_repo = {
+      findById: vi.fn(),
       findMembership: vi.fn(),
-      findMembershipAny: vi.fn(),
       findAuthUserIdByEmail: vi.fn(),
-      addMember: vi.fn(),
-      reactivateMember: vi.fn(),
+      findFolderById: vi.fn(),
     };
-    workspace_repo.find_membership = workspace_repo.findMembership;
-    workspace_repo.find_membership_any = workspace_repo.findMembershipAny;
-    workspace_repo.find_auth_user_id_by_email = workspace_repo.findAuthUserIdByEmail;
-    workspace_repo.add_member = workspace_repo.addMember;
-    workspace_repo.reactivate_member = workspace_repo.reactivateMember;
+
+    workspace_repo.findById.mockResolvedValue(make_workspace());
+    document_member_repo.findMembership.mockResolvedValue(null);
+    document_member_repo.listByUser.mockResolvedValue({ data: [], total: 0 });
 
     /* Cast mocks to satisfy the constructor's type expectations */
     service = new DocumentService(
       document_repo as never,
+      document_member_repo as never,
       version_repo as never,
       workspace_repo as never,
     );
@@ -167,12 +192,35 @@ describe("DocumentService", () => {
     });
   });
 
+  /* ── shared_documents ─────────────────────────────── */
+
+  describe("list_shared_documents", () => {
+    it("returns documents directly shared with the current user", async () => {
+      // Arrange
+      document_member_repo.listByUser.mockResolvedValue({
+        data: [make_shared_doc({ id: "doc-shared-1" })],
+        total: 1,
+      });
+
+      // Act
+      const result = await service.list_shared_documents(USER_ID, { limit: 50, offset: 0 });
+
+      // Assert
+      expect(document_member_repo.listByUser).toHaveBeenCalledWith(USER_ID, {
+        limit: 50,
+        offset: 0,
+      });
+      expect(result.data[0].visibility).toBe("workspace");
+    });
+  });
+
   /* ── get_document ────────────────────────────────── */
 
   describe("get_document", () => {
     it("returns document with latest version content", async () => {
       document_repo.findById.mockResolvedValue(make_doc());
       workspace_repo.findMembership.mockResolvedValue(make_membership());
+      document_member_repo.findMembership.mockResolvedValue(null);
       version_repo.findLatest.mockResolvedValue(make_version(3));
 
       const result = await service.get_document(DOCUMENT_ID, USER_ID);
@@ -190,8 +238,27 @@ describe("DocumentService", () => {
     it("throws ForbiddenError when user is not a member of document's workspace", async () => {
       document_repo.findById.mockResolvedValue(make_doc());
       workspace_repo.findMembership.mockResolvedValue(null);
+      document_member_repo.findMembership.mockResolvedValue(null);
 
       await expect(service.get_document(DOCUMENT_ID, USER_ID)).rejects.toThrow(ForbiddenError);
+    });
+
+    it("allows access through document membership even without workspace membership", async () => {
+      // Arrange
+      document_repo.findById.mockResolvedValue(make_doc());
+      workspace_repo.findMembership.mockResolvedValue(null);
+      document_member_repo.findMembership.mockResolvedValue({
+        document_id: DOCUMENT_ID,
+        user_id: USER_ID,
+        role: "editor",
+      });
+      version_repo.findLatest.mockResolvedValue(make_version(3));
+
+      // Act
+      const result = await service.get_document(DOCUMENT_ID, USER_ID);
+
+      // Assert
+      expect(result.id).toBe(DOCUMENT_ID);
     });
   });
 
@@ -317,22 +384,47 @@ describe("DocumentService", () => {
         ForbiddenError,
       );
     });
+
+    it("moves a document to another workspace and updates visibility", async () => {
+      // Arrange
+      document_repo.findById.mockResolvedValue(make_doc({ visibility: "private" }));
+      workspace_repo.findMembership.mockResolvedValue(make_membership());
+      workspace_repo.findById.mockResolvedValue({
+        ...make_workspace({ id: "ws-new" }),
+        settings: { kind: "shared" },
+      });
+      document_repo.update.mockResolvedValue(make_doc({ workspace_id: "ws-new" }));
+
+      // Act
+      const result = await service.update_document(
+        DOCUMENT_ID,
+        { workspace_id: "ws-new" },
+        USER_ID,
+      );
+
+      // Assert
+      expect(document_repo.update).toHaveBeenCalledWith(
+        DOCUMENT_ID,
+        expect.objectContaining({ workspace_id: "ws-new", visibility: "workspace" }),
+      );
+      expect(result.workspace_id).toBe("ws-new");
+    });
   });
 
   /* ── invite_document_collaborator ───────────────────── */
 
   describe("invite_document_collaborator", () => {
-    it("invites an existing user by email into the document workspace", async () => {
+    it("shares a document directly through document membership", async () => {
       // Arrange
-      document_repo.findById.mockResolvedValue(make_doc());
-      workspace_repo.findMembership.mockResolvedValueOnce(make_membership());
+      document_repo.findById.mockResolvedValue(make_doc({ visibility: "workspace" }));
+      workspace_repo.findById.mockResolvedValue(make_workspace({ settings: { kind: "shared" } }));
+      workspace_repo.findMembership.mockResolvedValue(make_membership());
       workspace_repo.findAuthUserIdByEmail.mockResolvedValue(INVITED_USER_ID);
-      workspace_repo.findMembership.mockResolvedValueOnce(null);
-      workspace_repo.findMembershipAny.mockResolvedValue(null);
-      workspace_repo.addMember.mockResolvedValue({
-        workspace_id: WORKSPACE_ID,
+      document_member_repo.findMembership.mockResolvedValue(null);
+      document_member_repo.addMember.mockResolvedValue({
+        document_id: DOCUMENT_ID,
         user_id: INVITED_USER_ID,
-        role: "member",
+        role: "editor",
       });
 
       // Act
@@ -344,62 +436,33 @@ describe("DocumentService", () => {
 
       // Assert
       expect(workspace_repo.findAuthUserIdByEmail).toHaveBeenCalledWith("invitee@caret.page");
-      expect(workspace_repo.addMember).toHaveBeenCalledWith(
+      expect(document_member_repo.addMember).toHaveBeenCalledWith(
         expect.objectContaining({
-          workspace_id: WORKSPACE_ID,
+          document_id: DOCUMENT_ID,
           user_id: INVITED_USER_ID,
-          role: "member",
-          invited_by_user_id: USER_ID,
+          role: "editor",
+          added_by_user_id: USER_ID,
         }),
       );
       expect(result).toEqual({
-        workspace_id: WORKSPACE_ID,
+        document_id: DOCUMENT_ID,
         user_id: INVITED_USER_ID,
         email: "invitee@caret.page",
-        role: "member",
+        role: "editor",
+        scope: "document",
       });
     });
 
-    it("reactivates a revoked membership instead of inserting a duplicate", async () => {
+    it("returns success when the invited user is already directly shared", async () => {
       // Arrange
-      document_repo.findById.mockResolvedValue(make_doc());
-      workspace_repo.findMembership.mockResolvedValueOnce(make_membership());
+      document_repo.findById.mockResolvedValue(make_doc({ visibility: "workspace" }));
+      workspace_repo.findById.mockResolvedValue(make_workspace({ settings: { kind: "shared" } }));
+      workspace_repo.findMembership.mockResolvedValue(make_membership());
       workspace_repo.findAuthUserIdByEmail.mockResolvedValue(INVITED_USER_ID);
-      workspace_repo.findMembership.mockResolvedValueOnce(null);
-      workspace_repo.findMembershipAny.mockResolvedValue({
-        workspace_id: WORKSPACE_ID,
+      document_member_repo.findMembership.mockResolvedValue({
+        document_id: DOCUMENT_ID,
         user_id: INVITED_USER_ID,
-        role: "member",
-        revoked_at: new Date(),
-      });
-      workspace_repo.reactivateMember.mockResolvedValue({
-        workspace_id: WORKSPACE_ID,
-        user_id: INVITED_USER_ID,
-        role: "member",
-        revoked_at: null,
-      });
-
-      // Act
-      await service.invite_document_collaborator(DOCUMENT_ID, "invitee@caret.page", USER_ID);
-
-      // Assert
-      expect(workspace_repo.reactivateMember).toHaveBeenCalledWith(
-        WORKSPACE_ID,
-        INVITED_USER_ID,
-        USER_ID,
-      );
-      expect(workspace_repo.addMember).not.toHaveBeenCalled();
-    });
-
-    it("returns success when the invited user is already an active member", async () => {
-      // Arrange
-      document_repo.findById.mockResolvedValue(make_doc());
-      workspace_repo.findMembership.mockResolvedValueOnce(make_membership());
-      workspace_repo.findAuthUserIdByEmail.mockResolvedValue(INVITED_USER_ID);
-      workspace_repo.findMembership.mockResolvedValueOnce({
-        workspace_id: WORKSPACE_ID,
-        user_id: INVITED_USER_ID,
-        role: "member",
+        role: "commenter",
       });
 
       // Act
@@ -410,10 +473,20 @@ describe("DocumentService", () => {
       );
 
       // Assert
-      expect(workspace_repo.findMembershipAny).not.toHaveBeenCalled();
-      expect(workspace_repo.addMember).not.toHaveBeenCalled();
-      expect(workspace_repo.reactivateMember).not.toHaveBeenCalled();
-      expect(result.user_id).toBe(INVITED_USER_ID);
+      expect(document_member_repo.addMember).not.toHaveBeenCalled();
+      expect(result.scope).toBe("document");
+      expect(result.role).toBe("commenter");
+    });
+
+    it("throws ForbiddenError when the document lives in a personal workspace", async () => {
+      // Arrange
+      document_repo.findById.mockResolvedValue(make_doc());
+      workspace_repo.findById.mockResolvedValue(make_workspace({ settings: { kind: "personal" } }));
+
+      // Act & Assert
+      await expect(
+        service.invite_document_collaborator(DOCUMENT_ID, "invitee@caret.page", USER_ID),
+      ).rejects.toThrow(ForbiddenError);
     });
 
     it("throws NotFoundError when the document does not exist", async () => {
@@ -429,6 +502,7 @@ describe("DocumentService", () => {
     it("throws ForbiddenError when inviter is not in the workspace", async () => {
       // Arrange
       document_repo.findById.mockResolvedValue(make_doc());
+      workspace_repo.findById.mockResolvedValue(make_workspace({ settings: { kind: "shared" } }));
       workspace_repo.findMembership.mockResolvedValue(null);
 
       // Act & Assert
@@ -440,6 +514,7 @@ describe("DocumentService", () => {
     it("throws NotFoundError when invited email does not exist in Caret", async () => {
       // Arrange
       document_repo.findById.mockResolvedValue(make_doc());
+      workspace_repo.findById.mockResolvedValue(make_workspace({ settings: { kind: "shared" } }));
       workspace_repo.findMembership.mockResolvedValue(make_membership());
       workspace_repo.findAuthUserIdByEmail.mockResolvedValue(null);
 
@@ -447,7 +522,7 @@ describe("DocumentService", () => {
       await expect(
         service.invite_document_collaborator(DOCUMENT_ID, "missing@caret.page", USER_ID),
       ).rejects.toThrow(NotFoundError);
-      expect(workspace_repo.addMember).not.toHaveBeenCalled();
+      expect(document_member_repo.addMember).not.toHaveBeenCalled();
     });
   });
 

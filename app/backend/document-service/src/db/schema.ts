@@ -66,10 +66,7 @@ export const document_member_role_enum = pgEnum("document_member_role", [
 ]);
 
 /** Document lifecycle status. */
-export const document_status_enum = pgEnum("document_status", [
-  "active",
-  "archived",
-]);
+export const document_status_enum = pgEnum("document_status", ["active", "archived"]);
 
 /* ============================================================
    1) Users & Profiles
@@ -89,13 +86,9 @@ export const user_profiles = pgTable("user_profiles", {
   /** IETF locale tag (e.g. "en-US"). */
   locale: text("locale"),
   /** Row creation timestamp. */
-  created_at: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   /** Row last-update timestamp. */
-  updated_at: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   /** Soft delete timestamp (null = not deleted). */
   deleted_at: timestamp("deleted_at", { withTimezone: true }),
 });
@@ -122,13 +115,9 @@ export const workspaces = pgTable(
     /** Workspace-level settings (feature flags, defaults). */
     settings: jsonb("settings").notNull().default({}),
     /** Row creation timestamp. */
-    created_at: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** Row last-update timestamp. */
-    updated_at: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     /** Soft delete timestamp (null = not deleted). */
     deleted_at: timestamp("deleted_at", { withTimezone: true }),
   },
@@ -160,9 +149,7 @@ export const workspace_members = pgTable(
     /** User who sent the invite. */
     invited_by_user_id: uuid("invited_by_user_id"),
     /** When the member joined. */
-    joined_at: timestamp("joined_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    joined_at: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
     /** Soft "remove member" timestamp (null = active). */
     revoked_at: timestamp("revoked_at", { withTimezone: true }),
     /** User who revoked membership. */
@@ -173,10 +160,7 @@ export const workspace_members = pgTable(
   (table) => [
     primaryKey({ columns: [table.workspace_id, table.user_id] }),
     /** Lookup by user: "list all workspaces I belong to". */
-    index("idx_workspace_members_user_workspace").on(
-      table.user_id,
-      table.workspace_id,
-    ),
+    index("idx_workspace_members_user_workspace").on(table.user_id, table.workspace_id),
     /** Active members of a workspace (excludes revoked). */
     index("idx_workspace_members_active")
       .on(table.workspace_id)
@@ -210,13 +194,9 @@ export const folders = pgTable(
     /** User who created this folder. */
     created_by_user_id: uuid("created_by_user_id"),
     /** Row creation timestamp. */
-    created_at: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** Row last-update timestamp. */
-    updated_at: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     /** Soft delete timestamp (null = not deleted). */
     deleted_at: timestamp("deleted_at", { withTimezone: true }),
   },
@@ -227,10 +207,7 @@ export const folders = pgTable(
       foreignColumns: [table.id],
     }).onDelete("set null"),
     /** List children of a folder (or root items). */
-    index("idx_folders_workspace_parent").on(
-      table.workspace_id,
-      table.parent_folder_id,
-    ),
+    index("idx_folders_workspace_parent").on(table.workspace_id, table.parent_folder_id),
     /** List active folders by most recently updated. */
     index("idx_folders_workspace_updated")
       .on(table.workspace_id, table.updated_at)
@@ -270,9 +247,7 @@ export const documents = pgTable(
     /** Lifecycle status (active/archived). */
     status: document_status_enum("status").notNull().default("active"),
     /** Access scope (private/workspace/link/public). */
-    visibility: document_visibility_enum("visibility")
-      .notNull()
-      .default("private"),
+    visibility: document_visibility_enum("visibility").notNull().default("private"),
     /** Default role when visibility = 'workspace'. */
     workspace_default_role: document_member_role_enum("workspace_default_role"),
     /** Document owner user ID. */
@@ -284,13 +259,9 @@ export const documents = pgTable(
     /** User who soft-deleted this document. */
     deleted_by_user_id: uuid("deleted_by_user_id"),
     /** Row creation timestamp. */
-    created_at: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** Row last-update timestamp. */
-    updated_at: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     /** When the document was archived. */
     archived_at: timestamp("archived_at", { withTimezone: true }),
     /** Soft delete timestamp (null = not deleted). */
@@ -334,19 +305,14 @@ export const document_members = pgTable(
     /** User who added this member. */
     added_by_user_id: uuid("added_by_user_id"),
     /** When the membership was created. */
-    created_at: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** Last time this member viewed the document. */
     last_viewed_at: timestamp("last_viewed_at", { withTimezone: true }),
   },
   (table) => [
     primaryKey({ columns: [table.document_id, table.user_id] }),
     /** List documents shared with a user. */
-    index("idx_document_members_user_document").on(
-      table.user_id,
-      table.document_id,
-    ),
+    index("idx_document_members_user_document").on(table.user_id, table.document_id),
     /** Permission checks: resolve role from index without table lookup. */
     index("idx_document_members_role").on(table.document_id, table.role),
   ],
@@ -381,26 +347,18 @@ export const document_versions = pgTable(
     /** User who created this version snapshot. */
     created_by_user_id: uuid("created_by_user_id"),
     /** Row creation timestamp. */
-    created_at: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     /**
      * UNIQUE constraint on (document_id, version_number).
      * Prevents race conditions creating duplicate version numbers.
      */
-    uniqueIndex("uq_document_versions_doc_version").on(
-      table.document_id,
-      table.version_number,
-    ),
+    uniqueIndex("uq_document_versions_doc_version").on(table.document_id, table.version_number),
     /**
      * List versions of a document by most recent first.
      * Also used to find the latest version efficiently.
      */
-    index("idx_document_versions_doc_version_desc").on(
-      table.document_id,
-      table.version_number,
-    ),
+    index("idx_document_versions_doc_version_desc").on(table.document_id, table.version_number),
   ],
 );

@@ -12,7 +12,7 @@ import App from "./App.tsx";
 const query_client = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000, /* 30 seconds */
+      staleTime: 30_000 /* 30 seconds */,
       retry: 1,
     },
   },

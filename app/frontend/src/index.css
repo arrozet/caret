@@ -32,9 +32,9 @@
   --color-error: rgb(var(--color-error-rgb));
 
   /* --- Font families (FRONTEND.md §2) --- */
-  --font-ui: 'Inter', 'Geist Sans', system-ui, sans-serif;
-  --font-document: 'Merriweather', 'Newsreader', Georgia, serif;
-  --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
+  --font-ui: "Inter", "Geist Sans", system-ui, sans-serif;
+  --font-document: "Merriweather", "Newsreader", Georgia, serif;
+  --font-mono: "Fira Code", "JetBrains Mono", monospace;
 
   /* --- Font sizes (FRONTEND.md §2 type scale) --- */
   --font-size-display: 32px;
@@ -92,9 +92,9 @@
   --duration-slow: 300ms;
 
   /* --- Transition timing functions (FRONTEND.md §11) --- */
-  --ease-out-custom: cubic-bezier(0.4, 0.0, 0.2, 1);
-  --ease-in-custom: cubic-bezier(0.4, 0.0, 1, 1);
-  --ease-in-out-custom: cubic-bezier(0.4, 0.0, 0.6, 1);
+  --ease-out-custom: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in-custom: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out-custom: cubic-bezier(0.4, 0, 0.6, 1);
 
   /* --- Breakpoints (FRONTEND.md §3) --- */
   --breakpoint-tablet: 768px;
@@ -121,14 +121,14 @@
   --color-diff-del-bg-rgb: 254 226 226;
   --color-diff-del-text-rgb: 185 28 28;
   --color-border-subtle-rgb: 229 229 229;
-  --color-success-rgb: 16 185 129;           /* #10B981 */
-  --color-warning-rgb: 245 158 11;           /* #F59E0B */
-  --color-error-rgb: 239 68 68;              /* #EF4444 */
+  --color-success-rgb: 16 185 129; /* #10B981 */
+  --color-warning-rgb: 245 158 11; /* #F59E0B */
+  --color-error-rgb: 239 68 68; /* #EF4444 */
 
   /* Font family custom properties (consumed by @theme and editor) */
-  --font-document: 'Merriweather', 'Newsreader', Georgia, serif;
-  --font-ui: 'Inter', 'Geist Sans', system-ui, sans-serif;
-  --font-mono: 'Fira Code', 'JetBrains Mono', monospace;
+  --font-document: "Merriweather", "Newsreader", Georgia, serif;
+  --font-ui: "Inter", "Geist Sans", system-ui, sans-serif;
+  --font-mono: "Fira Code", "JetBrains Mono", monospace;
 }
 
 .dark {
@@ -146,9 +146,9 @@
   --color-diff-del-bg-rgb: 127 29 29;
   --color-diff-del-text-rgb: 248 113 113;
   --color-border-subtle-rgb: 42 42 42;
-  --color-success-rgb: 52 211 153;           /* #34D399 */
-  --color-warning-rgb: 251 191 36;           /* #FBBF24 */
-  --color-error-rgb: 248 113 113;            /* #F87171 */
+  --color-success-rgb: 52 211 153; /* #34D399 */
+  --color-warning-rgb: 251 191 36; /* #FBBF24 */
+  --color-error-rgb: 248 113 113; /* #F87171 */
 
   /* Dark mode shadows — increase opacity by 0.1 per FRONTEND.md §6 */
   --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.18);
@@ -158,7 +158,10 @@
 
 /* Smooth theme transitions (see FRONTEND.md §16) */
 * {
-  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
 }
 
 /* ============================================================
@@ -621,7 +624,8 @@ ul[data-type="taskList"] li[data-checked="true"] > div {
 }
 
 @keyframes gradient-x {
-  0%, 100% {
+  0%,
+  100% {
     background-position: 0% 50%;
   }
   50% {
