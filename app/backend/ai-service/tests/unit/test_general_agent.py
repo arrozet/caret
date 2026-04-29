@@ -225,3 +225,35 @@ class TestGeneralAgentRegistration:
         assert "When the user asks for document metrics" in system_prompt
         assert "MUST call the relevant metric tool(s) automatically" in system_prompt
         assert "Do not ask the user which tool to use" in system_prompt
+
+    def test_system_prompt_requires_markdown_chat_replies(self) -> None:
+        """The prompt should require Markdown formatting for normal chat replies."""
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")]))
+        )
+
+        system_prompt = agent._system_prompts[0]
+
+        assert "Every chat reply must be valid Markdown" in system_prompt
+
+    def test_system_prompt_defaults_to_document_edits_when_ambiguous(self) -> None:
+        """
+        The prompt should default to editing the document unless
+        the request is clearly chat-only.
+        """
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")]))
+        )
+
+        system_prompt = agent._system_prompts[0]
+
+        assert (
+            "Assume the user wants you to update the document unless "
+            "the request is clearly chat-only"
+        ) in system_prompt
+        assert (
+            "If the request is ambiguous between replying in chat and "
+            "updating the document, choose to update the document"
+        ) in system_prompt
