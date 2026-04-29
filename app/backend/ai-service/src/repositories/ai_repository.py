@@ -23,6 +23,7 @@ from models.ai import (
     AiSuggestionStatus,
     DocumentEmbedding,
 )
+from schemas.ai import ToolCallTrace
 
 # ---------------------------------------------------------------------------
 # AiConversationRepository
@@ -182,7 +183,7 @@ class AiMessageRepository:
         role: AiMessageRole,
         content: str,
         token_count: int | None = None,
-        tool_calls: list[str] | None = None,
+        tool_calls: list[ToolCallTrace | dict[str, object] | str] | None = None,
     ) -> AiMessage:
         """
         Insert a new message row.
@@ -192,7 +193,7 @@ class AiMessageRepository:
             role: Message role (user/assistant/system/tool).
             content: Raw text content of the message.
             token_count: Optional LLM token usage for this message.
-            tool_calls: Ordered tool names used to produce the message.
+            tool_calls: Ordered structured tool traces used to produce the message.
 
         Returns:
             The persisted AiMessage instance.
@@ -202,7 +203,10 @@ class AiMessageRepository:
             role=role,
             content=content,
             token_count=token_count,
-            tool_calls=list(tool_calls or []),
+            tool_calls=[
+                item.model_dump(mode="json") if isinstance(item, ToolCallTrace) else item
+                for item in list(tool_calls or [])
+            ],
         )
         self._session.add(message)
         await self._session.flush()

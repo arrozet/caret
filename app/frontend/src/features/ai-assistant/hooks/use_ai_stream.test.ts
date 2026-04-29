@@ -59,6 +59,12 @@ async function* make_stream(
     error?: string;
     message_id?: string;
     tool_name?: string;
+    tool_call?: {
+      tool_name: string;
+      text_offset: number;
+      result_summary?: string | null;
+      result?: unknown;
+    };
   }>,
 ): AsyncGenerator<(typeof chunks)[number]> {
   for (const chunk of chunks) {
@@ -99,7 +105,7 @@ describe("use_ai_stream", () => {
         conversation_id: "c1",
         role: "assistant" as const,
         content: "Hi!",
-        tool_calls: ["count_words"],
+        tool_calls: [{ tool_name: "count_words", text_offset: 0, result_summary: "4 words" }],
         created_at: "",
       },
     ];
@@ -118,7 +124,7 @@ describe("use_ai_stream", () => {
       id: "m2",
       role: "assistant",
       content: "Hi!",
-      tool_calls: ["count_words"],
+      tool_calls: [{ tool_name: "count_words", text_offset: 0, result_summary: "4 words" }],
     });
     expect(listMessages).toHaveBeenCalledWith("c1");
   });
@@ -207,8 +213,26 @@ describe("use_ai_stream", () => {
 
     vi.mocked(streamAiResponse).mockReturnValueOnce(
       make_stream([
-        { type: "tool_call", tool_name: "get_document_content" },
-        { type: "tool_call", tool_name: "count_words" },
+        {
+          type: "tool_call",
+          tool_name: "get_document_content",
+          tool_call: { tool_name: "get_document_content", text_offset: 0 },
+        },
+        {
+          type: "tool_call",
+          tool_name: "count_words",
+          tool_call: { tool_name: "count_words", text_offset: 0 },
+        },
+        {
+          type: "tool_call",
+          tool_name: "count_words",
+          tool_call: {
+            tool_name: "count_words",
+            text_offset: 0,
+            result_summary: "4 words",
+            result: { value: 4 },
+          },
+        },
         { type: "done", message_id: "final-id" },
       ]),
     );
@@ -223,7 +247,15 @@ describe("use_ai_stream", () => {
       (message) => message.role === "assistant",
     );
 
-    expect(assistant_message?.tool_calls).toEqual(["get_document_content", "count_words"]);
+    expect(assistant_message?.tool_calls).toEqual([
+      { tool_name: "get_document_content", text_offset: 0 },
+      {
+        tool_name: "count_words",
+        text_offset: 0,
+        result_summary: "4 words",
+        result: { value: 4 },
+      },
+    ]);
   });
 
   it("forwards a structured document context to streamAiResponse", async () => {

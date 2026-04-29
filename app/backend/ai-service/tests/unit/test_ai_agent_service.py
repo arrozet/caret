@@ -17,9 +17,10 @@ import pytest
 from pydantic_ai import (
     AgentRunResultEvent,
     FunctionToolCallEvent,
+    FunctionToolResultEvent,
     PartStartEvent,
 )
-from pydantic_ai.messages import TextPart, ToolCallPart
+from pydantic_ai.messages import TextPart, ToolCallPart, ToolReturnPart
 
 from models.ai import AiMessageRole
 from services.ai_agent_service import AiAgentService, _build_model, _normalize_document_context
@@ -257,7 +258,31 @@ class TestAiAgentServiceConversations:
         assert result.total == 2
         assert result.items[0].role == AiMessageRole.user
         assert result.items[1].role == AiMessageRole.assistant
-        assert result.items[1].tool_calls == ["get_document_content", "count_words"]
+        assert result.items[1].tool_calls[0].tool_name == "get_document_content"
+        assert result.items[1].tool_calls[1].tool_name == "count_words"
+
+    @pytest.mark.asyncio
+    async def test_list_messages_normalizes_legacy_string_tool_calls(self) -> None:
+        """Legacy string tool-call payloads should be exposed as structured traces."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Hello!",
+            tool_calls=["count_words"],
+        )
+
+        with patch(
+            "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+            new_callable=AsyncMock,
+            return_value=[mock_msg],
+        ):
+            service = AiAgentService(session)
+            result = await service.list_messages(conv_id)
+
+        assert result.items[0].tool_calls[0].tool_name == "count_words"
+        assert result.items[0].tool_calls[0].text_offset == 0
 
 
 # ---------------------------------------------------------------------------
@@ -437,6 +462,12 @@ class TestAiAgentServiceStreaming:
                             args={},
                         )
                     ),
+                    FunctionToolResultEvent(
+                        result=ToolReturnPart(
+                            tool_name="count_words",
+                            content={"metric_name": "count_words", "value": 4},
+                        )
+                    ),
                     PartStartEvent(
                         index=0,
                         part=TextPart(content="El documento tiene 4 palabras."),
@@ -480,11 +511,15 @@ class TestAiAgentServiceStreaming:
         document_change_chunks = [c for c in chunks if c.get("type") == "document_change"]
         done_chunks = [c for c in chunks if c.get("type") == "done"]
 
-        assert len(tool_call_chunks) == 1
+        assert len(tool_call_chunks) == 2
         assert tool_call_chunks[0]["tool_name"] == "count_words"
+        assert tool_call_chunks[1]["tool_call"]["result_summary"] == "4 words"
         assert document_change_chunks == []
         assert len(done_chunks) == 1
-        assert create_message.await_args_list[1].kwargs["tool_calls"] == ["count_words"]
+        persisted_traces = create_message.await_args_list[1].kwargs["tool_calls"]
+        assert len(persisted_traces) == 1
+        assert persisted_traces[0].tool_name == "count_words"
+        assert persisted_traces[0].result_summary == "4 words"
 
     @pytest.mark.asyncio
     async def test_stream_response_yields_delta_and_done(self) -> None:

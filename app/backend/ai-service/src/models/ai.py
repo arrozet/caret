@@ -12,6 +12,7 @@ Rule: never return SQLAlchemy models directly from a Router — map to Pydantic 
 
 import enum
 import uuid
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -161,7 +162,7 @@ class AiMessage(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    tool_calls: Mapped[list[str]] = mapped_column(
+    tool_calls: Mapped[list[dict[str, Any] | str]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,

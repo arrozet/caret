@@ -103,6 +103,15 @@ class MessageCreate(BaseModel):
     )
 
 
+class ToolCallTrace(BaseModel):
+    """Structured trace entry for a tool used during an assistant response."""
+
+    tool_name: str
+    text_offset: int = 0
+    result_summary: str | None = None
+    result: Any | None = None
+
+
 class MessageResponse(_TimestampedResponse):
     """A single chat turn returned to the client."""
 
@@ -111,7 +120,7 @@ class MessageResponse(_TimestampedResponse):
     role: AiMessageRole
     content: str
     token_count: int | None
-    tool_calls: list[str] = Field(default_factory=list)
+    tool_calls: list[ToolCallTrace | str] = Field(default_factory=list)
 
 
 class MessageListResponse(BaseModel):
@@ -317,7 +326,7 @@ class StreamChunk(BaseModel):
       "done"            — final sentinel; includes the full accumulated text
       "error"           — something went wrong; includes an error message
       "document_change" — the agent proposed a document edit (agentic mode only)
-      "tool_call"       — the agent invoked a tool (agentic mode only)
+      "tool_call"       — the agent invoked or updated a tool trace (agentic mode only)
     """
 
     type: str = Field(..., pattern=r"^(delta|done|error|document_change|tool_call)$")
@@ -333,4 +342,8 @@ class StreamChunk(BaseModel):
     tool_name: str | None = Field(
         default=None,
         description="Set on 'tool_call' events — the name of the tool being invoked.",
+    )
+    tool_call: ToolCallTrace | None = Field(
+        default=None,
+        description="Structured tool trace entry for 'tool_call' events.",
     )

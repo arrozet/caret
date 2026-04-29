@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -254,21 +254,14 @@ function MessageBubble({ message, is_agent_mode, think_label, language }: Messag
         )}
 
         <div className={is_user ? "whitespace-pre-wrap break-words" : "break-words"}>
-          {is_user ? (
-            main_content
-          ) : main_content ? (
-            <MarkdownContent
-              content={main_content || ""}
-              className="break-words text-text-primary"
-            />
-          ) : null}
-          {!is_user && has_tool_trace && (
-            <ToolCallInlineTrace
-              toolCalls={message.tool_calls}
-              isCompleted={!message.is_streaming}
-              language={language}
-            />
-          )}
+          {is_user
+            ? main_content
+            : renderAssistantContentWithToolCalls(
+                main_content || "",
+                message.tool_calls,
+                !message.is_streaming,
+                language,
+              )}
           {/* Animated typing cursor */}
           {is_animating && (main_content || !has_tool_trace) && (
             <div className="mt-1">
@@ -284,6 +277,79 @@ function MessageBubble({ message, is_agent_mode, think_label, language }: Messag
   );
 }
 
+function groupToolCallsByOffset(toolCalls: ChatMessage["tool_calls"]) {
+  const sortedToolCalls = [...toolCalls].sort((a, b) => a.text_offset - b.text_offset);
+  const groups: Array<{ text_offset: number; tool_calls: ChatMessage["tool_calls"] }> = [];
+
+  for (const toolCall of sortedToolCalls) {
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup && lastGroup.text_offset === toolCall.text_offset) {
+      lastGroup.tool_calls.push(toolCall);
+      continue;
+    }
+
+    groups.push({ text_offset: toolCall.text_offset, tool_calls: [toolCall] });
+  }
+
+  return groups;
+}
+
+function renderAssistantContentWithToolCalls(
+  content: string,
+  toolCalls: ChatMessage["tool_calls"],
+  isCompleted: boolean,
+  language: string,
+) {
+  if (toolCalls.length === 0) {
+    return content ? (
+      <MarkdownContent content={content} className="break-words text-text-primary" />
+    ) : null;
+  }
+
+  const groups = groupToolCallsByOffset(toolCalls);
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+
+  groups.forEach((group, index) => {
+    const clampedOffset = Math.max(0, Math.min(group.text_offset, content.length));
+    const chunk = content.slice(cursor, clampedOffset);
+
+    if (chunk) {
+      nodes.push(
+        <MarkdownContent
+          key={`content-${index}-${cursor}`}
+          content={chunk}
+          className="break-words text-text-primary"
+        />,
+      );
+    }
+
+    nodes.push(
+      <ToolCallInlineTrace
+        key={`tool-${index}-${clampedOffset}`}
+        toolCalls={group.tool_calls}
+        isCompleted={isCompleted}
+        language={language}
+      />,
+    );
+
+    cursor = clampedOffset;
+  });
+
+  const tail = content.slice(cursor);
+  if (tail) {
+    nodes.push(
+      <MarkdownContent
+        key={`content-tail-${cursor}`}
+        content={tail}
+        className="break-words text-text-primary"
+      />,
+    );
+  }
+
+  return <>{nodes}</>;
+}
+
 // ---------------------------------------------------------------------------
 // Tool call trace
 // ---------------------------------------------------------------------------
@@ -292,8 +358,8 @@ function MessageBubble({ message, is_agent_mode, think_label, language }: Messag
  * Props for a single tool call item shown during/after an agent run.
  */
 interface ToolCallTraceItemProps {
-  /** The name of the tool that was called. */
-  toolName: string;
+  /** Structured trace entry for the tool call. */
+  toolCall: ChatMessage["tool_calls"][number];
   /** Whether the agent run has finished and this tool call is resolved. */
   isCompleted?: boolean;
 }
@@ -447,6 +513,60 @@ function getToolPresentation(toolName: string, language: string): ToolCallPresen
   };
 }
 
+function getToolResultSummary(toolCall: ChatMessage["tool_calls"][number], language: string) {
+  const languageBucket = getLanguageBucket(language);
+  const result = toolCall.result;
+
+  if (toolCall.tool_name === "count_words" && typeof result === "object" && result !== null) {
+    const value = (result as { value?: unknown }).value;
+    if (typeof value === "number") {
+      return languageBucket === "es" ? `${value} palabras` : `${value} words`;
+    }
+  }
+
+  if (toolCall.tool_name === "count_sentences" && typeof result === "object" && result !== null) {
+    const value = (result as { value?: unknown }).value;
+    if (typeof value === "number") {
+      return languageBucket === "es" ? `${value} frases` : `${value} sentences`;
+    }
+  }
+
+  if (toolCall.tool_name === "count_paragraphs" && typeof result === "object" && result !== null) {
+    const value = (result as { value?: unknown }).value;
+    if (typeof value === "number") {
+      return languageBucket === "es" ? `${value} párrafos` : `${value} paragraphs`;
+    }
+  }
+
+  if (toolCall.tool_name === "count_characters" && typeof result === "object" && result !== null) {
+    const value = (result as { value?: { with_spaces?: unknown; without_spaces?: unknown } }).value;
+    if (typeof value?.with_spaces === "number" && typeof value?.without_spaces === "number") {
+      return languageBucket === "es"
+        ? `${value.with_spaces} caracteres (${value.without_spaces} sin espacios)`
+        : `${value.with_spaces} chars (${value.without_spaces} without spaces)`;
+    }
+  }
+
+  if (
+    toolCall.tool_name === "estimate_reading_time" &&
+    typeof result === "object" &&
+    result !== null
+  ) {
+    const value = (result as { value?: { minutes?: unknown; seconds?: unknown } }).value;
+    if (typeof value?.minutes === "number" && typeof value?.seconds === "number") {
+      return languageBucket === "es"
+        ? `${value.minutes} min ${value.seconds} s`
+        : `${value.minutes}m ${value.seconds}s`;
+    }
+  }
+
+  if (typeof toolCall.result_summary === "string" && toolCall.result_summary.trim()) {
+    return toolCall.result_summary;
+  }
+
+  return null;
+}
+
 function humanizeToolName(toolName: string) {
   return toolName
     .split("_")
@@ -460,14 +580,16 @@ function humanizeToolName(toolName: string) {
  * Shows a spinner while the run is active and a checkmark once completed.
  */
 function ToolCallTraceItem({
-  toolName,
+  toolCall,
   isCompleted = false,
   language,
 }: ToolCallTraceItemProps & { language: string }) {
+  const toolName = toolCall.tool_name;
   const presentation = getToolPresentation(toolName, language);
   const Icon = presentation.icon;
   const label = isCompleted ? presentation.completedLabel : presentation.pendingLabel;
   const categoryLabel = presentation.categoryLabel;
+  const resultSummary = getToolResultSummary(toolCall, language);
   const stateLabel =
     getLanguageBucket(language) === "es"
       ? isCompleted
@@ -500,21 +622,35 @@ function ToolCallTraceItem({
         <p className="mt-1 text-[11px] leading-relaxed text-text-secondary/80">
           {presentation.description}
         </p>
+        {resultSummary && (
+          <p className="mt-1 text-[11px] leading-relaxed text-accent-ai">{resultSummary}</p>
+        )}
       </div>
     </div>
   );
 }
 
-function getToolTraceSummary(toolCalls: string[], isCompleted: boolean, language: string) {
+function getToolTraceSummary(
+  toolCalls: ChatMessage["tool_calls"],
+  isCompleted: boolean,
+  language: string,
+) {
   const languageBucket = getLanguageBucket(language);
   const primaryTool =
     [...toolCalls]
       .reverse()
       .find(
-        (toolName) => toolName !== "get_document_content" && toolName !== "get_selection_content",
+        (toolCall) =>
+          toolCall.tool_name !== "get_document_content" &&
+          toolCall.tool_name !== "get_selection_content",
       ) ?? toolCalls[toolCalls.length - 1];
-  const hasDocumentRead = toolCalls.includes("get_document_content");
-  const hasSelectionRead = toolCalls.includes("get_selection_content");
+  const primaryToolName = primaryTool?.tool_name;
+  const hasDocumentRead = toolCalls.some(
+    (toolCall) => toolCall.tool_name === "get_document_content",
+  );
+  const hasSelectionRead = toolCalls.some(
+    (toolCall) => toolCall.tool_name === "get_selection_content",
+  );
 
   if (toolCalls.length > 2) {
     if (languageBucket === "es") {
@@ -528,7 +664,7 @@ function getToolTraceSummary(toolCalls: string[], isCompleted: boolean, language
       : `Let me run ${toolCalls.length} tools before answering...`;
   }
 
-  switch (primaryTool) {
+  switch (primaryToolName) {
     case "count_words":
       if (languageBucket === "es") {
         return isCompleted
@@ -662,7 +798,7 @@ function ToolCallInlineTrace({
   isCompleted,
   language,
 }: {
-  toolCalls: string[];
+  toolCalls: ChatMessage["tool_calls"];
   isCompleted: boolean;
   language: string;
 }) {
@@ -676,7 +812,8 @@ function ToolCallInlineTrace({
       ? `${toolCalls.length} herramienta${toolCalls.length === 1 ? "" : "s"}`
       : `${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"}`;
   const isExpandable =
-    toolCalls.length > 1 || !toolCalls.every((toolName) => INLINE_ONLY_TOOLS.has(toolName));
+    toolCalls.length > 1 ||
+    !toolCalls.every((toolCall) => INLINE_ONLY_TOOLS.has(toolCall.tool_name));
 
   const summaryContent = (
     <>
@@ -722,10 +859,10 @@ function ToolCallInlineTrace({
       </summary>
       <div className="mt-2 border-t border-border-subtle/70 pt-2">
         <div className="space-y-1">
-          {toolCalls.map((toolName: string, idx: number) => (
+          {toolCalls.map((toolCall, idx: number) => (
             <ToolCallTraceItem
-              key={`${toolName}-${idx}`}
-              toolName={toolName}
+              key={`${toolCall.tool_name}-${toolCall.text_offset}-${idx}`}
+              toolCall={toolCall}
               isCompleted={isCompleted}
               language={language}
             />

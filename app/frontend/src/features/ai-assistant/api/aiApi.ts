@@ -52,6 +52,17 @@ export interface ConversationListResponse {
   total: number;
 }
 
+export interface ToolCallTrace {
+  /** Name of the tool the assistant invoked. */
+  tool_name: string;
+  /** Character offset in the assistant text when the tool was invoked. */
+  text_offset: number;
+  /** Concise human-readable summary of the tool result. */
+  result_summary?: string | null;
+  /** Raw serialized tool result payload. */
+  result?: unknown;
+}
+
 export interface MessageResponse {
   /** Message UUID. */
   id: string;
@@ -61,8 +72,8 @@ export interface MessageResponse {
   role: "user" | "assistant";
   /** Message text content. */
   content: string;
-  /** Ordered tool names used by the assistant for this reply. */
-  tool_calls: string[];
+  /** Ordered tool traces used by the assistant for this reply. */
+  tool_calls: Array<string | ToolCallTrace>;
   /** ISO 8601 creation timestamp. */
   created_at: string;
 }
@@ -120,6 +131,8 @@ export interface StreamChunk {
   document_change?: DocumentChangePayload;
   /** Set on "tool_call" events — the name of the tool being invoked. */
   tool_name?: string;
+  /** Structured trace payload for tool call and tool result updates. */
+  tool_call?: ToolCallTrace;
 }
 
 /** A single selectable LLM model returned by GET /ai/models. */

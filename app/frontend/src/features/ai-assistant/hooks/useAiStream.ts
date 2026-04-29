@@ -6,8 +6,36 @@ import {
   type DocumentContextSnapshot,
   type MessageResponse,
   type DocumentChangePayload,
+  type ToolCallTrace,
 } from "../api/aiApi";
 import { useAiStore } from "../../../stores/aiStore";
+
+export interface ToolCallTraceEntry {
+  /** Name of the tool the assistant invoked. */
+  tool_name: string;
+  /** Character offset in the assistant text when the tool was invoked. */
+  text_offset: number;
+  /** Concise human-readable summary of the tool result. */
+  result_summary?: string | null;
+  /** Raw serialized tool result payload. */
+  result?: unknown;
+}
+
+function normalize_tool_call_trace(
+  tool_call: string | ToolCallTrace,
+  fallback_offset = 0,
+): ToolCallTraceEntry {
+  if (typeof tool_call === "string") {
+    return { tool_name: tool_call, text_offset: fallback_offset };
+  }
+
+  return {
+    tool_name: tool_call.tool_name,
+    text_offset: tool_call.text_offset ?? fallback_offset,
+    result_summary: tool_call.result_summary,
+    result: tool_call.result,
+  };
+}
 
 /** A chat message as stored in the hook's local state. */
 export interface ChatMessage {
@@ -17,8 +45,8 @@ export interface ChatMessage {
   role: "user" | "assistant";
   /** Full message text content. */
   content: string;
-  /** Ordered tool names used by the assistant for this reply. */
-  tool_calls: string[];
+  /** Ordered tool traces used by the assistant for this reply. */
+  tool_calls: ToolCallTraceEntry[];
   /** Whether this message is currently being streamed (partial). */
   is_streaming?: boolean;
 }
@@ -104,7 +132,7 @@ export function useAiStream(): UseAiStreamReturn {
           id: m.id,
           role: m.role,
           content: m.content,
-          tool_calls: m.tool_calls ?? [],
+          tool_calls: (m.tool_calls ?? []).map((tool_call) => normalize_tool_call_trace(tool_call)),
         })),
       );
     } catch (err) {
@@ -206,7 +234,30 @@ export function useAiStream(): UseAiStreamReturn {
                 msg.id === currentStreamingId
                   ? {
                       ...msg,
-                      tool_calls: [...msg.tool_calls, chunk.tool_name!],
+                      tool_calls: chunk.tool_call
+                        ? (() => {
+                            const normalizedTrace = normalize_tool_call_trace(
+                              chunk.tool_call,
+                              msg.content.length,
+                            );
+                            const existingIndex = msg.tool_calls.findIndex(
+                              (trace) =>
+                                trace.tool_name === normalizedTrace.tool_name &&
+                                trace.text_offset === normalizedTrace.text_offset,
+                            );
+
+                            if (existingIndex >= 0) {
+                              return msg.tool_calls.map((trace, index) =>
+                                index === existingIndex ? { ...trace, ...normalizedTrace } : trace,
+                              );
+                            }
+
+                            return [...msg.tool_calls, normalizedTrace];
+                          })()
+                        : [
+                            ...msg.tool_calls,
+                            { tool_name: chunk.tool_name!, text_offset: msg.content.length },
+                          ],
                     }
                   : msg,
               ),

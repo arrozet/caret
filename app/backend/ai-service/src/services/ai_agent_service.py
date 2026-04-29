@@ -24,6 +24,7 @@ from pydantic_ai import (
     Agent,
     AgentRunResultEvent,
     FunctionToolCallEvent,
+    FunctionToolResultEvent,
     PartDeltaEvent,
     PartStartEvent,
     TextPartDelta,
@@ -58,9 +59,88 @@ from schemas.ai import (
     MessageListResponse,
     MessageResponse,
     StreamChunk,
+    ToolCallTrace,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_tool_call_traces(
+    raw_tool_calls: list[ToolCallTrace | dict[str, Any] | str] | None,
+) -> list[ToolCallTrace]:
+    """Coerce legacy stored tool-call payloads into structured trace entries."""
+
+    traces: list[ToolCallTrace] = []
+    for raw_tool_call in raw_tool_calls or []:
+        if isinstance(raw_tool_call, ToolCallTrace):
+            traces.append(raw_tool_call)
+        elif isinstance(raw_tool_call, str):
+            traces.append(ToolCallTrace(tool_name=raw_tool_call, text_offset=0))
+        elif isinstance(raw_tool_call, dict):
+            traces.append(ToolCallTrace.model_validate(raw_tool_call))
+    return traces
+
+
+def _serialize_tool_result(result: Any) -> Any:
+    """Convert tool return values into JSON-serializable payloads."""
+
+    if hasattr(result, "model_dump"):
+        return result.model_dump(mode="json")
+    if isinstance(result, (str, int, float, bool)) or result is None:
+        return result
+    if isinstance(result, dict):
+        return result
+    return str(result)
+
+
+def _summarize_tool_result(tool_name: str, serialized_result: Any) -> str | None:
+    """Create a concise human-readable summary for a tool result."""
+
+    if tool_name == "count_words" and isinstance(serialized_result, dict):
+        value = serialized_result.get("value")
+        if isinstance(value, int):
+            return f"{value} words"
+
+    if tool_name == "count_sentences" and isinstance(serialized_result, dict):
+        value = serialized_result.get("value")
+        if isinstance(value, int):
+            return f"{value} sentences"
+
+    if tool_name == "count_paragraphs" and isinstance(serialized_result, dict):
+        value = serialized_result.get("value")
+        if isinstance(value, int):
+            return f"{value} paragraphs"
+
+    if tool_name == "count_characters" and isinstance(serialized_result, dict):
+        value = serialized_result.get("value")
+        if isinstance(value, dict):
+            with_spaces = value.get("with_spaces")
+            without_spaces = value.get("without_spaces")
+            if isinstance(with_spaces, int) and isinstance(without_spaces, int):
+                return f"{with_spaces} chars ({without_spaces} without spaces)"
+
+    if tool_name == "estimate_reading_time" and isinstance(serialized_result, dict):
+        value = serialized_result.get("value")
+        if isinstance(value, dict):
+            minutes = value.get("minutes")
+            seconds = value.get("seconds")
+            if isinstance(minutes, int) and isinstance(seconds, int):
+                return f"{minutes}m {seconds}s"
+
+    if tool_name == "propose_document_replacement" and isinstance(serialized_result, str):
+        return serialized_result
+
+    if tool_name in {
+        "get_document_content",
+        "get_selection_content",
+    } and isinstance(serialized_result, str):
+        return serialized_result[:120] + ("..." if len(serialized_result) > 120 else "")
+
+    if isinstance(serialized_result, str):
+        return serialized_result
+
+    return None
+
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -311,7 +391,21 @@ class AiAgentService:
             MessageListResponse containing the ordered message list.
         """
         messages = await self._msg_repo.list_for_conversation(conversation_id)
-        items = [MessageResponse.model_validate(m) for m in messages]
+        items = [
+            MessageResponse.model_validate(
+                {
+                    "id": message.id,
+                    "conversation_id": message.conversation_id,
+                    "role": message.role,
+                    "content": message.content,
+                    "token_count": message.token_count,
+                    "tool_calls": _normalize_tool_call_traces(message.tool_calls),
+                    "created_at": message.created_at,
+                    "updated_at": message.updated_at,
+                }
+            )
+            for message in messages
+        ]
         return MessageListResponse(items=items, total=len(items))
 
     async def list_conversations_for_document(
@@ -486,7 +580,7 @@ class AiAgentService:
 
         full_text = ""
         token_count = 0
-        tool_call_names: list[str] = []
+        tool_call_traces: list[ToolCallTrace] = []
 
         if agent_type == "general":
             from agents.general_agent import (  # noqa: PLC0415
@@ -536,11 +630,16 @@ class AiAgentService:
                         continue
 
                     if isinstance(event, FunctionToolCallEvent):
-                        tool_call_names.append(event.part.tool_name)
+                        trace = ToolCallTrace(
+                            tool_name=event.part.tool_name,
+                            text_offset=len(full_text),
+                        )
+                        tool_call_traces.append(trace)
                         tool_chunk = StreamChunk(
                             type="tool_call",
                             content="",
                             tool_name=event.part.tool_name,
+                            tool_call=trace,
                         )
                         yield f"data: {tool_chunk.model_dump_json()}\n\n"
 
@@ -561,6 +660,25 @@ class AiAgentService:
 
                         if isinstance(candidate_text, str) and candidate_text.strip():
                             fallback_proposed_texts.append(candidate_text)
+                        continue
+
+                    if isinstance(event, FunctionToolResultEvent):
+                        serialized_result = _serialize_tool_result(event.result.content)
+                        for trace in reversed(tool_call_traces):
+                            if trace.tool_name == event.result.tool_name:
+                                trace.result = serialized_result
+                                trace.result_summary = _summarize_tool_result(
+                                    trace.tool_name,
+                                    serialized_result,
+                                )
+                                result_chunk = StreamChunk(
+                                    type="tool_call",
+                                    content="",
+                                    tool_name=trace.tool_name,
+                                    tool_call=trace,
+                                )
+                                yield f"data: {result_chunk.model_dump_json()}\n\n"
+                                break
                         continue
 
                     if isinstance(event, AgentRunResultEvent) and isinstance(
@@ -640,7 +758,7 @@ class AiAgentService:
             role=AiMessageRole.assistant,
             content=full_text,
             token_count=token_count,
-            tool_calls=tool_call_names,
+            tool_calls=tool_call_traces,
         )
         await self._conv_repo.touch_updated_at(conversation_id)
 

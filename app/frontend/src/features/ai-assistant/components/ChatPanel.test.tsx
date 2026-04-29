@@ -25,7 +25,12 @@ let mock_messages: Array<{
   id: string;
   role: "user" | "assistant";
   content: string;
-  tool_calls: string[];
+  tool_calls: Array<{
+    tool_name: string;
+    text_offset: number;
+    result_summary?: string | null;
+    result?: unknown;
+  }>;
   is_streaming?: boolean;
 }> = [];
 let mock_is_loading = false;
@@ -265,7 +270,15 @@ describe("ChatPanel", () => {
         id: "m1",
         role: "assistant",
         content: "My answer",
-        tool_calls: ["get_document_content", "count_words"],
+        tool_calls: [
+          { tool_name: "get_document_content", text_offset: 0 },
+          {
+            tool_name: "count_words",
+            text_offset: 0,
+            result_summary: "4 words",
+            result: { value: 4 },
+          },
+        ],
       },
     ];
 
@@ -281,6 +294,7 @@ describe("ChatPanel", () => {
 
     expect(screen.getByText("Read document")).toBeInTheDocument();
     expect(screen.getByText("Counted words")).toBeInTheDocument();
+    expect(screen.getByText("4 words")).toBeInTheDocument();
   });
 
   it("renders pending inline tool trace while streaming", () => {
@@ -291,7 +305,7 @@ describe("ChatPanel", () => {
         id: "m1",
         role: "assistant",
         content: "",
-        tool_calls: ["count_words"],
+        tool_calls: [{ tool_name: "count_words", text_offset: 0 }],
         is_streaming: true,
       },
     ];
@@ -301,5 +315,33 @@ describe("ChatPanel", () => {
     expect(screen.getByText("Let me count the words first...")).toBeInTheDocument();
     expect(screen.getByText("Counting words...")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
+  });
+
+  it("interleaves tool trace between assistant content segments", () => {
+    mock_ai_mode = "agent";
+    mock_messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: "Before.\n\nAfter.",
+        tool_calls: [
+          {
+            tool_name: "count_words",
+            text_offset: 9,
+            result_summary: "2 words",
+            result: { value: 2 },
+          },
+        ],
+      },
+    ];
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    const before = screen.getByText("Before.");
+    const trace = screen.getByText("I counted the words before answering.");
+    const after = screen.getByText("After.");
+
+    expect(before.compareDocumentPosition(trace) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(trace.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
