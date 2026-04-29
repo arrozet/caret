@@ -221,10 +221,11 @@ class TestGeneralAgentRegistration:
         )
 
         system_prompt = agent._system_prompts[0]
+        normalized_prompt = " ".join(system_prompt.split())
 
-        assert "When the user asks for document metrics" in system_prompt
-        assert "MUST call the relevant metric tool(s) automatically" in system_prompt
-        assert "Do not ask the user which tool to use" in system_prompt
+        assert "When the user asks for document metrics" in normalized_prompt
+        assert "MUST call the relevant metric tool(s) automatically" in normalized_prompt
+        assert "Do not ask the user which tool to use" in normalized_prompt
 
     def test_system_prompt_requires_markdown_chat_replies(self) -> None:
         """The prompt should require Markdown formatting for normal chat replies."""
@@ -248,12 +249,13 @@ class TestGeneralAgentRegistration:
         )
 
         system_prompt = agent._system_prompts[0]
+        normalized_prompt = " ".join(system_prompt.split())
 
         assert (
             "Assume the user wants you to update the document unless "
             "the request is clearly chat-only"
-        ) in system_prompt
+        ) in normalized_prompt
         assert (
             "If the request is ambiguous between replying in chat and "
             "updating the document, choose to update the document"
-        ) in system_prompt
+        ) in normalized_prompt
