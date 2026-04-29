@@ -152,7 +152,7 @@ describe("use_ai_stream", () => {
       await result.current.send_message("Hello", "doc1");
     });
 
-    expect(createConversation).toHaveBeenCalledWith("doc1", "Hello");
+    expect(createConversation).toHaveBeenCalledWith("doc1");
     expect(mock_set_conversation).toHaveBeenCalledWith("new-convo");
   });
 
@@ -255,6 +255,55 @@ describe("use_ai_stream", () => {
         result_summary: "4 words",
         result: { value: 4 },
       },
+    ]);
+    expect(assistant_message?.segments).toEqual([
+      {
+        type: "tool_calls",
+        tool_calls: [
+          { tool_name: "get_document_content", text_offset: 0 },
+          {
+            tool_name: "count_words",
+            text_offset: 0,
+            result_summary: "4 words",
+            result: { value: 4 },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("preserves delta and tool chronology in assistant segments", async () => {
+    mock_conversation_id = "convo-order";
+
+    vi.mocked(streamAiResponse).mockReturnValueOnce(
+      make_stream([
+        { type: "delta", content: "Antes. " },
+        {
+          type: "tool_call",
+          tool_name: "count_words",
+          tool_call: { tool_name: "count_words", text_offset: 7 },
+        },
+        { type: "delta", content: "Despues." },
+        { type: "done", message_id: "final-id" },
+      ]),
+    );
+
+    const { result } = renderHook(() => useAiStream());
+
+    await act(async () => {
+      await result.current.send_message("Hi", "doc1");
+    });
+
+    const assistant_message = result.current.messages.find(
+      (message) => message.role === "assistant",
+    );
+    expect(assistant_message?.segments).toEqual([
+      { type: "text", content: "Antes. " },
+      {
+        type: "tool_calls",
+        tool_calls: [{ tool_name: "count_words", text_offset: 7 }],
+      },
+      { type: "text", content: "Despues." },
     ]);
   });
 

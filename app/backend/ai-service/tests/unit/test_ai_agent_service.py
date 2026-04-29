@@ -18,9 +18,10 @@ from pydantic_ai import (
     AgentRunResultEvent,
     FunctionToolCallEvent,
     FunctionToolResultEvent,
+    PartDeltaEvent,
     PartStartEvent,
 )
-from pydantic_ai.messages import TextPart, ToolCallPart, ToolReturnPart
+from pydantic_ai.messages import TextPart, TextPartDelta, ToolCallPart, ToolReturnPart
 
 from models.ai import AiMessageRole
 from services.ai_agent_service import AiAgentService, _build_model, _normalize_document_context
@@ -208,6 +209,21 @@ class TestAiAgentServiceConversations:
 
         # Assert
         assert result.id == new_conv.id
+
+    @pytest.mark.asyncio
+    async def test_touch_conversation_updates_recency(self) -> None:
+        """touch_conversation should delegate to the repository touch helper."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+
+        with patch(
+            "services.ai_agent_service.AiConversationRepository.touch_updated_at",
+            new_callable=AsyncMock,
+        ) as touch_updated_at:
+            service = AiAgentService(session)
+            await service.touch_conversation(conv_id)
+
+        touch_updated_at.assert_awaited_once_with(conv_id)
 
     @pytest.mark.asyncio
     async def test_list_messages_empty(self) -> None:
@@ -522,6 +538,65 @@ class TestAiAgentServiceStreaming:
         assert persisted_traces[0].result_summary == "4 words"
 
     @pytest.mark.asyncio
+    async def test_stream_response_general_keeps_streamed_text_for_tool_offsets(
+        self,
+    ) -> None:
+        """Final output must not invalidate offsets captured during streaming."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Texto por chunks.",
+        )
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.run_stream_events = MagicMock(
+            return_value=_make_event_stream(
+                [
+                    PartStartEvent(index=0, part=TextPart(content="Texto por ")),
+                    FunctionToolCallEvent(
+                        part=ToolCallPart(
+                            tool_name="count_words",
+                            args={"document_text": "uno dos"},
+                        )
+                    ),
+                    PartDeltaEvent(index=0, delta=TextPartDelta(content_delta="chunks.")),
+                    AgentRunResultEvent(result=MagicMock(output="Texto final distinto.")),
+                ]
+            )
+        )
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ) as create_message,
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "agents.general_agent.build_general_agent",
+                return_value=mock_agent_instance,
+            ),
+        ):
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Cuenta palabras",
+                agent_type="general",
+            ):
+                pass
+
+        assert create_message.await_args_list[1].kwargs["content"] == "Texto por chunks."
+
+    @pytest.mark.asyncio
     async def test_stream_response_yields_delta_and_done(self) -> None:
         """stream_response should yield delta chunks followed by a 'done' event."""
         # Arrange
@@ -580,6 +655,131 @@ class TestAiAgentServiceStreaming:
         last = json.loads(chunks[-1].replace("data: ", "").strip())
         assert last["type"] == "done"
         assert "message_id" in last
+
+    @pytest.mark.asyncio
+    async def test_stream_response_generates_title_for_first_exchange(self) -> None:
+        """First-turn conversations should persist an AI-generated title."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.user,
+            content="Haz una intro más guapa",
+        )
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Claro, aquí tienes una versión mejorada.",
+        )
+
+        async def fake_stream_text(delta: bool = False) -> AsyncGenerator[str, None]:
+            yield "Claro, aquí tienes una versión mejorada."
+
+        mock_stream_result = MagicMock()
+        mock_stream_result.stream_text = fake_stream_text
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_stream_result)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_chat_agent = MagicMock()
+        mock_chat_agent.run_stream = MagicMock(return_value=mock_stream_ctx)
+
+        mock_title_agent = MagicMock()
+        mock_title_agent.run = AsyncMock(return_value=MagicMock(output="Intro más potente"))
+
+        with (
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "services.ai_agent_service.Agent",
+                side_effect=[mock_chat_agent, mock_title_agent],
+            ),
+            patch(
+                "services.ai_agent_service.AiConversationRepository.set_title",
+                new_callable=AsyncMock,
+            ) as set_title,
+        ):
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Haz una intro más guapa",
+            ):
+                pass
+
+        set_title.assert_awaited_once_with(conv_id, "Intro más potente")
+
+    @pytest.mark.asyncio
+    async def test_stream_response_uses_first_message_fallback_when_title_generation_fails(
+        self,
+    ) -> None:
+        """Title generation failures should fall back to a trimmed first user message."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        user_message = "Haz una intro más guapa"
+        mock_user_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.user,
+            content=user_message,
+        )
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Claro, aquí tienes una versión mejorada.",
+        )
+
+        async def fake_stream_text(delta: bool = False) -> AsyncGenerator[str, None]:
+            yield "Claro, aquí tienes una versión mejorada."
+
+        mock_stream_result = MagicMock()
+        mock_stream_result.stream_text = fake_stream_text
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_stream_result)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_chat_agent = MagicMock()
+        mock_chat_agent.run_stream = MagicMock(return_value=mock_stream_ctx)
+
+        mock_title_agent = MagicMock()
+        mock_title_agent.run = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with (
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "services.ai_agent_service.Agent",
+                side_effect=[mock_chat_agent, mock_title_agent],
+            ),
+            patch(
+                "services.ai_agent_service.AiConversationRepository.set_title",
+                new_callable=AsyncMock,
+            ) as set_title,
+        ):
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message=user_message,
+            ):
+                pass
+
+        set_title.assert_awaited_once_with(conv_id, user_message)
 
     @pytest.mark.asyncio
     async def test_stream_response_uses_structured_message_history(self) -> None:

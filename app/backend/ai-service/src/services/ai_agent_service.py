@@ -64,6 +64,20 @@ from schemas.ai import (
 
 logger = logging.getLogger(__name__)
 
+_TITLE_MAX_LENGTH = 80
+_TITLE_FALLBACK_PREFIX_MAX_LENGTH = 60
+_TITLE_GENERATION_SYSTEM_PROMPT = """\
+Generate a short descriptive title for a conversation.
+
+Rules:
+- Return only the title text.
+- Use the same language as the conversation.
+- Keep it between 3 and 7 words when possible.
+- No quotation marks.
+- No trailing punctuation.
+- No prefixes like 'Chat about' or 'Conversation about'.
+"""
+
 
 def _normalize_tool_call_traces(
     raw_tool_calls: list[ToolCallTrace | dict[str, Any] | str] | None,
@@ -194,6 +208,38 @@ def _normalize_document_context(
         if isinstance(selected_text, str) and selected_text.strip():
             return selected_text
     return json.dumps(document_context, ensure_ascii=False)
+
+
+def _normalize_whitespace(value: str) -> str:
+    """Collapse repeated whitespace into single spaces."""
+
+    return " ".join(value.split())
+
+
+def _truncate_title_fallback(user_message: str) -> str:
+    """Fallback title derived from the first user message."""
+
+    normalized = _normalize_whitespace(user_message).strip("'\" ")
+    if not normalized:
+        return "New conversation"
+    if len(normalized) <= _TITLE_FALLBACK_PREFIX_MAX_LENGTH:
+        return normalized
+    return normalized[:_TITLE_FALLBACK_PREFIX_MAX_LENGTH].rstrip() + "..."
+
+
+def _sanitize_generated_title(title: str | None) -> str | None:
+    """Normalize and validate a generated title before persisting it."""
+
+    if title is None:
+        return None
+
+    sanitized = _normalize_whitespace(title).strip().strip("'\"")
+    sanitized = sanitized.rstrip(".,:;!?-")
+    if not sanitized:
+        return None
+    if len(sanitized) > _TITLE_MAX_LENGTH:
+        sanitized = sanitized[:_TITLE_MAX_LENGTH].rstrip()
+    return sanitized or None
 
 
 def _build_message_history(history_messages: list) -> list[ModelMessage]:
@@ -377,6 +423,14 @@ class AiAgentService:
         )
         return ConversationResponse.model_validate(conv)
 
+    async def touch_conversation(
+        self,
+        conversation_id: uuid.UUID,
+    ) -> None:
+        """Mark a conversation as recently used."""
+
+        await self._conv_repo.touch_updated_at(conversation_id)
+
     async def list_messages(
         self,
         conversation_id: uuid.UUID,
@@ -495,6 +549,7 @@ class AiAgentService:
         model_id: str | None = None,
         document_id: uuid.UUID | None = None,
         agent_type: str | None = None,
+        conversation_title: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """
         Persist the user message, run the PydanticAI agent with streaming,
@@ -548,6 +603,7 @@ class AiAgentService:
             and history_messages[-1].content == user_message
         ):
             history_messages = history_messages[:-1]
+        should_generate_title = conversation_title is None and len(history_messages) == 0
         message_history = _build_message_history(history_messages)
 
         normalized_document_context = _normalize_document_context(document_context)
@@ -684,7 +740,8 @@ class AiAgentService:
                     if isinstance(event, AgentRunResultEvent) and isinstance(
                         event.result.output, str
                     ):
-                        full_text = event.result.output
+                        if not full_text:
+                            full_text = event.result.output
 
             except Exception as exc:
                 logger.exception("General agent streaming error: %s", exc)
@@ -762,9 +819,47 @@ class AiAgentService:
         )
         await self._conv_repo.touch_updated_at(conversation_id)
 
+        if should_generate_title:
+            await self._maybe_set_generated_title(
+                conversation_id=conversation_id,
+                user_message=user_message,
+                assistant_message=full_text,
+                model_id=model_id,
+            )
+
         done_chunk = StreamChunk(
             type="done",
             content=full_text,
             message_id=assistant_msg.id,
         )
         yield f"data: {done_chunk.model_dump_json()}\n\n"
+
+    async def _maybe_set_generated_title(
+        self,
+        conversation_id: uuid.UUID,
+        user_message: str,
+        assistant_message: str,
+        model_id: str | None = None,
+    ) -> None:
+        """Generate and persist a short title without blocking the chat flow."""
+
+        fallback_title = _truncate_title_fallback(user_message)
+
+        try:
+            model = _build_model(model_id)
+            agent: Agent[None, str] = Agent(
+                model=model,
+                system_prompt=_TITLE_GENERATION_SYSTEM_PROMPT,
+                output_type=str,
+            )
+            prompt = (
+                f"User message:\n{user_message}\n\n"
+                f"Assistant reply:\n{assistant_message or '(empty)'}"
+            )
+            result = await agent.run(prompt)
+            title = _sanitize_generated_title(result.output)
+        except Exception as exc:
+            logger.warning("Conversation title generation failed for %s: %s", conversation_id, exc)
+            title = None
+
+        await self._conv_repo.set_title(conversation_id, title or fallback_title)

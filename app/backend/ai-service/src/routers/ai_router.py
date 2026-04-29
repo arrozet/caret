@@ -170,6 +170,35 @@ async def list_conversations(
     )
 
 
+@router.post(
+    "/{conversation_id}/touch",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Mark a conversation as recently used",
+    description="Updates updated_at so recent conversations reflect the last chat the user opened.",
+)
+async def touch_conversation(
+    conversation_id: uuid.UUID,
+    user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Touch one conversation after validating ownership."""
+    from repositories.ai_repository import AiConversationRepository
+
+    conv_repo = AiConversationRepository(session)
+    conversation = await conv_repo.get_by_id_for_user(
+        conversation_id=conversation_id,
+        user_id=uuid.UUID(user.user_id),
+    )
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found.",
+        )
+
+    service = _get_service(session)
+    await service.touch_conversation(conversation_id)
+
+
 # ---------------------------------------------------------------------------
 # GET /conversations/{conversation_id}/messages  — list messages
 # ---------------------------------------------------------------------------
@@ -340,6 +369,7 @@ async def stream_ai_response(
             model_id=body.model_id,
             document_id=body.document_id,  # Pass optional document_id for RAG retrieval
             agent_type=body.agent_type,  # Pass optional agent_type for agentic mode
+            conversation_title=conversation.title,
         ),
         media_type="text/event-stream",
         headers={

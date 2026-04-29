@@ -165,6 +165,18 @@ class AiConversationRepository:
             .values(updated_at=func.now())
         )
 
+    async def set_title(self, conversation_id: uuid.UUID, title: str) -> None:
+        """
+        Persist a generated title only when the conversation is still untitled.
+
+        This avoids overwriting a title that may have been set concurrently.
+        """
+        await self._session.execute(
+            update(AiConversation)
+            .where((AiConversation.id == conversation_id) & (AiConversation.title.is_(None)))
+            .values(title=title)
+        )
+
 
 # ---------------------------------------------------------------------------
 # AiMessageRepository

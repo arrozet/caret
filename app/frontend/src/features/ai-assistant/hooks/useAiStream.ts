@@ -21,6 +21,22 @@ export interface ToolCallTraceEntry {
   result?: unknown;
 }
 
+export interface ChatTextSegment {
+  /** Plain assistant text streamed in order. */
+  type: "text";
+  /** Text content for this segment. */
+  content: string;
+}
+
+export interface ChatToolCallSegment {
+  /** Ordered tool-call trace segment. */
+  type: "tool_calls";
+  /** Tool calls emitted at this point in the stream. */
+  tool_calls: ToolCallTraceEntry[];
+}
+
+export type ChatMessageSegment = ChatTextSegment | ChatToolCallSegment;
+
 function normalize_tool_call_trace(
   tool_call: string | ToolCallTrace,
   fallback_offset = 0,
@@ -47,8 +63,84 @@ export interface ChatMessage {
   content: string;
   /** Ordered tool traces used by the assistant for this reply. */
   tool_calls: ToolCallTraceEntry[];
+  /** Ordered streamed segments used to preserve text/tool chronology. */
+  segments?: ChatMessageSegment[];
   /** Whether this message is currently being streamed (partial). */
   is_streaming?: boolean;
+}
+
+function upsert_tool_call_trace(
+  traces: ToolCallTraceEntry[],
+  normalizedTrace: ToolCallTraceEntry,
+): ToolCallTraceEntry[] {
+  const existingIndex = traces.findIndex(
+    (trace) =>
+      trace.tool_name === normalizedTrace.tool_name &&
+      trace.text_offset === normalizedTrace.text_offset,
+  );
+
+  if (existingIndex >= 0) {
+    return traces.map((trace, index) =>
+      index === existingIndex ? { ...trace, ...normalizedTrace } : trace,
+    );
+  }
+
+  return [...traces, normalizedTrace];
+}
+
+function append_text_segment(
+  segments: ChatMessageSegment[] | undefined,
+  content: string,
+): ChatMessageSegment[] {
+  const currentSegments = segments ?? [];
+  const lastSegment = currentSegments[currentSegments.length - 1];
+
+  if (lastSegment?.type === "text") {
+    return [
+      ...currentSegments.slice(0, -1),
+      { ...lastSegment, content: lastSegment.content + content },
+    ];
+  }
+
+  return [...currentSegments, { type: "text", content }];
+}
+
+function append_or_update_tool_segment(
+  segments: ChatMessageSegment[] | undefined,
+  normalizedTrace: ToolCallTraceEntry,
+): ChatMessageSegment[] {
+  const currentSegments = segments ?? [];
+
+  for (let index = currentSegments.length - 1; index >= 0; index -= 1) {
+    const segment = currentSegments[index];
+    if (segment?.type !== "tool_calls") {
+      break;
+    }
+
+    const hasMatchingTrace = segment.tool_calls.some(
+      (trace) =>
+        trace.tool_name === normalizedTrace.tool_name &&
+        trace.text_offset === normalizedTrace.text_offset,
+    );
+
+    if (hasMatchingTrace) {
+      return currentSegments.map((entry, entryIndex) =>
+        entryIndex === index
+          ? { ...entry, tool_calls: upsert_tool_call_trace(entry.tool_calls, normalizedTrace) }
+          : entry,
+      );
+    }
+  }
+
+  const lastSegment = currentSegments[currentSegments.length - 1];
+  if (lastSegment?.type === "tool_calls") {
+    return [
+      ...currentSegments.slice(0, -1),
+      { ...lastSegment, tool_calls: [...lastSegment.tool_calls, normalizedTrace] },
+    ];
+  }
+
+  return [...currentSegments, { type: "tool_calls", tool_calls: [normalizedTrace] }];
 }
 
 /** Return value of the useAiStream hook. */
@@ -169,9 +261,7 @@ export function useAiStream(): UseAiStreamReturn {
       let conversationId = activeConversationId;
       if (!conversationId) {
         try {
-          const generated_title =
-            user_message.length > 40 ? user_message.substring(0, 40) + "..." : user_message;
-          const conversation = await createConversation(document_id, generated_title);
+          const conversation = await createConversation(document_id);
           conversationId = conversation.id;
           setConversation(conversationId);
         } catch (err) {
@@ -198,6 +288,7 @@ export function useAiStream(): UseAiStreamReturn {
           role: "assistant",
           content: "",
           tool_calls: [],
+          segments: [],
           is_streaming: true,
         },
       ]);
@@ -223,7 +314,11 @@ export function useAiStream(): UseAiStreamReturn {
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === currentStreamingId
-                  ? { ...msg, content: msg.content + chunk.content }
+                  ? {
+                      ...msg,
+                      content: msg.content + chunk.content,
+                      segments: append_text_segment(msg.segments, chunk.content),
+                    }
                   : msg,
               ),
             );
@@ -231,35 +326,19 @@ export function useAiStream(): UseAiStreamReturn {
             const currentStreamingId = streamingIdRef.current;
             setMessages((prev) =>
               prev.map((msg) =>
-                msg.id === currentStreamingId
-                  ? {
-                      ...msg,
-                      tool_calls: chunk.tool_call
-                        ? (() => {
-                            const normalizedTrace = normalize_tool_call_trace(
-                              chunk.tool_call,
-                              msg.content.length,
-                            );
-                            const existingIndex = msg.tool_calls.findIndex(
-                              (trace) =>
-                                trace.tool_name === normalizedTrace.tool_name &&
-                                trace.text_offset === normalizedTrace.text_offset,
-                            );
+                msg.id !== currentStreamingId
+                  ? msg
+                  : (() => {
+                      const normalizedTrace = chunk.tool_call
+                        ? normalize_tool_call_trace(chunk.tool_call, msg.content.length)
+                        : { tool_name: chunk.tool_name!, text_offset: msg.content.length };
 
-                            if (existingIndex >= 0) {
-                              return msg.tool_calls.map((trace, index) =>
-                                index === existingIndex ? { ...trace, ...normalizedTrace } : trace,
-                              );
-                            }
-
-                            return [...msg.tool_calls, normalizedTrace];
-                          })()
-                        : [
-                            ...msg.tool_calls,
-                            { tool_name: chunk.tool_name!, text_offset: msg.content.length },
-                          ],
-                    }
-                  : msg,
+                      return {
+                        ...msg,
+                        tool_calls: upsert_tool_call_trace(msg.tool_calls, normalizedTrace),
+                        segments: append_or_update_tool_segment(msg.segments, normalizedTrace),
+                      };
+                    })(),
               ),
             );
           } else if (chunk.type === "document_change" && chunk.document_change) {

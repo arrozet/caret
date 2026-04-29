@@ -24,8 +24,8 @@ import type { LucideIcon } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { useAiStore } from "../../../stores/aiStore";
 import { useAiStream } from "../hooks/useAiStream";
-import type { ChatMessage } from "../hooks/useAiStream";
-import { deleteConversation, getModels, listConversations } from "../api/aiApi";
+import type { ChatMessage, ChatMessageSegment } from "../hooks/useAiStream";
+import { deleteConversation, getModels, listConversations, touchConversation } from "../api/aiApi";
 import type { DocumentContextSnapshot, ModelInfo } from "../api/aiApi";
 
 /** Offline / error fallback only — order is arbitrary; server `default_model_id` wins after fetch. */
@@ -259,6 +259,7 @@ function MessageBubble({ message, is_agent_mode, think_label, language }: Messag
             : renderAssistantContentWithToolCalls(
                 main_content || "",
                 message.tool_calls,
+                message.segments,
                 !message.is_streaming,
                 language,
               )}
@@ -294,12 +295,71 @@ function groupToolCallsByOffset(toolCalls: ChatMessage["tool_calls"]) {
   return groups;
 }
 
-function renderAssistantContentWithToolCalls(
-  content: string,
-  toolCalls: ChatMessage["tool_calls"],
+const WORD_CHARACTER_PATTERN = /[\p{L}\p{N}]/u;
+
+function isWordCharacter(value: string | undefined) {
+  return value !== undefined && WORD_CHARACTER_PATTERN.test(value);
+}
+
+function normalizeToolCallOffsetForDisplay(content: string, textOffset: number) {
+  let normalizedOffset = Math.max(0, Math.min(textOffset, content.length));
+
+  if (
+    !isWordCharacter(content[normalizedOffset - 1]) ||
+    !isWordCharacter(content[normalizedOffset])
+  ) {
+    return normalizedOffset;
+  }
+
+  while (normalizedOffset < content.length && isWordCharacter(content[normalizedOffset])) {
+    normalizedOffset += 1;
+  }
+
+  return normalizedOffset;
+}
+
+function renderAssistantSegments(
+  segments: ChatMessageSegment[],
   isCompleted: boolean,
   language: string,
 ) {
+  return segments.map((segment, index) => {
+    if (segment.type === "tool_calls") {
+      return (
+        <ToolCallInlineTrace
+          key={`tool-${index}`}
+          toolCalls={segment.tool_calls}
+          isCompleted={isCompleted}
+          language={language}
+        />
+      );
+    }
+
+    if (!segment.content) {
+      return null;
+    }
+
+    return (
+      <MarkdownContent
+        key={`content-${index}`}
+        content={segment.content}
+        className="break-words text-text-primary"
+      />
+    );
+  });
+}
+
+function renderAssistantContentWithToolCalls(
+  content: string,
+  toolCalls: ChatMessage["tool_calls"],
+  segments: ChatMessageSegment[] | undefined,
+  isCompleted: boolean,
+  language: string,
+) {
+  if (segments && segments.length > 0) {
+    return <>{renderAssistantSegments(segments, isCompleted, language)}</>;
+  }
+
   if (toolCalls.length === 0) {
     return content ? (
       <MarkdownContent content={content} className="break-words text-text-primary" />
@@ -311,7 +371,7 @@ function renderAssistantContentWithToolCalls(
   let cursor = 0;
 
   groups.forEach((group, index) => {
-    const clampedOffset = Math.max(0, Math.min(group.text_offset, content.length));
+    const clampedOffset = normalizeToolCallOffsetForDisplay(content, group.text_offset);
     const chunk = content.slice(cursor, clampedOffset);
 
     if (chunk) {
@@ -956,10 +1016,19 @@ export function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isUserScrolling = useRef(false);
+  const wasLoadingRef = useRef(false);
+  const hasResolvedInitialConversationRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const historyPanelRef = useRef<HTMLDivElement>(null);
   const modelPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    hasResolvedInitialConversationRef.current = false;
+    clear();
+    setRecentConversations([]);
+    setIsHistoryOpen(false);
+  }, [document_id, clear]);
 
   // Fetch catalog; `default_model_id` comes from server OPENROUTER_MODEL (single backend source of truth).
   useEffect(() => {
@@ -1040,6 +1109,7 @@ export function ChatPanel({
   // Load existing messages when panel opens with a pre-existing conversation.
   useEffect(() => {
     if (activeConversationId && messages.length === 0) {
+      touchConversation(activeConversationId).catch(() => undefined);
       load_messages(activeConversationId);
     }
   }, [activeConversationId, load_messages, messages.length]);
@@ -1047,11 +1117,41 @@ export function ChatPanel({
   const loadRecentConversations = useCallback(async () => {
     try {
       const response = await listConversations(document_id);
-      setRecentConversations(response.items.map((item) => ({ id: item.id, title: item.title })));
+      const items = response.items.map((item) => ({ id: item.id, title: item.title }));
+      setRecentConversations(items);
+
+      if (items.length === 0) {
+        if (activeConversationId !== null) {
+          setConversation(null);
+          clear();
+        }
+        return;
+      }
+
+      const hasActiveConversation =
+        activeConversationId !== null && items.some((item) => item.id === activeConversationId);
+
+      if (activeConversationId !== null && !hasActiveConversation) {
+        setConversation(items[0].id);
+        clear();
+        hasResolvedInitialConversationRef.current = true;
+        return;
+      }
+
+      if (hasActiveConversation) {
+        hasResolvedInitialConversationRef.current = true;
+        return;
+      }
+
+      if (!hasResolvedInitialConversationRef.current) {
+        hasResolvedInitialConversationRef.current = true;
+        setConversation(items[0].id);
+        clear();
+      }
     } catch {
       setRecentConversations([]);
     }
-  }, [document_id]);
+  }, [activeConversationId, clear, document_id, setConversation]);
 
   useEffect(() => {
     loadRecentConversations();
@@ -1062,6 +1162,13 @@ export function ChatPanel({
       loadRecentConversations();
     }
   }, [messages.length, loadRecentConversations]);
+
+  useEffect(() => {
+    if (wasLoadingRef.current && !is_loading && messages.length > 0) {
+      loadRecentConversations();
+    }
+    wasLoadingRef.current = is_loading;
+  }, [is_loading, loadRecentConversations, messages.length]);
 
   // Handle manual scroll to detect if user scrolled up.
   const handleScroll = useCallback(() => {
@@ -1134,6 +1241,7 @@ export function ChatPanel({
     if (activeConversationId) {
       deleteConversation(activeConversationId).catch(() => undefined);
     }
+    hasResolvedInitialConversationRef.current = true;
     setConversation(null);
     clear();
     setRecentConversations((prev) => prev.filter((item) => item.id !== activeConversationId));
@@ -1141,13 +1249,16 @@ export function ChatPanel({
 
   const handleSelectConversation = useCallback(
     async (conversationId: string) => {
-      if (conversationId === activeConversationId) return;
+      if (conversationId === activeConversationId) {
+        setIsHistoryOpen(false);
+        return;
+      }
+      hasResolvedInitialConversationRef.current = true;
       setConversation(conversationId);
       clear();
-      await load_messages(conversationId);
       setIsHistoryOpen(false);
     },
-    [activeConversationId, setConversation, clear, load_messages],
+    [activeConversationId, setConversation, clear],
   );
 
   const handleSelectModel = useCallback(

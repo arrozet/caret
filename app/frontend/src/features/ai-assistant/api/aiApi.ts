@@ -222,6 +222,16 @@ export function deleteConversation(conversation_id: string): Promise<void> {
   });
 }
 
+/**
+ * Mark a conversation as recently used so it becomes the default reopened chat.
+ * @param conversation_id - Conversation UUID.
+ */
+export function touchConversation(conversation_id: string): Promise<void> {
+  return api_fetch<void>(`${AI_BASE}/conversations/${conversation_id}/touch`, {
+    method: "POST",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // SSE streaming
 // ---------------------------------------------------------------------------

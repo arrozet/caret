@@ -488,6 +488,57 @@ class TestDeleteConversation:
 
 
 # ---------------------------------------------------------------------------
+# POST /ai/conversations/{id}/touch
+# ---------------------------------------------------------------------------
+
+
+class TestTouchConversation:
+    """Test the conversation touch endpoint used for recent-chat ordering."""
+
+    async def test_touch_conversation_returns_204(self, client_with_auth_and_db) -> None:
+        """POST /ai/conversations/{id}/touch should return 204 when conversation exists."""
+        conv_id = uuid.uuid4()
+
+        with (
+            patch(
+                "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+                new_callable=AsyncMock,
+                return_value=_make_mock_conv(),
+            ),
+            patch(
+                "services.ai_agent_service.AiConversationRepository.touch_updated_at",
+                new_callable=AsyncMock,
+            ) as touch_updated_at,
+        ):
+            response = await client_with_auth_and_db.post(
+                f"/ai/conversations/{conv_id}/touch",
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        assert response.status_code == 204
+        touch_updated_at.assert_awaited_once_with(conv_id)
+
+    async def test_touch_conversation_not_found(self, client_with_auth_and_db) -> None:
+        """POST /ai/conversations/{id}/touch should return 404 when conversation not found."""
+        with patch(
+            "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            response = await client_with_auth_and_db.post(
+                f"/ai/conversations/{uuid.uuid4()}/touch",
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        assert response.status_code == 404
+
+    async def test_touch_conversation_requires_auth(self, client) -> None:
+        """POST /ai/conversations/{id}/touch without auth must return 401."""
+        response = await client.post(f"/ai/conversations/{uuid.uuid4()}/touch")
+        assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
 # POST /ai/conversations/{id}/stream
 # ---------------------------------------------------------------------------
 
