@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ConversationListResponse, ModelsResponse } from "../api/aiApi";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -17,8 +18,18 @@ const mock_clear = vi.fn();
 const mock_clear_pending_change = vi.fn();
 
 const { mock_get_models, mock_list_conversations, mock_touch_conversation } = vi.hoisted(() => ({
-  mock_get_models: vi.fn(() => new Promise<never>(() => {})),
-  mock_list_conversations: vi.fn(() => new Promise<never>(() => {})),
+  mock_get_models: vi.fn(
+    async (): Promise<ModelsResponse> => ({
+      models: [],
+      default_model_id: "mock-model",
+    }),
+  ),
+  mock_list_conversations: vi.fn(
+    async (): Promise<ConversationListResponse> => ({
+      items: [],
+      total: 0,
+    }),
+  ),
   mock_touch_conversation: vi.fn().mockResolvedValue(undefined),
 }));
 

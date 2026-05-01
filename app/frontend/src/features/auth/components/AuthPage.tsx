@@ -1,28 +1,20 @@
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { Moon, Sun } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
-import { useAuthStore } from "../../../stores/authStore";
+import { CaretLogo } from "../../../components/ui/Logo";
 import { useTheme } from "../../../hooks/useTheme";
-import { Sun, Moon, Monitor } from "lucide-react";
+import { useAuthStore } from "../../../stores/authStore";
 
 /** Which form is currently active. */
 type AuthMode = "sign_in" | "sign_up";
 
-/** Map theme value to its corresponding icon component. */
-const theme_icons = {
-  light: Sun,
-  dark: Moon,
-  system: Monitor,
-} as const;
-
 /**
  * Combined Login / Sign-up page.
  *
- * Renders a centered card with email+password form.
- * Uses Supabase Auth via the auth store for sign-in and sign-up.
- * Follows the "Swiss Focus" design: minimal chrome, clean typography.
+ * Uses one centered Caret surface, closer to the editor than to a generic SaaS form.
  */
 export function AuthPage() {
   const { t } = useTranslation("common");
@@ -39,13 +31,12 @@ export function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isOauthLoading, setIsOauthLoading] = useState(false);
 
-  const ThemeIcon = theme_icons[theme];
+  const is_sign_in = mode === "sign_in";
+  const ThemeIcon = theme === "dark" ? Moon : Sun;
+  const panel_title = is_sign_in ? "Sign in" : "Create account";
+  const primary_action = is_sign_in ? t("auth.sign_in") : t("auth.sign_up");
 
-  /**
-   * Handle Google OAuth sign-in.
-   * Supabase redirects to Google, then back to the app.
-   * The onAuthStateChange listener handles session detection.
-   */
+  /** Handle Google OAuth sign-in. */
   async function handleGoogleSignIn() {
     set_error(null);
     setIsOauthLoading(true);
@@ -56,19 +47,15 @@ export function AuthPage() {
       setIsOauthLoading(false);
       set_error(errorMessage);
     }
-    /* If no error, the browser is redirecting to Google — no need to reset loading */
   }
 
-  /**
-   * Handle form submission for both sign-in and sign-up.
-   * On success, navigate to the main editor page.
-   */
+  /** Handle form submission for sign-in and sign-up. */
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     set_error(null);
     setIsLoading(true);
 
-    const action = mode === "sign_in" ? signIn : signUp;
+    const action = is_sign_in ? signIn : signUp;
     const errorMessage = await action(email, password);
 
     setIsLoading(false);
@@ -78,10 +65,7 @@ export function AuthPage() {
       return;
     }
 
-    /* sign_up with Supabase may require email confirmation;
-       the auth state listener in the store will handle the
-       transition once the session is established. */
-    if (mode === "sign_in") {
+    if (is_sign_in) {
       navigate("/documents");
     }
   }
@@ -93,121 +77,133 @@ export function AuthPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-app px-4">
-      {/* Theme toggle — top-right corner */}
-      <div className="absolute top-4 right-4">
+    <div className="relative min-h-screen overflow-hidden bg-app text-text-primary">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(6,102,204,0.12),transparent_36%),radial-gradient(circle_at_top_right,rgba(255,107,53,0.08),transparent_30%)]" />
+        <div className="absolute right-[4vw] top-[10vh] hidden font-document text-[16vw] leading-none text-text-primary/[0.04] lg:block">
+          ^
+        </div>
+      </div>
+
+      <header className="relative z-10 flex h-14 items-center justify-between border-b border-border-subtle bg-surface px-6">
+        <Link to="/" className="transition-opacity hover:opacity-85">
+          <CaretLogo className="gap-1.5" />
+        </Link>
+
         <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label={t(`theme.${theme}`)}>
           <ThemeIcon className="h-5 w-5" />
         </Button>
-      </div>
+      </header>
 
-      {/* Auth card */}
-      <div className="w-full max-w-sm">
-        {/* Branding */}
-        <div className="mb-8 text-center">
-          <Link to="/" className="inline-block hover:opacity-80 transition-opacity">
-            <h1 className="font-ui text-display tracking-tight text-text-primary">
-              {t("app_name")}
-            </h1>
-          </Link>
-          <p className="mt-2 text-ui-base text-text-secondary">{t("auth.tagline")}</p>
-        </div>
+      <main className="relative z-10 flex min-h-[calc(100vh-56px)] items-center justify-center px-6 py-14 md:py-20">
+        <section className="w-full max-w-[30rem]">
+          <div className="relative">
+            <div className="absolute -top-4 left-6 h-px w-20 bg-accent-caret" />
 
-        {/* Card */}
-        <div className="rounded-[6px] border border-border-subtle bg-surface p-6 shadow-subtle">
-          <h2 className="mb-6 text-ui-lg text-text-primary">
-            {mode === "sign_in" ? t("auth.welcome_back") : t("auth.create_account")}
-          </h2>
+            <div className="overflow-hidden rounded-[6px] border border-border-subtle bg-surface shadow-subtle">
+              <div className="border-b border-border-subtle bg-app/40 px-6 py-4 md:px-7">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-ui-sm uppercase tracking-[0.18em] text-text-secondary">
+                    {t("auth.tagline", { defaultValue: "The AI-first document editor" })}
+                  </p>
+                  <div className="h-2 w-14 bg-accent-caret" />
+                </div>
+              </div>
 
-          {/* Google OAuth */}
-          <Button
-            type="button"
-            variant="secondary"
-            size="md"
-            onClick={handleGoogleSignIn}
-            disabled={isOauthLoading || isLoading}
-            isLoading={isOauthLoading}
-            className="w-full"
-          >
-            {!isOauthLoading && <GoogleIcon />}
-            {t("auth.continue_with_google")}
-          </Button>
+              <div className="px-6 py-6 md:px-7 md:py-7">
+                <div className="mb-6 flex items-start justify-between gap-4 border-b border-border-subtle pb-5">
+                  <div className="min-w-0">
+                    <h1 className="font-document text-h2 font-normal tracking-[-0.02em] text-text-primary">
+                      {panel_title}
+                    </h1>
+                  </div>
+                  <div className="mt-1 h-9 w-9 shrink-0 rounded-full border border-border-subtle bg-app" />
+                </div>
 
-          {/* Divider */}
-          <div className="my-5 flex items-center gap-3">
-            <div className="h-px flex-1 bg-border-subtle" />
-            <span className="text-ui-sm text-text-secondary">{t("auth.or_divider")}</span>
-            <div className="h-px flex-1 bg-border-subtle" />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  onClick={handleGoogleSignIn}
+                  disabled={isOauthLoading || isLoading}
+                  isLoading={isOauthLoading}
+                  className="h-12 w-full"
+                >
+                  {!isOauthLoading && <GoogleIcon />}
+                  {t("auth.continue_with_google")}
+                </Button>
+
+                <div className="my-5 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border-subtle" />
+                  <span className="text-ui-sm text-text-secondary">{t("auth.or_divider")}</span>
+                  <div className="h-px flex-1 bg-border-subtle" />
+                </div>
+
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                  <Input
+                    id="email"
+                    label={t("auth.email")}
+                    type="email"
+                    placeholder={t("auth.email_placeholder")}
+                    value={email}
+                    onChange={(e) => set_email(e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
+
+                  <Input
+                    id="password"
+                    label={t("auth.password")}
+                    type="password"
+                    placeholder={t("auth.password_placeholder")}
+                    value={password}
+                    onChange={(e) => set_password(e.target.value)}
+                    required
+                    autoComplete={is_sign_in ? "current-password" : "new-password"}
+                    minLength={6}
+                  />
+
+                  {error && (
+                    <p className="text-ui-sm text-error" role="alert">
+                      {error}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="md"
+                    isLoading={isLoading}
+                    className="h-12 w-full"
+                  >
+                    {isLoading
+                      ? is_sign_in
+                        ? t("auth.signing_in")
+                        : t("auth.signing_up")
+                      : primary_action}
+                  </Button>
+                </form>
+
+                <p className="mt-5 text-center text-ui-sm text-text-secondary">
+                  {is_sign_in ? t("auth.no_account") : t("auth.has_account")}{" "}
+                  <button
+                    type="button"
+                    onClick={toggleMode}
+                    className="cursor-pointer text-accent-main hover:text-accent-caret hover:underline"
+                  >
+                    {is_sign_in ? t("auth.sign_up") : t("auth.sign_in")}
+                  </button>
+                </p>
+              </div>
+            </div>
           </div>
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <Input
-              id="email"
-              label={t("auth.email")}
-              type="email"
-              placeholder={t("auth.email_placeholder")}
-              value={email}
-              onChange={(e) => set_email(e.target.value)}
-              required
-              autoComplete="email"
-            />
-
-            <Input
-              id="password"
-              label={t("auth.password")}
-              type="password"
-              placeholder={t("auth.password_placeholder")}
-              value={password}
-              onChange={(e) => set_password(e.target.value)}
-              required
-              autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
-              minLength={6}
-            />
-
-            {error && (
-              <p className="text-ui-sm text-error" role="alert">
-                {error}
-              </p>
-            )}
-
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              isLoading={isLoading}
-              className="w-full"
-            >
-              {isLoading
-                ? mode === "sign_in"
-                  ? t("auth.signing_in")
-                  : t("auth.signing_up")
-                : mode === "sign_in"
-                  ? t("auth.sign_in")
-                  : t("auth.sign_up")}
-            </Button>
-          </form>
-
-          {/* Toggle link */}
-          <p className="mt-4 text-center text-ui-sm text-text-secondary">
-            {mode === "sign_in" ? t("auth.no_account") : t("auth.has_account")}{" "}
-            <button
-              type="button"
-              onClick={toggleMode}
-              className="cursor-pointer text-accent-main hover:underline"
-            >
-              {mode === "sign_in" ? t("auth.sign_up") : t("auth.sign_in")}
-            </button>
-          </p>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }
 
-/**
- * Google "G" logo as an inline SVG.
- * Uses the official brand colors for recognition.
- */
+/** Google "G" logo as an inline SVG. */
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">

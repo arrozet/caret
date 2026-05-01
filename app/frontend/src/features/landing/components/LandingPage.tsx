@@ -273,13 +273,6 @@ export function LandingPage() {
           <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label={t(`theme.${theme}`)}>
             <ThemeIcon className="h-4 w-4" />
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => navigate(isAuthenticated ? "/documents" : "/login")}
-          >
-            {isAuthenticated ? "Dashboard" : t("auth.sign_in")}
-          </Button>
         </motion.div>
       </header>
 
