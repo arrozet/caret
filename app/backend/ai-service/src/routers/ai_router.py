@@ -23,6 +23,7 @@ from core.auth import AuthUser, get_current_user
 from core.config import settings
 from core.dependencies import get_db_session
 from core.models_catalog import OPENROUTER_MODELS, ModelEntry
+from repositories.ai_repository import DocumentAccessRepository
 from schemas.ai import (
     ConversationCreate,
     ConversationListByDocumentResponse,
@@ -51,6 +52,27 @@ meta_router = APIRouter(tags=["ai"])
 def _get_service(session: AsyncSession) -> AiAgentService:
     """Instantiate the AiAgentService with the request-scoped session."""
     return AiAgentService(session)
+
+
+async def _authorize_document_access(
+    session: AsyncSession,
+    document_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> None:
+    """Reject document-scoped AI operations when the caller lacks access."""
+
+    access_repo = DocumentAccessRepository(session)
+    access = await access_repo.get_document_access(document_id=document_id, user_id=user_id)
+    if access is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document {document_id} not found.",
+        )
+    if not access["has_access"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this document.",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +190,35 @@ async def list_conversations(
         limit=limit,
         offset=offset,
     )
+
+
+@router.post(
+    "/{conversation_id}/touch",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Mark a conversation as recently used",
+    description="Updates updated_at so recent conversations reflect the last chat the user opened.",
+)
+async def touch_conversation(
+    conversation_id: uuid.UUID,
+    user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Touch one conversation after validating ownership."""
+    from repositories.ai_repository import AiConversationRepository
+
+    conv_repo = AiConversationRepository(session)
+    conversation = await conv_repo.get_by_id_for_user(
+        conversation_id=conversation_id,
+        user_id=uuid.UUID(user.user_id),
+    )
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation {conversation_id} not found.",
+        )
+
+    service = _get_service(session)
+    await service.touch_conversation(conversation_id)
 
 
 # ---------------------------------------------------------------------------
@@ -330,16 +381,21 @@ async def stream_ai_response(
             detail=f"Conversation {conversation_id} not found.",
         )
 
+    if body.document_id is not None:
+        await _authorize_document_access(session, body.document_id, uuid.UUID(user.user_id))
+
     service = _get_service(session)
 
     return StreamingResponse(
         content=service.stream_response(
             conversation_id=conversation_id,
             user_message=body.message,
+            user_id=uuid.UUID(user.user_id),
             document_context=body.document_context,
             model_id=body.model_id,
             document_id=body.document_id,  # Pass optional document_id for RAG retrieval
             agent_type=body.agent_type,  # Pass optional agent_type for agentic mode
+            conversation_title=conversation.title,
         ),
         media_type="text/event-stream",
         headers={

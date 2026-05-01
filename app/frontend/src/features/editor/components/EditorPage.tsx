@@ -596,15 +596,6 @@ export function EditorPage() {
     <div className="flex flex-1 flex-col overflow-hidden bg-app">
       {/* Full-width toolbar — spans both editor and AI panel */}
       <div className="shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle flex items-center gap-2 px-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handle_back}
-          className="shrink-0 hover:bg-border-subtle/50"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-
         <div className="flex min-w-0 flex-1 justify-center">
           {editor_instance ? (
             <div className="w-full max-w-[var(--max-width-document-wide)]">

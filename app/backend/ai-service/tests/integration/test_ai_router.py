@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException, status
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -488,6 +489,57 @@ class TestDeleteConversation:
 
 
 # ---------------------------------------------------------------------------
+# POST /ai/conversations/{id}/touch
+# ---------------------------------------------------------------------------
+
+
+class TestTouchConversation:
+    """Test the conversation touch endpoint used for recent-chat ordering."""
+
+    async def test_touch_conversation_returns_204(self, client_with_auth_and_db) -> None:
+        """POST /ai/conversations/{id}/touch should return 204 when conversation exists."""
+        conv_id = uuid.uuid4()
+
+        with (
+            patch(
+                "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+                new_callable=AsyncMock,
+                return_value=_make_mock_conv(),
+            ),
+            patch(
+                "services.ai_agent_service.AiConversationRepository.touch_updated_at",
+                new_callable=AsyncMock,
+            ) as touch_updated_at,
+        ):
+            response = await client_with_auth_and_db.post(
+                f"/ai/conversations/{conv_id}/touch",
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        assert response.status_code == 204
+        touch_updated_at.assert_awaited_once_with(conv_id)
+
+    async def test_touch_conversation_not_found(self, client_with_auth_and_db) -> None:
+        """POST /ai/conversations/{id}/touch should return 404 when conversation not found."""
+        with patch(
+            "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            response = await client_with_auth_and_db.post(
+                f"/ai/conversations/{uuid.uuid4()}/touch",
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        assert response.status_code == 404
+
+    async def test_touch_conversation_requires_auth(self, client) -> None:
+        """POST /ai/conversations/{id}/touch without auth must return 401."""
+        response = await client.post(f"/ai/conversations/{uuid.uuid4()}/touch")
+        assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
 # POST /ai/conversations/{id}/stream
 # ---------------------------------------------------------------------------
 
@@ -543,6 +595,43 @@ class TestStreamAiResponse:
 
         # Assert
         assert response.status_code == 422
+
+    async def test_stream_rejects_unauthorized_rag_document_access(
+        self, client_with_auth_and_db
+    ) -> None:
+        """POST /ai/conversations/{id}/stream should return 403 when RAG access is denied."""
+        # Arrange
+        conv_id = uuid.uuid4()
+        mock_conv = _make_mock_conv()
+        mock_conv.id = conv_id
+
+        with (
+            patch(
+                "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+                new_callable=AsyncMock,
+                return_value=mock_conv,
+            ),
+            patch(
+                "routers.ai_router._authorize_document_access",
+                new_callable=AsyncMock,
+                side_effect=HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have access to this document.",
+                ),
+            ),
+        ):
+            # Act
+            response = await client_with_auth_and_db.post(
+                f"/ai/conversations/{conv_id}/stream",
+                json={
+                    "message": "Hello",
+                    "document_id": str(uuid.uuid4()),
+                },
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        # Assert
+        assert response.status_code == 403
 
     async def test_stream_returns_event_stream_content_type(self, client_with_auth_and_db) -> None:
         """POST /ai/conversations/{id}/stream should return text/event-stream content-type."""

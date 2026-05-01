@@ -6,8 +6,52 @@ import {
   type DocumentContextSnapshot,
   type MessageResponse,
   type DocumentChangePayload,
+  type ToolCallTrace,
 } from "../api/aiApi";
 import { useAiStore } from "../../../stores/aiStore";
+
+export interface ToolCallTraceEntry {
+  /** Name of the tool the assistant invoked. */
+  tool_name: string;
+  /** Character offset in the assistant text when the tool was invoked. */
+  text_offset: number;
+  /** Concise human-readable summary of the tool result. */
+  result_summary?: string | null;
+  /** Raw serialized tool result payload. */
+  result?: unknown;
+}
+
+export interface ChatTextSegment {
+  /** Plain assistant text streamed in order. */
+  type: "text";
+  /** Text content for this segment. */
+  content: string;
+}
+
+export interface ChatToolCallSegment {
+  /** Ordered tool-call trace segment. */
+  type: "tool_calls";
+  /** Tool calls emitted at this point in the stream. */
+  tool_calls: ToolCallTraceEntry[];
+}
+
+export type ChatMessageSegment = ChatTextSegment | ChatToolCallSegment;
+
+function normalize_tool_call_trace(
+  tool_call: string | ToolCallTrace,
+  fallback_offset = 0,
+): ToolCallTraceEntry {
+  if (typeof tool_call === "string") {
+    return { tool_name: tool_call, text_offset: fallback_offset };
+  }
+
+  return {
+    tool_name: tool_call.tool_name,
+    text_offset: tool_call.text_offset ?? fallback_offset,
+    result_summary: tool_call.result_summary,
+    result: tool_call.result,
+  };
+}
 
 /** A chat message as stored in the hook's local state. */
 export interface ChatMessage {
@@ -17,8 +61,86 @@ export interface ChatMessage {
   role: "user" | "assistant";
   /** Full message text content. */
   content: string;
+  /** Ordered tool traces used by the assistant for this reply. */
+  tool_calls: ToolCallTraceEntry[];
+  /** Ordered streamed segments used to preserve text/tool chronology. */
+  segments?: ChatMessageSegment[];
   /** Whether this message is currently being streamed (partial). */
   is_streaming?: boolean;
+}
+
+function upsert_tool_call_trace(
+  traces: ToolCallTraceEntry[],
+  normalizedTrace: ToolCallTraceEntry,
+): ToolCallTraceEntry[] {
+  const existingIndex = traces.findIndex(
+    (trace) =>
+      trace.tool_name === normalizedTrace.tool_name &&
+      trace.text_offset === normalizedTrace.text_offset,
+  );
+
+  if (existingIndex >= 0) {
+    return traces.map((trace, index) =>
+      index === existingIndex ? { ...trace, ...normalizedTrace } : trace,
+    );
+  }
+
+  return [...traces, normalizedTrace];
+}
+
+function append_text_segment(
+  segments: ChatMessageSegment[] | undefined,
+  content: string,
+): ChatMessageSegment[] {
+  const currentSegments = segments ?? [];
+  const lastSegment = currentSegments[currentSegments.length - 1];
+
+  if (lastSegment?.type === "text") {
+    return [
+      ...currentSegments.slice(0, -1),
+      { ...lastSegment, content: lastSegment.content + content },
+    ];
+  }
+
+  return [...currentSegments, { type: "text", content }];
+}
+
+function append_or_update_tool_segment(
+  segments: ChatMessageSegment[] | undefined,
+  normalizedTrace: ToolCallTraceEntry,
+): ChatMessageSegment[] {
+  const currentSegments = segments ?? [];
+
+  for (let index = currentSegments.length - 1; index >= 0; index -= 1) {
+    const segment = currentSegments[index];
+    if (segment?.type !== "tool_calls") {
+      break;
+    }
+
+    const hasMatchingTrace = segment.tool_calls.some(
+      (trace) =>
+        trace.tool_name === normalizedTrace.tool_name &&
+        trace.text_offset === normalizedTrace.text_offset,
+    );
+
+    if (hasMatchingTrace) {
+      return currentSegments.map((entry, entryIndex) =>
+        entryIndex === index
+          ? { ...entry, tool_calls: upsert_tool_call_trace(entry.tool_calls, normalizedTrace) }
+          : entry,
+      );
+    }
+  }
+
+  const lastSegment = currentSegments[currentSegments.length - 1];
+  if (lastSegment?.type === "tool_calls") {
+    return [
+      ...currentSegments.slice(0, -1),
+      { ...lastSegment, tool_calls: [...lastSegment.tool_calls, normalizedTrace] },
+    ];
+  }
+
+  return [...currentSegments, { type: "tool_calls", tool_calls: [normalizedTrace] }];
 }
 
 /** Return value of the useAiStream hook. */
@@ -31,8 +153,6 @@ export interface UseAiStreamReturn {
   error: string | null;
   /** A pending document change proposed by the agent (null if none). */
   pending_change: DocumentChangePayload | null;
-  /** List of tool names called during the current/last agent run. */
-  tool_calls: string[];
   /**
    * Send a user message and stream the AI response into `messages`.
    * Creates a new conversation for the document if none is active.
@@ -82,7 +202,6 @@ export function useAiStream(): UseAiStreamReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [toolCalls, setToolCalls] = useState<string[]>([]);
 
   /** Ref to the AbortController so stop_generating can cancel inflight requests. */
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -105,6 +224,7 @@ export function useAiStream(): UseAiStreamReturn {
           id: m.id,
           role: m.role,
           content: m.content,
+          tool_calls: (m.tool_calls ?? []).map((tool_call) => normalize_tool_call_trace(tool_call)),
         })),
       );
     } catch (err) {
@@ -136,15 +256,12 @@ export function useAiStream(): UseAiStreamReturn {
 
       setError(null);
       setIsLoading(true);
-      setToolCalls([]);
 
       // Ensure we have an active conversation.
       let conversationId = activeConversationId;
       if (!conversationId) {
         try {
-          const generated_title =
-            user_message.length > 40 ? user_message.substring(0, 40) + "..." : user_message;
-          const conversation = await createConversation(document_id, generated_title);
+          const conversation = await createConversation(document_id);
           conversationId = conversation.id;
           setConversation(conversationId);
         } catch (err) {
@@ -156,14 +273,24 @@ export function useAiStream(): UseAiStreamReturn {
 
       // Append the user's message to the local chat history.
       const userMsgId = `user-${Date.now()}`;
-      setMessages((prev) => [...prev, { id: userMsgId, role: "user", content: user_message }]);
+      setMessages((prev) => [
+        ...prev,
+        { id: userMsgId, role: "user", content: user_message, tool_calls: [] },
+      ]);
 
       // Append a streaming placeholder for the assistant reply.
       const assistantPlaceholderId = `assistant-streaming-${Date.now()}`;
       streamingIdRef.current = assistantPlaceholderId;
       setMessages((prev) => [
         ...prev,
-        { id: assistantPlaceholderId, role: "assistant", content: "", is_streaming: true },
+        {
+          id: assistantPlaceholderId,
+          role: "assistant",
+          content: "",
+          tool_calls: [],
+          segments: [],
+          is_streaming: true,
+        },
       ]);
 
       // Set up cancellation.
@@ -187,13 +314,33 @@ export function useAiStream(): UseAiStreamReturn {
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === currentStreamingId
-                  ? { ...msg, content: msg.content + chunk.content }
+                  ? {
+                      ...msg,
+                      content: msg.content + chunk.content,
+                      segments: append_text_segment(msg.segments, chunk.content),
+                    }
                   : msg,
               ),
             );
           } else if (chunk.type === "tool_call" && chunk.tool_name) {
-            // Accumulate tool names invoked during the agent run.
-            setToolCalls((prev) => [...prev, chunk.tool_name!]);
+            const currentStreamingId = streamingIdRef.current;
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id !== currentStreamingId
+                  ? msg
+                  : (() => {
+                      const normalizedTrace = chunk.tool_call
+                        ? normalize_tool_call_trace(chunk.tool_call, msg.content.length)
+                        : { tool_name: chunk.tool_name!, text_offset: msg.content.length };
+
+                      return {
+                        ...msg,
+                        tool_calls: upsert_tool_call_trace(msg.tool_calls, normalizedTrace),
+                        segments: append_or_update_tool_segment(msg.segments, normalizedTrace),
+                      };
+                    })(),
+              ),
+            );
           } else if (chunk.type === "document_change" && chunk.document_change) {
             // Store the proposed document edit for the accept/reject diff viewer.
             setPendingDocumentChange(chunk.document_change);
@@ -261,7 +408,6 @@ export function useAiStream(): UseAiStreamReturn {
     setError(null);
     setIsLoading(false);
     setPendingDocumentChange(null);
-    setToolCalls([]);
     streamingIdRef.current = null;
   }, [setPendingDocumentChange]);
 
@@ -277,7 +423,6 @@ export function useAiStream(): UseAiStreamReturn {
     is_loading: isLoading,
     error,
     pending_change: pendingDocumentChange,
-    tool_calls: toolCalls,
     send_message,
     stop_generating,
     load_messages,

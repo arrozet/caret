@@ -32,12 +32,21 @@ def _make_mock_session() -> MagicMock:
 def _make_mock_chunk(
     chunk_index: int = 0,
     chunk_text: str = "sample text",
+    document_id: uuid.UUID | None = None,
+    workspace_id: uuid.UUID | None = None,
+    document_title: str = "Sample document",
+    is_current_document: bool = True,
 ) -> MagicMock:
-    """Build a mock DocumentEmbedding ORM object."""
-    chunk = MagicMock()
-    chunk.chunk_index = chunk_index
-    chunk.chunk_text = chunk_text
-    return chunk
+    """Build a primitive workspace search row."""
+    return {
+        "document_id": document_id or uuid.uuid4(),
+        "workspace_id": workspace_id or uuid.uuid4(),
+        "chunk_index": chunk_index,
+        "chunk_text": chunk_text,
+        "document_title": document_title,
+        "is_current_document": is_current_document,
+        "distance": 0.0,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +213,7 @@ class TestEmbeddingServiceIndexDocument:
         # Arrange
         session = _make_mock_session()
         document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
         content = "Hello world. " * 10  # short text → single chunk
 
         fake_vector = [0.1] * 1536
@@ -220,6 +230,16 @@ class TestEmbeddingServiceIndexDocument:
             ),
             patch.object(
                 service._repo,
+                "get_document_metadata",
+                new_callable=AsyncMock,
+                return_value={
+                    "document_id": document_id,
+                    "workspace_id": workspace_id,
+                    "document_title": "Test document",
+                },
+            ),
+            patch.object(
+                service._repo,
                 "bulk_insert",
                 new_callable=AsyncMock,
                 return_value=expected_chunk_count,
@@ -233,7 +253,8 @@ class TestEmbeddingServiceIndexDocument:
         mock_bulk_insert.assert_called_once()
         call_args = mock_bulk_insert.call_args
         assert call_args[0][0] == document_id  # first positional arg is document_id
-        chunk_rows = call_args[0][1]
+        assert call_args[0][1] == workspace_id
+        chunk_rows = call_args[0][2]
         assert len(chunk_rows) == 1
         idx, text_chunk, vector = chunk_rows[0]
         assert idx == 0
@@ -242,12 +263,52 @@ class TestEmbeddingServiceIndexDocument:
         assert vector == fake_vector
 
     @pytest.mark.asyncio
+    async def test_index_document_resolves_workspace_from_document_metadata(self) -> None:
+        """index_document should resolve workspace metadata in the backend before inserting."""
+        # Arrange
+        session = _make_mock_session()
+        document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+
+        service = EmbeddingService(session)
+
+        with (
+            patch.object(
+                service,
+                "_embed_texts",
+                new_callable=AsyncMock,
+                return_value=[[0.1] * 1536],
+            ),
+            patch.object(
+                service._repo,
+                "get_document_metadata",
+                new_callable=AsyncMock,
+                return_value={
+                    "document_id": document_id,
+                    "workspace_id": workspace_id,
+                    "document_title": "Resolved document",
+                },
+            ) as mock_get_document_metadata,
+            patch.object(
+                service._repo,
+                "bulk_insert",
+                new_callable=AsyncMock,
+                return_value=1,
+            ) as mock_bulk_insert,
+        ):
+            # Act
+            await service.index_document(document_id=document_id, content="Hello world")
+
+        # Assert
+        mock_get_document_metadata.assert_awaited_once_with(document_id)
+        assert mock_bulk_insert.call_args[0][1] == workspace_id
+
+    @pytest.mark.asyncio
     async def test_index_document_empty_content_returns_zero(self) -> None:
         """index_document with empty content should return 0 without calling embedding API."""
         # Arrange
         session = _make_mock_session()
         document_id = uuid.uuid4()
-
         service = EmbeddingService(session)
 
         with patch.object(
@@ -288,13 +349,23 @@ class TestEmbeddingServiceIndexDocument:
                 new_callable=AsyncMock,
                 return_value=5,
             ) as mock_bulk_insert,
+            patch.object(
+                service._repo,
+                "get_document_metadata",
+                new_callable=AsyncMock,
+                return_value={
+                    "document_id": document_id,
+                    "workspace_id": uuid.uuid4(),
+                    "document_title": "Long document",
+                },
+            ),
         ):
             # Act
             await service.index_document(document_id=document_id, content=content)
 
         # Assert — bulk_insert received multiple chunk rows
         call_args = mock_bulk_insert.call_args
-        chunk_rows = call_args[0][1]
+        chunk_rows = call_args[0][2]
         assert len(chunk_rows) > 1
 
     @pytest.mark.asyncio
@@ -321,6 +392,16 @@ class TestEmbeddingServiceIndexDocument:
                 new_callable=AsyncMock,
                 return_value=1,
             ),
+            patch.object(
+                service._repo,
+                "get_document_metadata",
+                new_callable=AsyncMock,
+                return_value={
+                    "document_id": document_id,
+                    "workspace_id": uuid.uuid4(),
+                    "document_title": "Locked document",
+                },
+            ),
         ):
             await service.index_document(document_id=document_id, content=content)
 
@@ -345,12 +426,21 @@ class TestEmbeddingServiceSearch:
         # Arrange
         session = _make_mock_session()
         document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
         query = "What is the main topic?"
 
         fake_query_vector = [0.5] * 1536
-        mock_chunk = _make_mock_chunk(chunk_index=2, chunk_text="Relevant passage here.")
+        mock_chunk = _make_mock_chunk(
+            chunk_index=2,
+            chunk_text="Relevant passage here.",
+            document_id=document_id,
+            workspace_id=workspace_id,
+            document_title="Current doc",
+            is_current_document=False,
+        )
         # Repository returns (DocumentEmbedding, cosine_distance) tuples
-        mock_repo_hits = [(mock_chunk, 0.15)]  # distance 0.15 → score 0.85
+        mock_chunk["distance"] = 0.15
+        mock_repo_hits = [mock_chunk]  # distance 0.15 → score 0.85
 
         service = EmbeddingService(session)
 
@@ -363,7 +453,7 @@ class TestEmbeddingServiceSearch:
             ),
             patch.object(
                 service._repo,
-                "search",
+                "search_workspace",
                 new_callable=AsyncMock,
                 return_value=mock_repo_hits,
             ),
@@ -372,14 +462,19 @@ class TestEmbeddingServiceSearch:
             results = await service.search_similar_chunks(
                 query=query,
                 document_id=document_id,
+                user_id=uuid.uuid4(),
                 top_k=5,
             )
 
         # Assert
         assert len(results) == 1
         chunk_result = results[0]
+        assert chunk_result.document_id == document_id
+        assert chunk_result.workspace_id == workspace_id
         assert chunk_result.chunk_index == 2
         assert chunk_result.chunk_text == "Relevant passage here."
+        assert chunk_result.document_title == "Current doc"
+        assert chunk_result.is_current_document is False
         assert abs(chunk_result.score - 0.85) < 1e-6
 
     @pytest.mark.asyncio
@@ -388,6 +483,7 @@ class TestEmbeddingServiceSearch:
         # Arrange
         session = _make_mock_session()
         document_id = uuid.uuid4()
+        user_id = uuid.uuid4()
 
         service = EmbeddingService(session)
 
@@ -400,7 +496,7 @@ class TestEmbeddingServiceSearch:
             ),
             patch.object(
                 service._repo,
-                "search",
+                "search_workspace",
                 new_callable=AsyncMock,
                 return_value=[],
             ) as mock_search,
@@ -409,14 +505,18 @@ class TestEmbeddingServiceSearch:
             await service.search_similar_chunks(
                 query="test",
                 document_id=document_id,
+                user_id=user_id,
                 top_k=3,
+                exclude_current_document=True,
             )
 
         # Assert
         mock_search.assert_called_once_with(
             query_embedding=[0.0] * 1536,
             document_id=document_id,
+            user_id=user_id,
             top_k=3,
+            exclude_current_document=True,
         )
 
     @pytest.mark.asyncio
@@ -428,7 +528,8 @@ class TestEmbeddingServiceSearch:
 
         mock_chunk = _make_mock_chunk(chunk_index=0, chunk_text="distant chunk")
         # cosine distance > 1.0 (should not happen normally but must be handled safely)
-        mock_repo_hits = [(mock_chunk, 1.5)]
+        mock_chunk["distance"] = 1.5
+        mock_repo_hits = [mock_chunk]
 
         service = EmbeddingService(session)
 
@@ -441,7 +542,7 @@ class TestEmbeddingServiceSearch:
             ),
             patch.object(
                 service._repo,
-                "search",
+                "search_workspace",
                 new_callable=AsyncMock,
                 return_value=mock_repo_hits,
             ),
@@ -450,6 +551,7 @@ class TestEmbeddingServiceSearch:
             results = await service.search_similar_chunks(
                 query="query",
                 document_id=document_id,
+                user_id=uuid.uuid4(),
             )
 
         # Assert

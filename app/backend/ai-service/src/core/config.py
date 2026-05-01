@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
     # Single source of truth for default LLM when the client omits model_id or for GET /ai/models.
     openrouter_model: str = Field(
-        default="x-ai/grok-4.1-fast",
+        default="deepseek/deepseek-v4-flash",
         validation_alias="OPENROUTER_MODEL",
     )
 

@@ -16,7 +16,7 @@ from pathlib import Path
 
 # Make sure the src directory is on sys.path so that `from core.xxx import ...`
 # always resolves, regardless of how alembic is invoked.
-_src_root = Path(__file__).parents[3]
+_src_root = Path(__file__).parents[2]
 if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 

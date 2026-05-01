@@ -19,12 +19,18 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test-dummy-key-for-unit-tests")
 
 from unittest.mock import MagicMock  # noqa: E402
 
+from pydantic_ai.messages import ModelResponse, TextPart  # noqa: E402
+from pydantic_ai.models.function import FunctionModel  # noqa: E402
+
 from agents.general_agent import (  # noqa: E402
     GeneralAgent,
     GeneralAgentDeps,
+    build_general_agent,
     get_document_content,
     propose_document_replacement,
+    search_workspace_context,
 )
+from schemas.embedding import ChunkResult  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -176,6 +182,51 @@ class TestProposeDocumentReplacement:
 
 
 # ---------------------------------------------------------------------------
+# search_workspace_context tool
+# ---------------------------------------------------------------------------
+
+
+class TestSearchWorkspaceContext:
+    """Unit tests for the workspace search tool wrapper."""
+
+    async def test_search_workspace_context_uses_injected_dependency(self) -> None:
+        """search_workspace_context should delegate to the injected service callback."""
+        expected = [
+            ChunkResult(
+                document_id="95ee18ab-9ddc-4137-a8b9-e94898e4d80b",
+                workspace_id="c7e181ce-2d7a-4fa5-af3f-9276f98a977a",
+                chunk_index=0,
+                chunk_text="Workspace context",
+                score=0.91,
+                document_title="Reference",
+                is_current_document=False,
+            )
+        ]
+
+        async def fake_search(query: str, exclude_current_document: bool, top_k: int):
+            assert query == "roadmap"
+            assert exclude_current_document is True
+            assert top_k == 3
+            return expected
+
+        deps = GeneralAgentDeps(search_workspace_context=fake_search)
+        ctx = make_ctx(deps)
+
+        result = await search_workspace_context(ctx, "roadmap", True, 3)
+
+        assert result == expected
+
+    async def test_search_workspace_context_reports_missing_dependency(self) -> None:
+        """search_workspace_context should degrade gracefully when no callback was injected."""
+        deps = GeneralAgentDeps()
+        ctx = make_ctx(deps)
+
+        result = await search_workspace_context(ctx, "roadmap")
+
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
 # Smoke test: agent is importable and has tools registered
 # ---------------------------------------------------------------------------
 
@@ -193,3 +244,88 @@ class TestGeneralAgentRegistration:
         """GeneralAgent must have GeneralAgentDeps as its deps_type."""
         # PydanticAI exposes _deps_type on Agent
         assert GeneralAgent._deps_type is GeneralAgentDeps
+
+    def test_build_general_agent_registers_metric_tools(self) -> None:
+        """The general agent should expose the metric tool pack on the single agent instance."""
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")]))
+        )
+
+        tool_names = set(agent._function_toolset.tools.keys())
+
+        assert "count_words" in tool_names
+        assert "count_characters" in tool_names
+        assert "count_paragraphs" in tool_names
+        assert "count_sentences" in tool_names
+        assert "estimate_reading_time" in tool_names
+        assert "search_workspace_context" in tool_names
+
+    def test_system_prompt_requires_automatic_metric_tool_usage(self) -> None:
+        """The prompt should force internal metric-tool selection for metric intents."""
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")]))
+        )
+
+        system_prompt = agent._system_prompts[0]
+        normalized_prompt = " ".join(system_prompt.split())
+
+        assert "When the user asks for document metrics" in normalized_prompt
+        assert "MUST call the relevant metric tool(s) automatically" in normalized_prompt
+        assert "Do not ask the user which tool to use" in normalized_prompt
+
+    def test_system_prompt_requires_markdown_chat_replies(self) -> None:
+        """The prompt should require Markdown formatting for normal chat replies."""
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")]))
+        )
+
+        system_prompt = agent._system_prompts[0]
+
+        assert "Every chat reply must be valid Markdown" in system_prompt
+
+    def test_system_prompt_describes_workspace_search_tool(self) -> None:
+        """The prompt should describe the workspace search tool."""
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")]))
+        )
+
+        system_prompt = agent._system_prompts[0]
+
+        assert "search_workspace_context" in system_prompt
+        assert "same workspace" in system_prompt
+
+    def test_system_prompt_defaults_to_document_edits_when_ambiguous(self) -> None:
+        """
+        The prompt should default to editing the document unless
+        the request is clearly chat-only.
+        """
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")]))
+        )
+
+        system_prompt = agent._system_prompts[0]
+        normalized_prompt = " ".join(system_prompt.split())
+
+        assert (
+            "Assume the user wants you to update the document unless "
+            "the request is clearly chat-only"
+        ) in normalized_prompt
+        assert (
+            "If the request is ambiguous between replying in chat and "
+            "updating the document, choose to update the document"
+        ) in normalized_prompt
+
+    def test_build_general_agent_accepts_system_prompt_override(self) -> None:
+        """The general agent factory should accept a per-request system prompt override."""
+
+        agent = build_general_agent(
+            FunctionModel(lambda messages, info: ModelResponse(parts=[TextPart(content="ok")])),
+            system_prompt="custom prompt",
+        )
+
+        assert agent._system_prompts[0] == "custom prompt"

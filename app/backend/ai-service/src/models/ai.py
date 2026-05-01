@@ -12,6 +12,7 @@ Rule: never return SQLAlchemy models directly from a Router — map to Pydantic 
 
 import enum
 import uuid
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -30,7 +31,7 @@ from sqlalchemy import (
 # documents.id are enforced at the database level (via Alembic migrations)
 # but must NOT appear in the ORM model here — SQLAlchemy would try to resolve
 # them against the local metadata and raise NoReferencedTableError at startup.
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.types import TIMESTAMP
@@ -161,6 +162,12 @@ class AiMessage(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tool_calls: Mapped[list[dict[str, Any] | str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
 
     created_at: Mapped[TIMESTAMP] = mapped_column(
         TIMESTAMP(timezone=True),
@@ -275,6 +282,7 @@ class DocumentEmbedding(Base):
     Columns:
         id           : UUID primary key.
         document_id  : FK to documents.id (enforced in DB, omitted from ORM).
+        workspace_id : Workspace UUID denormalized from public.documents.
         chunk_index  : Zero-based position of this chunk in the document.
         chunk_text   : The raw text of the chunk.
         embedding    : 1536-dimensional float32 vector (pgvector).
@@ -290,6 +298,11 @@ class DocumentEmbedding(Base):
         server_default=text("gen_random_uuid()"),
     )
     document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
         index=True,

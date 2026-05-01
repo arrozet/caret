@@ -27,9 +27,9 @@ RUN chmod -R a+rX /app/.venv
 
 # Run as non-root user for security.
 # nobody's HOME=/nonexistent on Debian, so we bypass uv at runtime entirely
-# by invoking uvicorn directly from the pre-built venv.
+# by invoking alembic + uvicorn directly from the pre-built venv.
 USER nobody
 
 EXPOSE 8000
 
-CMD ["/app/.venv/bin/uvicorn", "main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/bin/sh", "-c", "/app/.venv/bin/alembic -c /app/alembic.ini upgrade head && exec /app/.venv/bin/uvicorn main:app --app-dir src --host 0.0.0.0 --port 8000"]

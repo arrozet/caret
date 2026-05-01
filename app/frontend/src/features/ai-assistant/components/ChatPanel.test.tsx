@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -16,20 +16,40 @@ const mock_load_messages = vi.fn();
 const mock_clear = vi.fn();
 const mock_clear_pending_change = vi.fn();
 
-const { mock_get_models, mock_list_conversations } = vi.hoisted(() => ({
+const { mock_get_models, mock_list_conversations, mock_touch_conversation } = vi.hoisted(() => ({
   mock_get_models: vi.fn(() => new Promise<never>(() => {})),
   mock_list_conversations: vi.fn(() => new Promise<never>(() => {})),
+  mock_touch_conversation: vi.fn().mockResolvedValue(undefined),
 }));
 
 let mock_messages: Array<{
   id: string;
   role: "user" | "assistant";
   content: string;
+  tool_calls: Array<{
+    tool_name: string;
+    text_offset: number;
+    result_summary?: string | null;
+    result?: unknown;
+  }>;
+  segments?: Array<
+    | { type: "text"; content: string }
+    | {
+        type: "tool_calls";
+        tool_calls: Array<{
+          tool_name: string;
+          text_offset: number;
+          result_summary?: string | null;
+          result?: unknown;
+        }>;
+      }
+  >;
   is_streaming?: boolean;
 }> = [];
 let mock_is_loading = false;
 let mock_error: string | null = null;
 let mock_ai_mode: "ask" | "agent" = "ask";
+let mock_active_conversation_id: string | null = null;
 
 vi.mock("../hooks/useAiStream", () => ({
   useAiStream: () => ({
@@ -43,7 +63,6 @@ vi.mock("../hooks/useAiStream", () => ({
       return mock_error;
     },
     pending_change: null,
-    tool_calls: [],
     send_message: mock_send_message,
     stop_generating: mock_stop_generating,
     load_messages: mock_load_messages,
@@ -61,7 +80,7 @@ const mock_set_conversation = vi.fn();
 vi.mock("../../../stores/aiStore", () => ({
   useAiStore: () => ({
     isPanelOpen: true,
-    activeConversationId: null,
+    activeConversationId: mock_active_conversation_id,
     aiMode: mock_ai_mode,
     selectedAgentType: "general",
     selectedModelId: undefined,
@@ -96,6 +115,7 @@ vi.mock("../api/aiApi", () => ({
   createConversation: vi.fn(),
   listMessages: vi.fn(),
   listConversations: mock_list_conversations,
+  touchConversation: mock_touch_conversation,
   streamAiResponse: vi.fn(),
   getModels: mock_get_models,
 }));
@@ -114,6 +134,7 @@ describe("ChatPanel", () => {
     mock_is_loading = false;
     mock_error = null;
     mock_ai_mode = "ask";
+    mock_active_conversation_id = null;
   });
 
   it("renders the panel title", () => {
@@ -147,15 +168,15 @@ describe("ChatPanel", () => {
   });
 
   it("does not render the empty state when messages exist", () => {
-    mock_messages = [{ id: "m1", role: "user", content: "Hello" }];
+    mock_messages = [{ id: "m1", role: "user", content: "Hello", tool_calls: [] }];
     render(<ChatPanel document_id="doc-1" />);
     expect(screen.queryByText("empty_state")).not.toBeInTheDocument();
   });
 
   it("renders user and assistant messages", () => {
     mock_messages = [
-      { id: "m1", role: "user", content: "My question" },
-      { id: "m2", role: "assistant", content: "My answer" },
+      { id: "m1", role: "user", content: "My question", tool_calls: [] },
+      { id: "m2", role: "assistant", content: "My answer", tool_calls: [] },
     ];
     render(<ChatPanel document_id="doc-1" />);
     expect(screen.getByText("My question")).toBeInTheDocument();
@@ -164,7 +185,12 @@ describe("ChatPanel", () => {
 
   it("renders assistant markdown content", () => {
     mock_messages = [
-      { id: "m1", role: "assistant", content: "**Bold** and [link](https://example.com)" },
+      {
+        id: "m1",
+        role: "assistant",
+        content: "**Bold** and [link](https://example.com)",
+        tool_calls: [],
+      },
     ];
 
     render(<ChatPanel document_id="doc-1" />);
@@ -183,6 +209,7 @@ describe("ChatPanel", () => {
         id: "m1",
         role: "assistant",
         content: "<think>Internal note</think>Final answer",
+        tool_calls: [],
       },
     ];
 
@@ -250,5 +277,197 @@ describe("ChatPanel", () => {
     render(<ChatPanel document_id="doc-1" />);
     const log = screen.getByRole("log");
     expect(log).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("auto-selects the most recent conversation when none is active", async () => {
+    mock_list_conversations.mockResolvedValueOnce({
+      items: [
+        {
+          id: "conv-latest",
+          title: "Latest",
+          document_id: "doc-1",
+          created_at: "",
+          updated_at: "",
+        },
+      ],
+      total: 1,
+    });
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    await waitFor(() => {
+      expect(mock_set_conversation).toHaveBeenCalledWith("conv-latest");
+    });
+  });
+
+  it("touches and loads the active conversation on open", async () => {
+    mock_active_conversation_id = "conv-1";
+    mock_list_conversations.mockResolvedValueOnce({
+      items: [
+        { id: "conv-1", title: "Latest", document_id: "doc-1", created_at: "", updated_at: "" },
+      ],
+      total: 1,
+    });
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    await waitFor(() => {
+      expect(mock_touch_conversation).toHaveBeenCalledWith("conv-1");
+      expect(mock_load_messages).toHaveBeenCalledWith("conv-1");
+    });
+  });
+
+  it("does not auto-restore an old conversation after starting a new one", async () => {
+    mock_active_conversation_id = "conv-old";
+    mock_messages = [{ id: "m1", role: "user", content: "Hello", tool_calls: [] }];
+
+    mock_list_conversations
+      .mockResolvedValueOnce({
+        items: [
+          { id: "conv-old", title: "Old", document_id: "doc-1", created_at: "", updated_at: "" },
+        ],
+        total: 1,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          { id: "conv-old", title: "Old", document_id: "doc-1", created_at: "", updated_at: "" },
+        ],
+        total: 1,
+      });
+
+    const { rerender } = render(<ChatPanel document_id="doc-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "new_conversation" }));
+
+    mock_active_conversation_id = null;
+    mock_messages = [];
+    rerender(<ChatPanel document_id="doc-1" />);
+
+    await waitFor(() => {
+      expect(mock_set_conversation).not.toHaveBeenCalledWith("conv-old");
+    });
+  });
+
+  it("renders an inline assistant tool trace for persisted history", () => {
+    mock_ai_mode = "agent";
+    mock_messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: "My answer",
+        tool_calls: [
+          { tool_name: "get_document_content", text_offset: 0 },
+          {
+            tool_name: "count_words",
+            text_offset: 0,
+            result_summary: "4 words",
+            result: { value: 4 },
+          },
+        ],
+      },
+    ];
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    expect(
+      screen.getByText("I read the document and counted the words before answering."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByText("I read the document and counted the words before answering."),
+    );
+
+    expect(screen.getByText("Read document")).toBeInTheDocument();
+    expect(screen.getByText("Counted words")).toBeInTheDocument();
+    expect(screen.getByText("4 words")).toBeInTheDocument();
+  });
+
+  it("renders pending inline tool trace while streaming", () => {
+    mock_ai_mode = "agent";
+    mock_is_loading = true;
+    mock_messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: "",
+        tool_calls: [{ tool_name: "count_words", text_offset: 0 }],
+        is_streaming: true,
+      },
+    ];
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    expect(screen.getByText("Let me count the words first...")).toBeInTheDocument();
+    expect(screen.getByText("Counting words...")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
+  });
+
+  it("renders streamed tool traces in chronological order with text segments", () => {
+    mock_ai_mode = "agent";
+    mock_messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: "Before.\n\nAfter.",
+        segments: [
+          { type: "text", content: "Before.\n\n" },
+          {
+            type: "tool_calls",
+            tool_calls: [
+              {
+                tool_name: "count_words",
+                text_offset: 8,
+                result_summary: "2 words",
+                result: { value: 2 },
+              },
+            ],
+          },
+          { type: "text", content: "After." },
+        ],
+        tool_calls: [
+          {
+            tool_name: "count_words",
+            text_offset: 9,
+            result_summary: "2 words",
+            result: { value: 2 },
+          },
+        ],
+      },
+    ];
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    const before = screen.getByText("Before.");
+    const trace = screen.getByText("I counted the words before answering.");
+    const after = screen.getByText("After.");
+
+    expect(before.compareDocumentPosition(trace) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(trace.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("falls back to stored offsets for persisted history", () => {
+    mock_ai_mode = "agent";
+    mock_messages = [
+      {
+        id: "m1",
+        role: "assistant",
+        content: "La frase existente sigue igual.",
+        tool_calls: [
+          {
+            tool_name: "propose_document_replacement",
+            text_offset: 14,
+            result_summary: "edit prepared",
+            result: { ok: true },
+          },
+        ],
+      },
+    ];
+
+    render(<ChatPanel document_id="doc-1" />);
+
+    expect(screen.getByText("La frase existente")).toBeInTheDocument();
+    expect(screen.getByText("sigue igual.")).toBeInTheDocument();
+    expect(screen.queryByText(/^exist$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^ente sigue igual\.$/)).not.toBeInTheDocument();
   });
 });

@@ -61,26 +61,7 @@ class ModelEntry:
 # Free models  (is_free=True, gateway="openrouter")
 # ---------------------------------------------------------------------------
 
-FREE_MODELS: list[ModelEntry] = [
-    ModelEntry(
-        id="google/gemma-4-31b-it:free",
-        name="Gemma 4 31B",
-        provider="Google",
-        gateway="openrouter",
-        is_free=True,
-        context_window=262_144,
-        description="Instruction-tuned Gemma with native function calling and long context.",
-    ),
-    ModelEntry(
-        id="z-ai/glm-4.5-air:free",
-        name="GLM-4.5 Air",
-        provider="Z.AI",
-        gateway="openrouter",
-        is_free=True,
-        context_window=128_000,
-        description="Lightweight, fast general-purpose model from Z.AI.",
-    ),
-]
+FREE_MODELS: list[ModelEntry] = []
 
 # ---------------------------------------------------------------------------
 # Paid models  (is_free=False)
@@ -88,78 +69,49 @@ FREE_MODELS: list[ModelEntry] = [
 
 PAID_MODELS: list[ModelEntry] = [
     ModelEntry(
-        id="x-ai/grok-4.1-fast",
-        name="Grok 4.1 Fast",
-        provider="xAI",
-        gateway="openrouter",
-        is_free=False,
-        context_window=2_000_000,
-        description=(
-            "Agentic tool-calling model for support, research, and long context via OpenRouter."
-        ),
-    ),
-    ModelEntry(
-        id="openai/gpt-5-nano",
-        name="GPT-5 Nano",
-        provider="OpenAI",
-        gateway="openrouter",
-        is_free=False,
-        context_window=400_000,
-        description="Smallest GPT-5 family variant — fast, low-latency developer workflows.",
-    ),
-    ModelEntry(
-        id="openai/gpt-5.4-nano",
-        name="GPT-5.4 Nano",
-        provider="OpenAI",
-        gateway="openrouter",
-        is_free=False,
-        context_window=400_000,
-        description="Lightweight GPT-5.4 tier for speed, volume, and sub-agent style tasks.",
-    ),
-    ModelEntry(
-        id="google/gemini-3.1-flash-lite-preview",
-        name="Gemini 3.1 Flash Lite",
-        provider="Google",
-        gateway="openrouter",
-        is_free=False,
-        context_window=1_048_576,
-        description="High-efficiency Gemini preview for volume, RAG, translation, and code.",
-    ),
-    ModelEntry(
-        id="z-ai/glm-4.7-flash",
-        name="GLM 4.7 Flash",
-        provider="Z.AI",
-        gateway="openrouter",
-        is_free=False,
-        context_window=202_752,
-        description="30B-class model tuned for coding, planning, and tool collaboration.",
-    ),
-    ModelEntry(
-        id="deepseek/deepseek-v3.2",
-        name="DeepSeek V3.2",
+        id="deepseek/deepseek-v4-flash",
+        name="DeepSeek V4 Flash",
         provider="DeepSeek",
         gateway="openrouter",
         is_free=False,
-        context_window=163_840,
-        description="Reasoning and agentic tool-use focused general model.",
+        context_window=1_048_576,
+        description="Primary model for fast, high-throughput general and coding workloads.",
     ),
     ModelEntry(
-        id="xiaomi/mimo-v2-flash",
-        name="MiMo-V2 Flash",
+        id="minimax/minimax-m2.7",
+        name="MiniMax M2.7",
+        provider="MiniMax",
+        gateway="openrouter",
+        is_free=False,
+        context_window=196_608,
+        description="First fallback model with strong agentic and planning capabilities.",
+    ),
+    ModelEntry(
+        id="xiaomi/mimo-v2.5",
+        name="MiMo-V2.5",
         provider="Xiaomi",
         gateway="openrouter",
         is_free=False,
-        context_window=262_144,
-        description="Open MoE foundation model with hybrid-thinking toggle.",
+        context_window=1_048_576,
+        description="Second fallback model optimized for multimodal and long-context tasks.",
     ),
     ModelEntry(
-        id="moonshotai/kimi-k2.5",
-        name="Kimi K2.5",
+        id="xiaomi/mimo-v2.5-pro",
+        name="MiMo-V2.5-Pro",
+        provider="Xiaomi",
+        gateway="openrouter",
+        is_free=False,
+        context_window=1_048_576,
+        description="Third fallback model focused on stronger complex reasoning performance.",
+    ),
+    ModelEntry(
+        id="moonshotai/kimi-k2.6",
+        name="Kimi K2.6",
         provider="Moonshot AI",
         gateway="openrouter",
         is_free=False,
-        context_window=262_144,
-        description="Native multimodal model with strong visual coding and agent-style use.",
+        context_window=256_000,
+        description="Final fallback model for long-horizon coding and orchestration tasks.",
     ),
 ]
 

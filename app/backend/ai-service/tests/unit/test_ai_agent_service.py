@@ -17,9 +17,11 @@ import pytest
 from pydantic_ai import (
     AgentRunResultEvent,
     FunctionToolCallEvent,
+    FunctionToolResultEvent,
+    PartDeltaEvent,
     PartStartEvent,
 )
-from pydantic_ai.messages import TextPart, ToolCallPart
+from pydantic_ai.messages import TextPart, TextPartDelta, ToolCallPart, ToolReturnPart
 
 from models.ai import AiMessageRole
 from services.ai_agent_service import AiAgentService, _build_model, _normalize_document_context
@@ -59,6 +61,7 @@ def _make_mock_message(
     conversation_id: uuid.UUID | None = None,
     role: AiMessageRole = AiMessageRole.user,
     content: str = "Hello",
+    tool_calls: list[str] | None = None,
 ) -> MagicMock:
     """Build a mock AiMessage model."""
     msg = MagicMock()
@@ -67,6 +70,7 @@ def _make_mock_message(
     msg.role = role
     msg.content = content
     msg.token_count = None
+    msg.tool_calls = list(tool_calls or [])
     msg.created_at = datetime.now(UTC)
     msg.updated_at = datetime.now(UTC)
     return msg
@@ -207,6 +211,21 @@ class TestAiAgentServiceConversations:
         assert result.id == new_conv.id
 
     @pytest.mark.asyncio
+    async def test_touch_conversation_updates_recency(self) -> None:
+        """touch_conversation should delegate to the repository touch helper."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+
+        with patch(
+            "services.ai_agent_service.AiConversationRepository.touch_updated_at",
+            new_callable=AsyncMock,
+        ) as touch_updated_at:
+            service = AiAgentService(session)
+            await service.touch_conversation(conv_id)
+
+        touch_updated_at.assert_awaited_once_with(conv_id)
+
+    @pytest.mark.asyncio
     async def test_list_messages_empty(self) -> None:
         """list_messages should return an empty list and total=0 when no messages exist."""
         # Arrange
@@ -235,7 +254,10 @@ class TestAiAgentServiceConversations:
         mock_msgs = [
             _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user, content="Hi"),
             _make_mock_message(
-                conversation_id=conv_id, role=AiMessageRole.assistant, content="Hello!"
+                conversation_id=conv_id,
+                role=AiMessageRole.assistant,
+                content="Hello!",
+                tool_calls=["get_document_content", "count_words"],
             ),
         ]
 
@@ -252,6 +274,31 @@ class TestAiAgentServiceConversations:
         assert result.total == 2
         assert result.items[0].role == AiMessageRole.user
         assert result.items[1].role == AiMessageRole.assistant
+        assert result.items[1].tool_calls[0].tool_name == "get_document_content"
+        assert result.items[1].tool_calls[1].tool_name == "count_words"
+
+    @pytest.mark.asyncio
+    async def test_list_messages_normalizes_legacy_string_tool_calls(self) -> None:
+        """Legacy string tool-call payloads should be exposed as structured traces."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Hello!",
+            tool_calls=["count_words"],
+        )
+
+        with patch(
+            "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+            new_callable=AsyncMock,
+            return_value=[mock_msg],
+        ):
+            service = AiAgentService(session)
+            result = await service.list_messages(conv_id)
+
+        assert result.items[0].tool_calls[0].tool_name == "count_words"
+        assert result.items[0].tool_calls[0].text_offset == 0
 
 
 # ---------------------------------------------------------------------------
@@ -407,6 +454,149 @@ class TestAiAgentServiceStreaming:
         assert document_change_chunks[0]["document_change"]["proposed_text"] == repeated_text
 
     @pytest.mark.asyncio
+    async def test_stream_response_general_emits_metric_tool_call_without_document_change(
+        self,
+    ) -> None:
+        """Metric tool calls should surface without entering document replacement flow."""
+        # Arrange
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="El documento tiene 4 palabras.",
+        )
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.run_stream_events = MagicMock(
+            return_value=_make_event_stream(
+                [
+                    FunctionToolCallEvent(
+                        part=ToolCallPart(
+                            tool_name="count_words",
+                            args={},
+                        )
+                    ),
+                    FunctionToolResultEvent(
+                        result=ToolReturnPart(
+                            tool_name="count_words",
+                            content={"metric_name": "count_words", "value": 4},
+                        )
+                    ),
+                    PartStartEvent(
+                        index=0,
+                        part=TextPart(content="El documento tiene 4 palabras."),
+                    ),
+                    AgentRunResultEvent(result=MagicMock(output="El documento tiene 4 palabras.")),
+                ]
+            )
+        )
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ) as create_message,
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "agents.general_agent.build_general_agent",
+                return_value=mock_agent_instance,
+            ),
+        ):
+            # Act
+            service = AiAgentService(session)
+            chunks = []
+            async for chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Cuantas palabras tiene el documento?",
+                document_context="uno dos tres cuatro",
+                agent_type="general",
+            ):
+                chunks.append(json.loads(chunk.removeprefix("data: ").strip()))
+
+        # Assert
+        tool_call_chunks = [c for c in chunks if c.get("type") == "tool_call"]
+        document_change_chunks = [c for c in chunks if c.get("type") == "document_change"]
+        done_chunks = [c for c in chunks if c.get("type") == "done"]
+
+        assert len(tool_call_chunks) == 2
+        assert tool_call_chunks[0]["tool_name"] == "count_words"
+        assert tool_call_chunks[1]["tool_call"]["result_summary"] == "4 words"
+        assert document_change_chunks == []
+        assert len(done_chunks) == 1
+        persisted_traces = create_message.await_args_list[1].kwargs["tool_calls"]
+        assert len(persisted_traces) == 1
+        assert persisted_traces[0].tool_name == "count_words"
+        assert persisted_traces[0].result_summary == "4 words"
+
+    @pytest.mark.asyncio
+    async def test_stream_response_general_keeps_streamed_text_for_tool_offsets(
+        self,
+    ) -> None:
+        """Final output must not invalidate offsets captured during streaming."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Texto por chunks.",
+        )
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.run_stream_events = MagicMock(
+            return_value=_make_event_stream(
+                [
+                    PartStartEvent(index=0, part=TextPart(content="Texto por ")),
+                    FunctionToolCallEvent(
+                        part=ToolCallPart(
+                            tool_name="count_words",
+                            args={"document_text": "uno dos"},
+                        )
+                    ),
+                    PartDeltaEvent(index=0, delta=TextPartDelta(content_delta="chunks.")),
+                    AgentRunResultEvent(result=MagicMock(output="Texto final distinto.")),
+                ]
+            )
+        )
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ) as create_message,
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "agents.general_agent.build_general_agent",
+                return_value=mock_agent_instance,
+            ),
+        ):
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Cuenta palabras",
+                agent_type="general",
+            ):
+                pass
+
+        assert create_message.await_args_list[1].kwargs["content"] == "Texto por chunks."
+
+    @pytest.mark.asyncio
     async def test_stream_response_yields_delta_and_done(self) -> None:
         """stream_response should yield delta chunks followed by a 'done' event."""
         # Arrange
@@ -465,6 +655,131 @@ class TestAiAgentServiceStreaming:
         last = json.loads(chunks[-1].replace("data: ", "").strip())
         assert last["type"] == "done"
         assert "message_id" in last
+
+    @pytest.mark.asyncio
+    async def test_stream_response_generates_title_for_first_exchange(self) -> None:
+        """First-turn conversations should persist an AI-generated title."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.user,
+            content="Haz una intro más guapa",
+        )
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Claro, aquí tienes una versión mejorada.",
+        )
+
+        async def fake_stream_text(delta: bool = False) -> AsyncGenerator[str, None]:
+            yield "Claro, aquí tienes una versión mejorada."
+
+        mock_stream_result = MagicMock()
+        mock_stream_result.stream_text = fake_stream_text
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_stream_result)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_chat_agent = MagicMock()
+        mock_chat_agent.run_stream = MagicMock(return_value=mock_stream_ctx)
+
+        mock_title_agent = MagicMock()
+        mock_title_agent.run = AsyncMock(return_value=MagicMock(output="Intro más potente"))
+
+        with (
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "services.ai_agent_service.Agent",
+                side_effect=[mock_chat_agent, mock_title_agent],
+            ),
+            patch(
+                "services.ai_agent_service.AiConversationRepository.set_title",
+                new_callable=AsyncMock,
+            ) as set_title,
+        ):
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Haz una intro más guapa",
+            ):
+                pass
+
+        set_title.assert_awaited_once_with(conv_id, "Intro más potente")
+
+    @pytest.mark.asyncio
+    async def test_stream_response_uses_first_message_fallback_when_title_generation_fails(
+        self,
+    ) -> None:
+        """Title generation failures should fall back to a trimmed first user message."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        user_message = "Haz una intro más guapa"
+        mock_user_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.user,
+            content=user_message,
+        )
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Claro, aquí tienes una versión mejorada.",
+        )
+
+        async def fake_stream_text(delta: bool = False) -> AsyncGenerator[str, None]:
+            yield "Claro, aquí tienes una versión mejorada."
+
+        mock_stream_result = MagicMock()
+        mock_stream_result.stream_text = fake_stream_text
+        mock_stream_ctx = MagicMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_stream_result)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_chat_agent = MagicMock()
+        mock_chat_agent.run_stream = MagicMock(return_value=mock_stream_ctx)
+
+        mock_title_agent = MagicMock()
+        mock_title_agent.run = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with (
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "services.ai_agent_service.Agent",
+                side_effect=[mock_chat_agent, mock_title_agent],
+            ),
+            patch(
+                "services.ai_agent_service.AiConversationRepository.set_title",
+                new_callable=AsyncMock,
+            ) as set_title,
+        ):
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message=user_message,
+            ):
+                pass
+
+        set_title.assert_awaited_once_with(conv_id, user_message)
 
     @pytest.mark.asyncio
     async def test_stream_response_uses_structured_message_history(self) -> None:
@@ -576,7 +891,10 @@ class TestAiAgentServiceStreaming:
 
         captured_deps: dict[str, Any] = {}
 
-        def fake_build_general_agent(model):
+        captured_prompt: dict[str, Any] = {}
+
+        def fake_build_general_agent(model, system_prompt=None):
+            captured_prompt["system_prompt"] = system_prompt
             return mock_agent_instance
 
         def fake_general_deps(**kwargs):
@@ -618,6 +936,90 @@ class TestAiAgentServiceStreaming:
             document_change_chunks[0]["document_change"]["proposed_text"]
             == "Documento completo mejorado."
         )
+        assert callable(captured_deps["search_workspace_context"])
+        expected_current_context = (
+            '--- Current document context ---\n{"type": "doc", "content": [{"type": "paragraph"}]}'
+        )
+        assert expected_current_context in captured_prompt["system_prompt"]
+
+    @pytest.mark.asyncio
+    async def test_stream_response_general_passes_workspace_rag_prompt_to_agent(
+        self,
+    ) -> None:
+        """general agent streaming should pass the composed workspace RAG prompt."""
+        # Arrange
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        doc_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Respuesta.",
+        )
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.run_stream_events = MagicMock(
+            return_value=_make_event_stream(
+                [AgentRunResultEvent(result=MagicMock(output="Respuesta."))]
+            )
+        )
+
+        captured_factory_args: dict[str, Any] = {}
+        rag_context = (
+            "--- Relevant document context (RAG) ---\n"
+            "[1] Related doc\n"
+            "Chunk\n"
+            "--- End of context ---"
+        )
+
+        def fake_build_general_agent(model, system_prompt=None):
+            captured_factory_args["system_prompt"] = system_prompt
+            return mock_agent_instance
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "services.ai_agent_service.AiAgentService._retrieve_rag_context",
+                new_callable=AsyncMock,
+                return_value=rag_context,
+            ),
+            patch("agents.general_agent.build_general_agent", side_effect=fake_build_general_agent),
+        ):
+            # Act
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Busca contexto",
+                user_id=user_id,
+                document_context="Texto actual",
+                document_id=doc_id,
+                agent_type="general",
+            ):
+                pass
+
+        # Assert
+        expected_current_context = "--- Current document context ---\nTexto actual\n---"
+        expected_rag_context = (
+            "--- Relevant document context (RAG) ---\n"
+            "[1] Related doc\n"
+            "Chunk\n"
+            "--- End of context ---"
+        )
+        assert expected_current_context in captured_factory_args["system_prompt"]
+        assert expected_rag_context in captured_factory_args["system_prompt"]
 
     @pytest.mark.asyncio
     async def test_stream_response_general_preserves_selection_context(self) -> None:
@@ -692,8 +1094,88 @@ class TestAiAgentServiceStreaming:
         document_change_chunks = [c for c in chunks if c.get("type") == "document_change"]
         assert len(document_change_chunks) == 1
         assert captured_deps["selection"]["text"] == "texto"
+        assert callable(captured_deps["search_workspace_context"])
         assert document_change_chunks[0]["document_change"]["position_start"] == 3
         assert document_change_chunks[0]["document_change"]["position_end"] == 8
+
+    @pytest.mark.asyncio
+    async def test_stream_response_general_injects_workspace_search_tool_dependency(
+        self,
+    ) -> None:
+        """general agent deps should include the workspace search dependency."""
+        # Arrange
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        doc_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Hecho.",
+        )
+
+        mock_agent_instance = MagicMock()
+        captured_deps: dict[str, Any] = {}
+
+        async def fake_run_stream_events(*args: Any, **kwargs: Any) -> AsyncGenerator[Any, None]:
+            captured_deps["deps"] = kwargs["deps"]
+            yield AgentRunResultEvent(result=MagicMock(output="Hecho."))
+
+        mock_agent_instance.run_stream_events = MagicMock(side_effect=fake_run_stream_events)
+
+        def fake_general_deps(**kwargs):
+            captured_deps.update(kwargs)
+            deps = MagicMock(**kwargs)
+            deps.proposed_changes = []
+            return deps
+
+        mock_search = AsyncMock(return_value=[])
+        mock_embedding_service = MagicMock()
+        mock_embedding_service.search_similar_chunks = mock_search
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("agents.general_agent.build_general_agent", return_value=mock_agent_instance),
+            patch("agents.general_agent.GeneralAgentDeps", side_effect=fake_general_deps),
+            patch(
+                "services.embedding_service.EmbeddingService",
+                return_value=mock_embedding_service,
+            ),
+        ):
+            # Act
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Busca contexto relacionado",
+                user_id=user_id,
+                document_context="Texto base",
+                document_id=doc_id,
+                agent_type="general",
+            ):
+                pass
+
+            await captured_deps["search_workspace_context"]("consulta", True, 4)
+
+        # Assert
+        mock_search.assert_any_await(
+            query="consulta",
+            document_id=doc_id,
+            user_id=user_id,
+            top_k=4,
+            exclude_current_document=True,
+        )
 
     def test_normalize_document_context_prefers_content_text(self) -> None:
         """_normalize_document_context should prefer a structured text snapshot when present."""
