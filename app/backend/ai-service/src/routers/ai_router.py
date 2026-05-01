@@ -23,6 +23,7 @@ from core.auth import AuthUser, get_current_user
 from core.config import settings
 from core.dependencies import get_db_session
 from core.models_catalog import OPENROUTER_MODELS, ModelEntry
+from repositories.ai_repository import DocumentAccessRepository
 from schemas.ai import (
     ConversationCreate,
     ConversationListByDocumentResponse,
@@ -51,6 +52,27 @@ meta_router = APIRouter(tags=["ai"])
 def _get_service(session: AsyncSession) -> AiAgentService:
     """Instantiate the AiAgentService with the request-scoped session."""
     return AiAgentService(session)
+
+
+async def _authorize_document_access(
+    session: AsyncSession,
+    document_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> None:
+    """Reject document-scoped AI operations when the caller lacks access."""
+
+    access_repo = DocumentAccessRepository(session)
+    access = await access_repo.get_document_access(document_id=document_id, user_id=user_id)
+    if access is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document {document_id} not found.",
+        )
+    if not access["has_access"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this document.",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -359,12 +381,16 @@ async def stream_ai_response(
             detail=f"Conversation {conversation_id} not found.",
         )
 
+    if body.document_id is not None:
+        await _authorize_document_access(session, body.document_id, uuid.UUID(user.user_id))
+
     service = _get_service(session)
 
     return StreamingResponse(
         content=service.stream_response(
             conversation_id=conversation_id,
             user_message=body.message,
+            user_id=uuid.UUID(user.user_id),
             document_context=body.document_context,
             model_id=body.model_id,
             document_id=body.document_id,  # Pass optional document_id for RAG retrieval

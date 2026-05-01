@@ -16,6 +16,7 @@ Architecture (BACKEND.md):
     which then emits `document_change` SSE events to the client.
 """
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -29,6 +30,7 @@ from agents.metrics_tools import (
     count_words,
     estimate_reading_time,
 )
+from schemas.embedding import ChunkResult
 
 # ---------------------------------------------------------------------------
 # Dependency injection container
@@ -45,15 +47,20 @@ class GeneralAgentDeps:
                           None if no document context is available.
         document_context: Raw structured document payload, preserved for
                           editor-aware tool logic.
+        selection: Active editor selection metadata when present.
         proposed_changes: Mutable list that agent tools append proposed edits to.
                           The service layer reads this list after the agent run
                           completes to emit document_change SSE events.
+        search_workspace_context: Async callback injected by the service layer.
+                                  Searches the current document's workspace
+                                  without exposing arbitrary workspace IDs.
     """
 
     document_content: str | None = None
     document_context: dict[str, Any] | str | None = None
     selection: dict[str, Any] | None = None
     proposed_changes: list[dict[str, str]] = field(default_factory=list)
+    search_workspace_context: Callable[[str, bool, int], Awaitable[list[ChunkResult]]] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -125,10 +132,24 @@ def propose_document_replacement(
     return "Document replacement proposed. The user will be asked to accept or reject the change."
 
 
+async def search_workspace_context(
+    ctx: RunContext[GeneralAgentDeps],
+    query: str,
+    exclude_current_document: bool = False,
+    top_k: int = 5,
+) -> list[ChunkResult]:
+    """Search semantically related chunks in the current document's workspace."""
+
+    if ctx.deps.search_workspace_context is None:
+        return []
+    return await ctx.deps.search_workspace_context(query, exclude_current_document, top_k)
+
+
 _GENERAL_AGENT_TOOLS = [
     get_document_content,
     get_selection_content,
     propose_document_replacement,
+    search_workspace_context,
     count_words,
     count_characters,
     count_paragraphs,
@@ -147,13 +168,14 @@ You are Caret AI, an agentic writing assistant embedded in the Caret document ed
 <role>
 Help the user write, revise, translate, and understand the current document.
 You can read document context, propose full-document replacements,
-and compute document metrics.
+compute document metrics, and search related context from the same workspace.
 </role>
 
 <toolbox>
 - get_document_content: reads the current document text.
 - get_selection_content: reads the active editor selection when present.
 - propose_document_replacement: proposes a full document replacement.
+- search_workspace_context: searches semantically related chunks from the same workspace.
 - count_words: counts total words.
 - count_characters: counts characters with and without spaces.
 - count_paragraphs: counts paragraphs.
@@ -194,6 +216,7 @@ Only stay in chat without proposing a document change when the user is clearly
 asking for one of these things:
 - document metrics
 - a question about the current document
+- a request for related context from other documents in the same workspace
 - explanation, analysis, brainstorming, or feedback that should not be applied yet
 - a request explicitly asking for options, ideas, or text in chat first
 - a request unrelated to changing the current document
@@ -268,7 +291,10 @@ Assistant behavior:
 """
 
 
-def build_general_agent(model: Model) -> "Agent[GeneralAgentDeps, str]":
+def build_general_agent(
+    model: Model,
+    system_prompt: str | None = None,
+) -> "Agent[GeneralAgentDeps, str]":
     """
     Build a fresh GeneralAgent instance for a single request.
 
@@ -279,6 +305,7 @@ def build_general_agent(model: Model) -> "Agent[GeneralAgentDeps, str]":
 
     Args:
         model: The resolved LLM model to use for this request.
+        system_prompt: Optional per-request system prompt override.
 
     Returns:
         A configured PydanticAI Agent with document read/edit tools.
@@ -287,7 +314,7 @@ def build_general_agent(model: Model) -> "Agent[GeneralAgentDeps, str]":
         model=model,
         deps_type=GeneralAgentDeps,
         output_type=str,
-        system_prompt=_SYSTEM_PROMPT,
+        system_prompt=system_prompt or _SYSTEM_PROMPT,
         tools=_GENERAL_AGENT_TOOLS,
     )
     return agent

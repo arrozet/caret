@@ -8,9 +8,10 @@ dependency_overrides mechanism — the correct approach for testing FastAPI apps
 
 import uuid
 from collections.abc import AsyncGenerator
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException, status
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -211,6 +212,85 @@ class TestSearchEndpointAuth:
         # Assert
         assert response.status_code == 422
 
+
+class TestSearchEndpointBehavior:
+    """Verify that the search endpoint forwards workspace-scoped options and response metadata."""
+
+    async def test_search_returns_workspace_scoped_chunk_metadata(
+        self, client_with_auth_and_db
+    ) -> None:
+        """POST /ai/embeddings/search should expose document and workspace metadata."""
+        # Arrange
+        document_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+
+        with (
+            patch(
+                "routers.embedding_router.EmbeddingService.search_similar_chunks",
+                new_callable=AsyncMock,
+                return_value=[
+                    {
+                        "document_id": str(document_id),
+                        "workspace_id": str(workspace_id),
+                        "chunk_index": 0,
+                        "chunk_text": "Workspace chunk",
+                        "score": 0.91,
+                        "document_title": "Reference",
+                        "is_current_document": False,
+                    }
+                ],
+            ),
+            patch(
+                "routers.embedding_router._authorize_document_access",
+                new_callable=AsyncMock,
+            ),
+        ):
+            # Act
+            response = await client_with_auth_and_db.post(
+                "/ai/embeddings/search",
+                json={
+                    "query": "reference",
+                    "document_id": str(document_id),
+                    "exclude_current_document": True,
+                },
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        # Assert
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["results"][0]["document_id"] == str(document_id)
+        assert payload["results"][0]["workspace_id"] == str(workspace_id)
+        assert payload["results"][0]["is_current_document"] is False
+
+    async def test_search_rejects_unauthorized_document_access(
+        self, client_with_auth_and_db
+    ) -> None:
+        """POST /ai/embeddings/search should return 403 on denied access."""
+        # Arrange
+        document_id = uuid.uuid4()
+
+        with patch(
+            "routers.embedding_router._authorize_document_access",
+            new_callable=AsyncMock,
+            side_effect=HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this document.",
+            ),
+        ):
+            # Act
+            response = await client_with_auth_and_db.post(
+                "/ai/embeddings/search",
+                json={
+                    "query": "reference",
+                    "document_id": str(document_id),
+                },
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        # Assert
+        assert response.status_code == 403
+
     async def test_search_rejects_top_k_above_maximum(self, client_with_db) -> None:
         """POST /ai/embeddings/search with top_k > 20 must return 422."""
         # Arrange — override auth so validation is reached
@@ -296,3 +376,57 @@ class TestDeleteEndpointAuth:
 
         # Assert
         assert response.status_code == 422
+
+
+class TestDocumentAccessAuthorization:
+    """Verify document-scoped embedding routes enforce explicit access checks."""
+
+    async def test_index_rejects_unauthorized_document_access(
+        self, client_with_auth_and_db
+    ) -> None:
+        """POST /ai/embeddings/index should return 403 on denied access."""
+        # Arrange
+        with patch(
+            "routers.embedding_router._authorize_document_access",
+            new_callable=AsyncMock,
+            side_effect=HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this document.",
+            ),
+        ):
+            # Act
+            response = await client_with_auth_and_db.post(
+                "/ai/embeddings/index",
+                json={
+                    "document_id": str(uuid.uuid4()),
+                    "content": "Some document content.",
+                },
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        # Assert
+        assert response.status_code == 403
+
+    async def test_delete_rejects_unauthorized_document_access(
+        self, client_with_auth_and_db
+    ) -> None:
+        """DELETE /ai/embeddings/{id} should return 403 on denied access."""
+        # Arrange
+        document_id = uuid.uuid4()
+
+        with patch(
+            "routers.embedding_router._authorize_document_access",
+            new_callable=AsyncMock,
+            side_effect=HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this document.",
+            ),
+        ):
+            # Act
+            response = await client_with_auth_and_db.delete(
+                f"/ai/embeddings/{document_id}",
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        # Assert
+        assert response.status_code == 403

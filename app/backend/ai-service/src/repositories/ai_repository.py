@@ -11,9 +11,13 @@ Rule: return SQLAlchemy model instances or Python primitives only.
 
 import uuid
 from collections.abc import Sequence
+from typing import TypedDict
 
-from sqlalchemy import func, select, update
+from sqlalchemy import Column, MetaData, Table, Text, cast, func, literal, select, update
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import TIMESTAMP
 
 from models.ai import (
     AiConversation,
@@ -24,6 +28,82 @@ from models.ai import (
     DocumentEmbedding,
 )
 from schemas.ai import ToolCallTrace
+
+
+class DocumentMetadata(TypedDict):
+    """Server-resolved metadata for a document owned by another service."""
+
+    document_id: uuid.UUID
+    workspace_id: uuid.UUID
+    document_title: str | None
+
+
+class DocumentAccessResult(TypedDict):
+    """Document metadata plus explicit access flags for one user."""
+
+    document_id: uuid.UUID
+    workspace_id: uuid.UUID
+    document_title: str | None
+    visibility: str
+    workspace_role: str | None
+    has_access: bool
+
+
+class WorkspaceSearchHit(TypedDict):
+    """Primitive search row returned from workspace-scoped retrieval."""
+
+    document_id: uuid.UUID
+    workspace_id: uuid.UUID
+    chunk_index: int
+    chunk_text: str
+    document_title: str | None
+    is_current_document: bool
+    distance: float
+
+
+document_visibility_enum = SAEnum(
+    "private",
+    "workspace",
+    "link",
+    "public",
+    name="document_visibility",
+)
+documents_table = Table(
+    "documents",
+    MetaData(),
+    Column("id", PGUUID(as_uuid=True)),
+    Column("workspace_id", PGUUID(as_uuid=True)),
+    Column("title", Text),
+    Column("visibility", document_visibility_enum),
+    Column("deleted_at", TIMESTAMP(timezone=True)),
+    schema="public",
+)
+workspaces_table = Table(
+    "workspaces",
+    MetaData(),
+    Column("id", PGUUID(as_uuid=True)),
+    Column("deleted_at", TIMESTAMP(timezone=True)),
+    schema="public",
+)
+workspace_members_table = Table(
+    "workspace_members",
+    MetaData(),
+    Column("workspace_id", PGUUID(as_uuid=True)),
+    Column("user_id", PGUUID(as_uuid=True)),
+    Column(
+        "role",
+        SAEnum("owner", "admin", "member", name="workspace_member_role"),
+    ),
+    Column("revoked_at", TIMESTAMP(timezone=True)),
+    schema="public",
+)
+document_members_table = Table(
+    "document_members",
+    MetaData(),
+    Column("document_id", PGUUID(as_uuid=True)),
+    Column("user_id", PGUUID(as_uuid=True)),
+    schema="public",
+)
 
 # ---------------------------------------------------------------------------
 # AiConversationRepository
@@ -386,6 +466,7 @@ class DocumentEmbeddingRepository:
     async def bulk_insert(
         self,
         document_id: uuid.UUID,
+        workspace_id: uuid.UUID,
         chunks: list[tuple[int, str, list[float]]],
     ) -> int:
         """
@@ -406,6 +487,7 @@ class DocumentEmbeddingRepository:
         rows = [
             DocumentEmbedding(
                 document_id=document_id,
+                workspace_id=workspace_id,
                 chunk_index=index,
                 chunk_text=text,
                 embedding=vector,
@@ -416,36 +498,121 @@ class DocumentEmbeddingRepository:
         await self._session.flush()
         return len(rows)
 
-    async def search(
+    async def get_document_metadata(self, document_id: uuid.UUID) -> DocumentMetadata | None:
+        """Return workspace-scoped metadata for a document from public.documents."""
+
+        result = await self._session.execute(
+            select(
+                documents_table.c.id,
+                documents_table.c.workspace_id,
+                documents_table.c.title,
+            ).where(
+                (documents_table.c.id == document_id) & (documents_table.c.deleted_at.is_(None))
+            )
+        )
+        row = result.one_or_none()
+        if row is None:
+            return None
+        return {
+            "document_id": row.id,
+            "workspace_id": row.workspace_id,
+            "document_title": row.title,
+        }
+
+    async def search_workspace(
         self,
         query_embedding: list[float],
         document_id: uuid.UUID,
+        user_id: uuid.UUID,
         top_k: int = 5,
-    ) -> list[tuple["DocumentEmbedding", float]]:
+        exclude_current_document: bool = False,
+    ) -> list[WorkspaceSearchHit]:
         """
-        Find the top-k most similar chunks using cosine distance (pgvector).
+        Find the top-k most similar chunks within the current document's workspace.
 
         Args:
             query_embedding: The embedded query vector (1536 dims).
-            document_id: Restrict search to this document.
+            document_id: Current document used to resolve the workspace scope.
+            user_id: Authenticated user used to filter source-document visibility.
             top_k: Maximum number of results to return.
+            exclude_current_document: When true, omit chunks from the current document.
 
         Returns:
-            List of (DocumentEmbedding, cosine_distance) tuples, closest first.
+            List of primitive search-hit dictionaries, closest first.
         """
         from pgvector.sqlalchemy import Vector
-        from sqlalchemy import cast
 
+        private_visibility = literal("private", type_=document_visibility_enum)
         distance_col = DocumentEmbedding.embedding.cosine_distance(
             cast(query_embedding, Vector(1536))
         )
-        result = await self._session.execute(
-            select(DocumentEmbedding, distance_col.label("distance"))
-            .where(DocumentEmbedding.document_id == document_id)
+        current_document = documents_table.alias("current_document")
+        source_document = documents_table.alias("source_document")
+        source_workspace_member = workspace_members_table.alias("source_workspace_member")
+        source_document_member = document_members_table.alias("source_document_member")
+
+        stmt = (
+            select(
+                DocumentEmbedding.document_id.label("document_id"),
+                source_document.c.workspace_id.label("resolved_workspace_id"),
+                DocumentEmbedding.chunk_index.label("chunk_index"),
+                DocumentEmbedding.chunk_text.label("chunk_text"),
+                source_document.c.title.label("document_title"),
+                (DocumentEmbedding.document_id == document_id).label("is_current_document"),
+                distance_col.label("distance"),
+            )
+            .join(source_document, DocumentEmbedding.document_id == source_document.c.id)
+            .join(current_document, current_document.c.id == document_id)
+            .outerjoin(
+                source_workspace_member,
+                (source_workspace_member.c.workspace_id == source_document.c.workspace_id)
+                & (source_workspace_member.c.user_id == user_id)
+                & (source_workspace_member.c.revoked_at.is_(None)),
+            )
+            .outerjoin(
+                source_document_member,
+                (source_document_member.c.document_id == source_document.c.id)
+                & (source_document_member.c.user_id == user_id),
+            )
+            .where(
+                (source_document.c.workspace_id == current_document.c.workspace_id)
+                & (source_document.c.deleted_at.is_(None))
+                & (current_document.c.deleted_at.is_(None))
+                & (
+                    (
+                        (source_document.c.visibility != private_visibility)
+                        & (source_workspace_member.c.user_id.is_not(None))
+                    )
+                    | (
+                        (source_document.c.visibility == private_visibility)
+                        & (
+                            source_document_member.c.user_id.is_not(None)
+                            | source_workspace_member.c.role.in_(["owner", "admin"])
+                        )
+                    )
+                )
+            )
             .order_by(distance_col)
             .limit(top_k)
         )
-        return [(row.DocumentEmbedding, row.distance) for row in result.all()]
+        if exclude_current_document:
+            stmt = stmt.where(DocumentEmbedding.document_id != document_id)
+
+        result = await self._session.execute(stmt)
+        hits: list[WorkspaceSearchHit] = []
+        for row in result.all():
+            hits.append(
+                {
+                    "document_id": row.document_id,
+                    "workspace_id": row.resolved_workspace_id,
+                    "chunk_index": row.chunk_index,
+                    "chunk_text": row.chunk_text,
+                    "document_title": row.document_title,
+                    "is_current_document": row.is_current_document,
+                    "distance": row.distance,
+                }
+            )
+        return hits
 
     async def delete_for_document(self, document_id: uuid.UUID) -> int:
         """
@@ -464,3 +631,72 @@ class DocumentEmbeddingRepository:
         )
         rowcount = getattr(result, "rowcount", 0)
         return int(rowcount or 0)
+
+
+class DocumentAccessRepository:
+    """Shared-data authorization helper for document-scoped AI routes."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_document_access(
+        self,
+        document_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> DocumentAccessResult | None:
+        """Return active document metadata and whether the user may access it."""
+
+        workspace = workspaces_table.alias("workspace")
+        workspace_member = workspace_members_table.alias("workspace_member")
+        document_member = document_members_table.alias("document_member")
+
+        result = await self._session.execute(
+            select(
+                documents_table.c.id,
+                documents_table.c.workspace_id,
+                documents_table.c.title,
+                documents_table.c.visibility,
+                workspace_member.c.role.label("workspace_member_role"),
+                workspace_member.c.user_id.label("workspace_member_user_id"),
+                document_member.c.user_id.label("document_member_user_id"),
+            )
+            .select_from(documents_table)
+            .outerjoin(
+                workspace,
+                (workspace.c.id == documents_table.c.workspace_id)
+                & (workspace.c.deleted_at.is_(None)),
+            )
+            .outerjoin(
+                workspace_member,
+                (workspace_member.c.workspace_id == documents_table.c.workspace_id)
+                & (workspace_member.c.user_id == user_id)
+                & (workspace_member.c.revoked_at.is_(None))
+                & (workspace.c.id.is_not(None)),
+            )
+            .outerjoin(
+                document_member,
+                (document_member.c.document_id == documents_table.c.id)
+                & (document_member.c.user_id == user_id),
+            )
+            .where((documents_table.c.id == document_id) & (documents_table.c.deleted_at.is_(None)))
+            .limit(1)
+        )
+        row = result.one_or_none()
+        if row is None:
+            return None
+        has_workspace_member = row.workspace_member_user_id is not None
+        has_document_member = row.document_member_user_id is not None
+        is_workspace_admin = row.workspace_member_role in {"owner", "admin"}
+        has_access = False
+        if row.visibility == "private":
+            has_access = has_document_member or is_workspace_admin
+        else:
+            has_access = has_workspace_member
+        return {
+            "document_id": row.id,
+            "workspace_id": row.workspace_id,
+            "document_title": row.title,
+            "visibility": row.visibility,
+            "workspace_role": row.workspace_member_role,
+            "has_access": has_access,
+        }

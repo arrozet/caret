@@ -12,11 +12,12 @@ Rule: NO business logic here. Validate input → call EmbeddingService → retur
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import AuthUser, get_current_user
 from core.dependencies import get_db_session
+from repositories.ai_repository import DocumentAccessRepository
 from schemas.embedding import (
     IndexRequest,
     IndexResponse,
@@ -33,6 +34,27 @@ router = APIRouter(prefix="/embeddings", tags=["embeddings"])
 def _get_service(session: AsyncSession) -> EmbeddingService:
     """Instantiate EmbeddingService with the request-scoped session."""
     return EmbeddingService(session)
+
+
+async def _authorize_document_access(
+    session: AsyncSession,
+    document_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> None:
+    """Reject document-scoped embedding operations when the caller lacks access."""
+
+    access_repo = DocumentAccessRepository(session)
+    access = await access_repo.get_document_access(document_id=document_id, user_id=user_id)
+    if access is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document {document_id} not found.",
+        )
+    if not access["has_access"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this document.",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -68,11 +90,15 @@ async def index_document(
     Returns:
         IndexResponse with the number of chunks stored.
     """
+    await _authorize_document_access(session, body.document_id, uuid.UUID(user.user_id))
     service = _get_service(session)
-    chunks_indexed = await service.index_document(
-        document_id=body.document_id,
-        content=body.content,
-    )
+    try:
+        chunks_indexed = await service.index_document(
+            document_id=body.document_id,
+            content=body.content,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return IndexResponse(
         document_id=body.document_id,
         chunks_indexed=chunks_indexed,
@@ -90,8 +116,8 @@ async def index_document(
     status_code=status.HTTP_200_OK,
     summary="Semantic search over document chunks",
     description=(
-        "Embeds the query string and returns the most similar document "
-        "chunks ranked by cosine similarity."
+        "Embeds the query string and returns the most similar chunks from "
+        "the current document's workspace ranked by cosine similarity."
     ),
 )
 async def search_embeddings(
@@ -100,21 +126,24 @@ async def search_embeddings(
     session: AsyncSession = Depends(get_db_session),
 ) -> SearchResponse:
     """
-    Perform a vector similarity search over a document's chunks.
+    Perform a vector similarity search over the current document's workspace.
 
     Args:
-        body: SearchRequest with query, document_id, and top_k.
+        body: SearchRequest with query, current document_id, and top_k.
         user: Authenticated user (validated by JWT dependency).
         session: Request-scoped database session.
 
     Returns:
         SearchResponse containing ranked ChunkResult objects.
     """
+    await _authorize_document_access(session, body.document_id, uuid.UUID(user.user_id))
     service = _get_service(session)
     results = await service.search_similar_chunks(
         query=body.query,
         document_id=body.document_id,
+        user_id=uuid.UUID(user.user_id),
         top_k=body.top_k,
+        exclude_current_document=body.exclude_current_document,
     )
     return SearchResponse(
         document_id=body.document_id,
@@ -147,5 +176,6 @@ async def delete_embeddings(
         user: Authenticated user (validated by JWT dependency).
         session: Request-scoped database session.
     """
+    await _authorize_document_access(session, document_id, uuid.UUID(user.user_id))
     service = _get_service(session)
     await service.delete_document_embeddings(document_id)

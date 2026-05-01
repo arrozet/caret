@@ -282,6 +282,7 @@ class DocumentEmbedding(Base):
     Columns:
         id           : UUID primary key.
         document_id  : FK to documents.id (enforced in DB, omitted from ORM).
+        workspace_id : Workspace UUID denormalized from public.documents.
         chunk_index  : Zero-based position of this chunk in the document.
         chunk_text   : The raw text of the chunk.
         embedding    : 1536-dimensional float32 vector (pgvector).
@@ -297,6 +298,11 @@ class DocumentEmbedding(Base):
         server_default=text("gen_random_uuid()"),
     )
     document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
         index=True,

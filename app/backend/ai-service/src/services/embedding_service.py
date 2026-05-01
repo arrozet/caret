@@ -81,27 +81,39 @@ class EmbeddingService:
         if not chunks:
             return 0
 
+        metadata = await self._repo.get_document_metadata(document_id)
+        if metadata is None:
+            raise ValueError(f"Document {document_id} was not found.")
+
         await self._lock_document_indexing(document_id)
 
         texts = [text for _, text in chunks]
         vectors = await self._embed_texts(texts)
 
         chunk_rows = [(idx, text, vector) for (idx, text), vector in zip(chunks, vectors)]
-        return await self._repo.bulk_insert(document_id, chunk_rows)
+        return await self._repo.bulk_insert(
+            document_id,
+            metadata["workspace_id"],
+            chunk_rows,
+        )
 
     async def search_similar_chunks(
         self,
         query: str,
         document_id: uuid.UUID,
+        user_id: uuid.UUID,
         top_k: int = 5,
+        exclude_current_document: bool = False,
     ) -> list[ChunkResult]:
         """
-        Embed `query` and return the most similar document chunks.
+        Embed `query` and return the most similar chunks in the document's workspace.
 
         Args:
             query: The user query or message text.
-            document_id: Restrict the search to this document's chunks.
+            document_id: Current document UUID used to resolve workspace scope.
+            user_id: Authenticated user UUID used to filter source-document visibility.
             top_k: Maximum number of chunks to return.
+            exclude_current_document: Exclude chunks from the current document.
 
         Returns:
             Ordered list of ChunkResult objects (closest first).
@@ -112,18 +124,24 @@ class EmbeddingService:
         query_vectors = await self._embed_texts([query])
         query_vector = query_vectors[0]
 
-        hits = await self._repo.search(
+        hits = await self._repo.search_workspace(
             query_embedding=query_vector,
             document_id=document_id,
+            user_id=user_id,
             top_k=top_k,
+            exclude_current_document=exclude_current_document,
         )
         return [
             ChunkResult(
-                chunk_index=chunk.chunk_index,
-                chunk_text=chunk.chunk_text,
-                score=max(0.0, 1.0 - float(distance)),  # cosine dist → similarity
+                document_id=chunk["document_id"],
+                workspace_id=chunk["workspace_id"],
+                chunk_index=chunk["chunk_index"],
+                chunk_text=chunk["chunk_text"],
+                document_title=chunk["document_title"],
+                is_current_document=chunk["is_current_document"],
+                score=max(0.0, 1.0 - float(chunk["distance"])),  # cosine dist → similarity
             )
-            for chunk, distance in hits
+            for chunk in hits
         ]
 
     async def delete_document_embeddings(self, document_id: uuid.UUID) -> int:

@@ -891,7 +891,10 @@ class TestAiAgentServiceStreaming:
 
         captured_deps: dict[str, Any] = {}
 
-        def fake_build_general_agent(model):
+        captured_prompt: dict[str, Any] = {}
+
+        def fake_build_general_agent(model, system_prompt=None):
+            captured_prompt["system_prompt"] = system_prompt
             return mock_agent_instance
 
         def fake_general_deps(**kwargs):
@@ -933,6 +936,90 @@ class TestAiAgentServiceStreaming:
             document_change_chunks[0]["document_change"]["proposed_text"]
             == "Documento completo mejorado."
         )
+        assert callable(captured_deps["search_workspace_context"])
+        expected_current_context = (
+            '--- Current document context ---\n{"type": "doc", "content": [{"type": "paragraph"}]}'
+        )
+        assert expected_current_context in captured_prompt["system_prompt"]
+
+    @pytest.mark.asyncio
+    async def test_stream_response_general_passes_workspace_rag_prompt_to_agent(
+        self,
+    ) -> None:
+        """general agent streaming should pass the composed workspace RAG prompt."""
+        # Arrange
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        doc_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Respuesta.",
+        )
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.run_stream_events = MagicMock(
+            return_value=_make_event_stream(
+                [AgentRunResultEvent(result=MagicMock(output="Respuesta."))]
+            )
+        )
+
+        captured_factory_args: dict[str, Any] = {}
+        rag_context = (
+            "--- Relevant document context (RAG) ---\n"
+            "[1] Related doc\n"
+            "Chunk\n"
+            "--- End of context ---"
+        )
+
+        def fake_build_general_agent(model, system_prompt=None):
+            captured_factory_args["system_prompt"] = system_prompt
+            return mock_agent_instance
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch(
+                "services.ai_agent_service.AiAgentService._retrieve_rag_context",
+                new_callable=AsyncMock,
+                return_value=rag_context,
+            ),
+            patch("agents.general_agent.build_general_agent", side_effect=fake_build_general_agent),
+        ):
+            # Act
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Busca contexto",
+                user_id=user_id,
+                document_context="Texto actual",
+                document_id=doc_id,
+                agent_type="general",
+            ):
+                pass
+
+        # Assert
+        expected_current_context = "--- Current document context ---\nTexto actual\n---"
+        expected_rag_context = (
+            "--- Relevant document context (RAG) ---\n"
+            "[1] Related doc\n"
+            "Chunk\n"
+            "--- End of context ---"
+        )
+        assert expected_current_context in captured_factory_args["system_prompt"]
+        assert expected_rag_context in captured_factory_args["system_prompt"]
 
     @pytest.mark.asyncio
     async def test_stream_response_general_preserves_selection_context(self) -> None:
@@ -1007,8 +1094,88 @@ class TestAiAgentServiceStreaming:
         document_change_chunks = [c for c in chunks if c.get("type") == "document_change"]
         assert len(document_change_chunks) == 1
         assert captured_deps["selection"]["text"] == "texto"
+        assert callable(captured_deps["search_workspace_context"])
         assert document_change_chunks[0]["document_change"]["position_start"] == 3
         assert document_change_chunks[0]["document_change"]["position_end"] == 8
+
+    @pytest.mark.asyncio
+    async def test_stream_response_general_injects_workspace_search_tool_dependency(
+        self,
+    ) -> None:
+        """general agent deps should include the workspace search dependency."""
+        # Arrange
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        doc_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        mock_user_msg = _make_mock_message(conversation_id=conv_id, role=AiMessageRole.user)
+        mock_assistant_msg = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Hecho.",
+        )
+
+        mock_agent_instance = MagicMock()
+        captured_deps: dict[str, Any] = {}
+
+        async def fake_run_stream_events(*args: Any, **kwargs: Any) -> AsyncGenerator[Any, None]:
+            captured_deps["deps"] = kwargs["deps"]
+            yield AgentRunResultEvent(result=MagicMock(output="Hecho."))
+
+        mock_agent_instance.run_stream_events = MagicMock(side_effect=fake_run_stream_events)
+
+        def fake_general_deps(**kwargs):
+            captured_deps.update(kwargs)
+            deps = MagicMock(**kwargs)
+            deps.proposed_changes = []
+            return deps
+
+        mock_search = AsyncMock(return_value=[])
+        mock_embedding_service = MagicMock()
+        mock_embedding_service.search_similar_chunks = mock_search
+
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-dummy-key"}, clear=False),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[mock_user_msg, mock_assistant_msg],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[mock_user_msg],
+            ),
+            patch("services.ai_agent_service._build_model", return_value=MagicMock()),
+            patch("agents.general_agent.build_general_agent", return_value=mock_agent_instance),
+            patch("agents.general_agent.GeneralAgentDeps", side_effect=fake_general_deps),
+            patch(
+                "services.embedding_service.EmbeddingService",
+                return_value=mock_embedding_service,
+            ),
+        ):
+            # Act
+            service = AiAgentService(session)
+            async for _chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Busca contexto relacionado",
+                user_id=user_id,
+                document_context="Texto base",
+                document_id=doc_id,
+                agent_type="general",
+            ):
+                pass
+
+            await captured_deps["search_workspace_context"]("consulta", True, 4)
+
+        # Assert
+        mock_search.assert_any_await(
+            query="consulta",
+            document_id=doc_id,
+            user_id=user_id,
+            top_k=4,
+            exclude_current_document=True,
+        )
 
     def test_normalize_document_context_prefers_content_text(self) -> None:
         """_normalize_document_context should prefer a structured text snapshot when present."""

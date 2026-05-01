@@ -57,9 +57,25 @@ def _make_mock_message(
     return msg
 
 
-def _make_chunk_result(index: int = 0, text: str = "Some text", score: float = 0.9) -> ChunkResult:
+def _make_chunk_result(
+    index: int = 0,
+    text: str = "Some text",
+    score: float = 0.9,
+    document_id: uuid.UUID | None = None,
+    workspace_id: uuid.UUID | None = None,
+    document_title: str = "Sample document",
+    is_current_document: bool = True,
+) -> ChunkResult:
     """Build a ChunkResult DTO for use in RAG mocking."""
-    return ChunkResult(chunk_index=index, chunk_text=text, score=score)
+    return ChunkResult(
+        document_id=document_id or uuid.uuid4(),
+        workspace_id=workspace_id or uuid.uuid4(),
+        chunk_index=index,
+        chunk_text=text,
+        score=score,
+        document_title=document_title,
+        is_current_document=is_current_document,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +137,7 @@ class TestRetrieveRagContext:
         session = _make_mock_session()
         service = AiAgentService(session)
         doc_id = uuid.uuid4()
+        user_id = uuid.uuid4()
 
         mock_emb_service = MagicMock()
         mock_emb_service.search_similar_chunks = AsyncMock(return_value=[])
@@ -140,6 +157,7 @@ class TestRetrieveRagContext:
                 ):
                     result = await service._retrieve_rag_context(
                         document_id=doc_id,
+                        user_id=user_id,
                         query="What is the document about?",
                     )
 
@@ -151,10 +169,28 @@ class TestRetrieveRagContext:
         session = _make_mock_session()
         service = AiAgentService(session)
         doc_id = uuid.uuid4()
+        workspace_id = uuid.uuid4()
+        user_id = uuid.uuid4()
 
         chunks = [
-            _make_chunk_result(0, "First relevant passage.", 0.95),
-            _make_chunk_result(1, "Second relevant passage.", 0.88),
+            _make_chunk_result(
+                0,
+                "First relevant passage.",
+                0.95,
+                document_id=doc_id,
+                workspace_id=workspace_id,
+                document_title="Current doc",
+                is_current_document=True,
+            ),
+            _make_chunk_result(
+                1,
+                "Second relevant passage.",
+                0.88,
+                document_id=uuid.uuid4(),
+                workspace_id=workspace_id,
+                document_title="Related doc",
+                is_current_document=False,
+            ),
         ]
 
         mock_emb_service = MagicMock()
@@ -166,12 +202,15 @@ class TestRetrieveRagContext:
         ):
             result = await service._retrieve_rag_context(
                 document_id=doc_id,
+                user_id=user_id,
                 query="Tell me about the passages.",
             )
 
         assert "--- Relevant document context (RAG) ---" in result
-        assert "[1] First relevant passage." in result
-        assert "[2] Second relevant passage." in result
+        assert "[1] Current doc (current document)" in result
+        assert "First relevant passage." in result
+        assert "[2] Related doc" in result
+        assert "Second relevant passage." in result
         assert "--- End of context ---" in result
 
     @pytest.mark.asyncio
@@ -180,6 +219,7 @@ class TestRetrieveRagContext:
         session = _make_mock_session()
         service = AiAgentService(session)
         doc_id = uuid.uuid4()
+        user_id = uuid.uuid4()
 
         mock_emb_service = MagicMock()
         mock_emb_service.search_similar_chunks = AsyncMock(
@@ -192,6 +232,7 @@ class TestRetrieveRagContext:
         ):
             result = await service._retrieve_rag_context(
                 document_id=doc_id,
+                user_id=user_id,
                 query="Any query.",
             )
 
@@ -204,8 +245,16 @@ class TestRetrieveRagContext:
         session = _make_mock_session()
         service = AiAgentService(session)
         doc_id = uuid.uuid4()
+        user_id = uuid.uuid4()
 
-        chunks = [_make_chunk_result(0, "Only chunk.", 0.99)]
+        chunks = [
+            _make_chunk_result(
+                0,
+                "Only chunk.",
+                0.99,
+                document_title="Only doc",
+            )
+        ]
 
         mock_emb_service = MagicMock()
         mock_emb_service.search_similar_chunks = AsyncMock(return_value=chunks)
@@ -216,15 +265,17 @@ class TestRetrieveRagContext:
         ):
             result = await service._retrieve_rag_context(
                 document_id=doc_id,
+                user_id=user_id,
                 query="query",
             )
 
         lines = result.splitlines()
         assert lines[0] == "--- Relevant document context (RAG) ---"
-        assert lines[1] == "[1] Only chunk."
+        assert lines[1] == "[1] Only doc (current document)"
+        assert lines[2] == "Only chunk."
         assert lines[-1] == "--- End of context ---"
-        # Exactly 3 lines: header, one chunk, footer
-        assert len(lines) == 3
+        # Exactly 4 lines: header, title, chunk, footer
+        assert len(lines) == 4
 
     @pytest.mark.asyncio
     async def test_passes_correct_args_to_embedding_service(self) -> None:
@@ -232,6 +283,7 @@ class TestRetrieveRagContext:
         session = _make_mock_session()
         service = AiAgentService(session)
         doc_id = uuid.uuid4()
+        user_id = uuid.uuid4()
         query_text = "What are the key findings?"
 
         mock_emb_service = MagicMock()
@@ -243,6 +295,7 @@ class TestRetrieveRagContext:
         ):
             await service._retrieve_rag_context(
                 document_id=doc_id,
+                user_id=user_id,
                 query=query_text,
                 top_k=3,
             )
@@ -250,7 +303,9 @@ class TestRetrieveRagContext:
         mock_emb_service.search_similar_chunks.assert_awaited_once_with(
             query=query_text,
             document_id=doc_id,
+            user_id=user_id,
             top_k=3,
+            exclude_current_document=False,
         )
 
 
@@ -314,12 +369,16 @@ class TestStreamResponseRagWiring:
             async for chunk in service.stream_response(
                 conversation_id=conv_id,
                 user_message="Summarise",
+                user_id=uuid.uuid4(),
                 document_id=doc_id,
             ):
                 chunks.append(chunk)
 
         # _retrieve_rag_context must have been called exactly once with the right args
-        mock_rag.assert_awaited_once_with(document_id=doc_id, query="Summarise")
+        rag_call = mock_rag.await_args.kwargs
+        assert rag_call["document_id"] == doc_id
+        assert rag_call["query"] == "Summarise"
+        assert isinstance(rag_call["user_id"], uuid.UUID)
 
         # Streaming must still complete successfully
         done = json.loads(chunks[-1].replace("data: ", "").strip())
@@ -373,6 +432,7 @@ class TestStreamResponseRagWiring:
             async for chunk in service.stream_response(
                 conversation_id=conv_id,
                 user_message="Hi",
+                user_id=uuid.uuid4(),
                 document_id=None,
             ):
                 chunks.append(chunk)
@@ -435,6 +495,7 @@ class TestStreamResponseRagWiring:
             async for chunk in service.stream_response(
                 conversation_id=conv_id,
                 user_message="Go",
+                user_id=uuid.uuid4(),
                 document_id=doc_id,
             ):
                 chunks.append(chunk)

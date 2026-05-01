@@ -497,6 +497,7 @@ class AiAgentService:
     async def _retrieve_rag_context(
         self,
         document_id: uuid.UUID,
+        user_id: uuid.UUID | None,
         query: str,
         top_k: int = 5,
     ) -> str:
@@ -509,6 +510,7 @@ class AiAgentService:
 
         Args:
             document_id: Document whose embeddings to search.
+            user_id: Authenticated user UUID used to filter source-document visibility.
             query: The user's message text used as the search query.
             top_k: Maximum number of chunks to retrieve.
 
@@ -516,6 +518,9 @@ class AiAgentService:
             A formatted multi-line string with ranked context chunks, or "" if
             no embeddings are found or an error occurs.
         """
+        if user_id is None:
+            return ""
+
         try:
             # Lazy import to avoid circular dependency between services.
             from services.embedding_service import EmbeddingService  # noqa: PLC0415
@@ -524,13 +529,19 @@ class AiAgentService:
             chunks = await emb_service.search_similar_chunks(
                 query=query,
                 document_id=document_id,
+                user_id=user_id,
                 top_k=top_k,
+                exclude_current_document=False,
             )
             if not chunks:
                 return ""
             lines = ["--- Relevant document context (RAG) ---"]
             for i, chunk in enumerate(chunks, 1):
-                lines.append(f"[{i}] {chunk.chunk_text}")
+                source_label = chunk.document_title or str(chunk.document_id)
+                if chunk.is_current_document:
+                    source_label += " (current document)"
+                lines.append(f"[{i}] {source_label}")
+                lines.append(chunk.chunk_text)
             lines.append("--- End of context ---")
             return "\n".join(lines)
         except Exception:
@@ -545,6 +556,7 @@ class AiAgentService:
         self,
         conversation_id: uuid.UUID,
         user_message: str,
+        user_id: uuid.UUID | None = None,
         document_context: BaseModel | dict[str, Any] | str | None = None,
         model_id: str | None = None,
         document_id: uuid.UUID | None = None,
@@ -578,6 +590,7 @@ class AiAgentService:
         Args:
             conversation_id: The conversation to append messages to.
             user_message: Text submitted by the user.
+            user_id: Optional authenticated user UUID for access-filtered RAG retrieval.
             document_context: Optional structured or plain-text document snapshot for context.
             model_id: Optional LLM model slug to override the server default.
             document_id: Optional document UUID for RAG chunk retrieval.
@@ -618,9 +631,10 @@ class AiAgentService:
         # 2b. Optionally inject RAG context from document embeddings -----------
         # This runs only when a document_id is supplied.  Failure is silently
         # swallowed by _retrieve_rag_context so streaming is never blocked.
-        if document_id is not None:
+        if document_id is not None and user_id is not None:
             rag_context = await self._retrieve_rag_context(
                 document_id=document_id,
+                user_id=user_id,
                 query=user_message,
             )
             if rag_context:
@@ -643,6 +657,7 @@ class AiAgentService:
                 GeneralAgentDeps,
                 build_general_agent,
             )
+            from services.embedding_service import EmbeddingService  # noqa: PLC0415
 
             selection_payload: dict[str, Any] | None = None
             if isinstance(document_context, BaseModel):
@@ -653,12 +668,30 @@ class AiAgentService:
                 raw_sel = document_context.get("selection")
                 selection_payload = raw_sel if isinstance(raw_sel, dict) else None
 
+            embedding_service = EmbeddingService(self._session)
+
+            async def search_workspace_context(
+                query: str,
+                exclude_current_document: bool = False,
+                top_k: int = 5,
+            ):
+                if document_id is None or user_id is None:
+                    return []
+                return await embedding_service.search_similar_chunks(
+                    query=query,
+                    document_id=document_id,
+                    user_id=user_id,
+                    top_k=top_k,
+                    exclude_current_document=exclude_current_document,
+                )
+
             deps = GeneralAgentDeps(
                 document_content=normalized_document_context,
                 document_context=document_context,
                 selection=selection_payload,
+                search_workspace_context=search_workspace_context,
             )
-            agent_instance = build_general_agent(model)
+            agent_instance = build_general_agent(model, system_prompt=system_prompt)
             fallback_proposed_texts: list[str] = []
 
             try:
