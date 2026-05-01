@@ -1,22 +1,14 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuthStore } from "../../stores/authStore";
-import { useTheme } from "../../hooks/useTheme";
 import { useDocument } from "../../features/editor/hooks/useDocument";
 import { useWorkspaces } from "../../features/editor/hooks/useWorkspaces";
 import { useFolders } from "../../features/editor/hooks/useFolders";
-import { Button } from "../ui/Button";
 import { CaretLogo } from "../ui/Logo";
-import { LogOut, Sun, Moon, Monitor, Settings, LayoutGrid, Folder } from "lucide-react";
+import { ArrowLeft, LayoutGrid, Folder } from "lucide-react";
+import { Avatar } from "../ui/Avatar";
 import type { FolderResponse } from "../../features/editor/api/documentApi";
-
-/** Map theme value to its corresponding icon component. */
-const theme_icons = {
-  light: Sun,
-  dark: Moon,
-  system: Monitor,
-} as const;
 
 function build_folder_path(folders: FolderResponse[], folder_id: string | null) {
   const by_id = new Map(folders.map((f) => [f.id, f]));
@@ -46,13 +38,10 @@ export function TopBar() {
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const user = useAuthStore((state) => state.user);
-  const signOut = useAuthStore((state) => state.signOut);
-  const { theme, toggleTheme } = useTheme();
-
-  const ThemeIcon = theme_icons[theme];
 
   const isEditorPage = location.pathname.startsWith("/documents/");
   const isDocumentsPage = location.pathname === "/documents";
+  const isSettingsPage = location.pathname === "/settings";
   const documents_location_state = location.state as
     | { workspace_id?: string; folder_id?: string | null }
     | null
@@ -80,6 +69,24 @@ export function TopBar() {
     () => build_folder_path(folders, breadcrumb_folder_id),
     [folders, breadcrumb_folder_id],
   );
+  const account_name = user?.user_metadata?.full_name || "User";
+  const return_to = { pathname: location.pathname, state: location.state ?? null };
+  const settings_return_to =
+    location.state && typeof location.state === "object" && "return_to" in location.state
+      ? (location.state.return_to as { pathname?: string; state?: unknown })
+      : null;
+  const settings_state = { return_to: settings_return_to ?? return_to };
+  const back_destination = settings_return_to?.pathname ?? "/documents";
+  const back_destination_state = settings_return_to?.state ?? null;
+  const editor_back_state = isEditorPage
+    ? {
+        workspace_id: breadcrumb_workspace_id,
+        folder_id: breadcrumb_folder_id,
+      }
+    : null;
+  const show_back_link = isSettingsPage || isEditorPage;
+  const back_link_destination = isSettingsPage ? back_destination : "/documents";
+  const back_link_state = isSettingsPage ? back_destination_state : editor_back_state;
 
   function navigate_to_documents_location(workspace_id: string, folder_id: string | null) {
     navigate("/documents", {
@@ -94,6 +101,17 @@ export function TopBar() {
     <header className="ui-peripheral fixed top-0 right-0 left-0 z-30 flex h-14 items-center justify-between border-b border-border-subtle bg-surface px-4 md:px-6">
       {/* Left: Logo + breadcrumb */}
       <div className="flex min-w-0 items-center gap-2 overflow-hidden text-ui-sm text-text-secondary">
+        {show_back_link ? (
+          <Link
+            to={back_link_destination}
+            state={back_link_state}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] transition hover:bg-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-main/40 focus-visible:ring-offset-2"
+            aria-label={t("settings.go_back", { defaultValue: "Go back" })}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        ) : null}
+
         <button
           onClick={() =>
             navigate("/documents", {
@@ -160,31 +178,24 @@ export function TopBar() {
 
       {/* Right: Actions */}
       <div className="flex shrink-0 items-center gap-1 md:gap-2">
-        {/* Settings */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/settings")}
-          aria-label={t("settings.title", { defaultValue: "Settings" })}
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-
-        {/* Theme toggle */}
-        <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label={t(`theme.${theme}`)}>
-          <ThemeIcon className="h-4 w-4" />
-        </Button>
-
-        {/* User info + sign out */}
         {user && (
-          <>
-            <span className="hidden md:inline text-ui-sm text-text-secondary truncate max-w-[160px]">
-              {user.email}
-            </span>
-            <Button variant="ghost" size="sm" onClick={signOut} aria-label={t("auth.sign_out")}>
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </>
+          <Link
+            to="/settings"
+            state={settings_state}
+            className="rounded-full p-1 transition hover:bg-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-main/40 focus-visible:ring-offset-2"
+            aria-label={t("settings.open_account", { defaultValue: "Open account settings" })}
+          >
+            <Avatar
+              name={account_name}
+              src={
+                typeof user.user_metadata?.avatar_url === "string"
+                  ? user.user_metadata.avatar_url
+                  : undefined
+              }
+              size="md"
+              className="border border-border-subtle bg-app"
+            />
+          </Link>
         )}
       </div>
     </header>
