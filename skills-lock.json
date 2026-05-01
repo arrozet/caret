@@ -36,6 +36,12 @@
       "sourceType": "github",
       "computedHash": "639f5368be13c18a246661758ab1df4ffae9cd9123f6dd4bd50209f20ebdce16"
     },
+    "brainstorming": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/brainstorming/SKILL.md",
+      "computedHash": "f483c304fcde060211ffae00f49bb728536e7e7613c99db45b5b924d9fc17243"
+    },
     "building-pydantic-ai-agents": {
       "source": "pydantic/skills",
       "sourceType": "github",
@@ -70,6 +76,12 @@
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
       "computedHash": "3a0481591523c55ecfe2569b6b28b2dcbfa3742367667697219d29170981ad53"
+    },
+    "dispatching-parallel-agents": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/dispatching-parallel-agents/SKILL.md",
+      "computedHash": "e21044ae7496fc285f1df9ff3fb518a3a20bea6f5216c1f59f4987e12c769a0a"
     },
     "distill": {
       "source": "pbakaus/impeccable",
@@ -141,10 +153,28 @@
       "sourceType": "github",
       "computedHash": "680cc12a17e9308b4592a2751db51615c618993f75362cb8e64207f6355a8c63"
     },
+    "subagent-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/subagent-driven-development/SKILL.md",
+      "computedHash": "a197f8e5fba5ea59013e1adbaa90dd42db35de8f074feca200c8038de584a83b"
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/systematic-debugging/SKILL.md",
+      "computedHash": "72e9ab72627e4fd8ed26a582e82309a98ecdc4f6e1c99418430ac05682c9e91d"
+    },
     "teach-impeccable": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "e95d2bb071e0d1877d291a421ce93165e3c75ebc010a46e8070eab53a9f90fd9"
+    },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "computedHash": "126f1ebf6ccd414f42544f6e83d8cc5adb089e1108eaffb7c400701e37eecd9f"
     },
     "tiptap": {
       "source": "ueberdosis/tiptap",
@@ -155,6 +185,12 @@
       "source": "pbakaus/impeccable",
       "sourceType": "github",
       "computedHash": "c6942dc2c2ff4cc6761a43f07a8d8719ec04b702b6b2c1c9793a5595b662a48b"
+    },
+    "using-superpowers": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/using-superpowers/SKILL.md",
+      "computedHash": "e0eced9fbb205c212f420aded0c6f2bf5d5f059254679a8459b4fe72390160be"
     },
     "vercel-cli-with-tokens": {
       "source": "vercel-labs/agent-skills",
