@@ -125,7 +125,7 @@ function append_or_update_tool_segment(
 
     if (hasMatchingTrace) {
       return currentSegments.map((entry, entryIndex) =>
-        entryIndex === index
+        entryIndex === index && entry.type === "tool_calls"
           ? { ...entry, tool_calls: upsert_tool_call_trace(entry.tool_calls, normalizedTrace) }
           : entry,
       );
@@ -317,21 +317,28 @@ export function useAiStream(): UseAiStreamReturn {
                   ? {
                       ...msg,
                       content: msg.content + chunk.content,
-                      segments: append_text_segment(msg.segments, chunk.content),
+                      segments: append_text_segment(msg.segments, chunk.content as string),
                     }
                   : msg,
               ),
             );
-          } else if (chunk.type === "tool_call" && chunk.tool_name) {
+          } else if (chunk.type === "tool_call") {
             const currentStreamingId = streamingIdRef.current;
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id !== currentStreamingId
                   ? msg
                   : (() => {
+                      const tool_name = chunk.tool_name ?? chunk.tool_call?.tool_name;
                       const normalizedTrace = chunk.tool_call
                         ? normalize_tool_call_trace(chunk.tool_call, msg.content.length)
-                        : { tool_name: chunk.tool_name!, text_offset: msg.content.length };
+                        : tool_name
+                          ? { tool_name, text_offset: msg.content.length }
+                          : null;
+
+                      if (!normalizedTrace) {
+                        return msg;
+                      }
 
                       return {
                         ...msg,
