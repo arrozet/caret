@@ -18,8 +18,6 @@ interface AiState {
   aiMode: AiMode;
   /** Agent type slug sent to the backend when ai_mode === "agent". */
   selectedAgentType: string;
-  /** Currently selected LLM model ID (undefined = server default). */
-  selectedModelId: string | undefined;
   /** Latest pending document change proposed by the agent. */
   pendingDocumentChange: DocumentChangePayload | null;
 
@@ -37,8 +35,6 @@ interface AiState {
   setConversationForDocument: (documentId: string, id: string | null) => void;
   /** Switch between Ask and Agent modes. */
   setAiMode: (mode: AiMode) => void;
-  /** Set the selected LLM model. */
-  setSelectedModelId: (id: string | undefined) => void;
   /** Update (or clear) the globally pending document change. */
   setPendingDocumentChange: (change: DocumentChangePayload | null) => void;
 }
@@ -47,7 +43,7 @@ interface AiState {
  * Global AI assistant store.
  *
  * Manages AI panel visibility, the active conversation context, interaction
- * mode (ask / agent), and model selection.
+ * mode (ask / agent).
  *
  * State management strategy (FRONTEND.md §21): Global UI state → Zustand.
  */
@@ -58,7 +54,6 @@ export const useAiStore = create<AiState>((set) => ({
   conversationByDocumentId: {},
   aiMode: "agent",
   selectedAgentType: "general",
-  selectedModelId: undefined,
   pendingDocumentChange: null,
 
   togglePanel() {
@@ -107,10 +102,6 @@ export const useAiStore = create<AiState>((set) => ({
 
   setAiMode(mode: AiMode) {
     set({ aiMode: mode });
-  },
-
-  setSelectedModelId(id: string | undefined) {
-    set({ selectedModelId: id });
   },
 
   setPendingDocumentChange(change: DocumentChangePayload | null) {

@@ -248,8 +248,6 @@ export interface StreamRequestOptions {
   message: string;
   /** Optional document snapshot for context. */
   document_context?: string | DocumentContextSnapshot;
-  /** Optional OpenRouter model slug to use for this request. */
-  model_id?: string;
   /**
    * Optional agent type slug (e.g. "general"). When provided, the backend
    * uses the agentic mode with document read/edit tools instead of plain chat.
@@ -275,8 +273,7 @@ export interface StreamRequestOptions {
 export async function* streamAiResponse(
   options: StreamRequestOptions,
 ): AsyncGenerator<StreamChunk> {
-  const { conversation_id, document_id, message, document_context, model_id, agent_type, signal } =
-    options;
+  const { conversation_id, document_id, message, document_context, agent_type, signal } = options;
 
   // Retrieve the current auth session to attach the Bearer token.
   const {
@@ -291,7 +288,7 @@ export async function* streamAiResponse(
       "Content-Type": "application/json",
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
     },
-    body: JSON.stringify({ message, document_context, model_id, document_id, agent_type }),
+    body: JSON.stringify({ message, document_context, document_id, agent_type }),
     signal,
   });
 

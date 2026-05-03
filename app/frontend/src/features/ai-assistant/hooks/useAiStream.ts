@@ -159,14 +159,12 @@ export interface UseAiStreamReturn {
    * @param user_message - The text the user typed.
    * @param document_id - Document UUID, used when creating a new conversation.
    * @param document_context - Optional document plain text for AI context.
-   * @param model_id - Optional model override.
    * @param agent_type - Optional agent type slug (e.g. "general"). Only sent in agent mode.
    */
   send_message: (
     user_message: string,
     document_id: string,
     document_context?: string | DocumentContextSnapshot,
-    model_id?: string,
     agent_type?: string,
   ) => Promise<void>;
   /**
@@ -249,7 +247,6 @@ export function useAiStream(): UseAiStreamReturn {
       user_message: string,
       document_id: string,
       document_context?: string | DocumentContextSnapshot,
-      model_id?: string,
       agent_type?: string,
     ): Promise<void> => {
       if (isLoading) return;
@@ -303,7 +300,6 @@ export function useAiStream(): UseAiStreamReturn {
           document_id,
           message: user_message,
           document_context,
-          model_id,
           agent_type,
           signal: controller.signal,
         });

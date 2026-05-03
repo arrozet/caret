@@ -199,6 +199,7 @@ describe("use_ai_stream", () => {
         message: "Hi",
       }),
     );
+    expect(vi.mocked(streamAiResponse).mock.calls[0]?.[0]).not.toHaveProperty("model_id");
 
     // The assistant message placeholder should exist.
     const assistant_messages = result.current.messages.filter((m) => m.role === "assistant");
