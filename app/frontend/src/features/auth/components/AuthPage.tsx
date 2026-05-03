@@ -1,47 +1,54 @@
-import { type FormEvent, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router-dom";
-import { Moon, Sun } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Moon, Sun, X } from "lucide-react";
 import { Button } from "../../../components/ui/Button";
-import { Input } from "../../../components/ui/Input";
 import { CaretLogo } from "../../../components/ui/Logo";
 import { useTheme } from "../../../hooks/useTheme";
 import { useAuthStore } from "../../../stores/authStore";
 
-/** Which form is currently active. */
-type AuthMode = "sign_in" | "sign_up";
+interface AuthPageProps {
+  embedded?: boolean;
+  onClose?: () => void;
+}
 
 /**
- * Combined Login / Sign-up page.
+ * OAuth-only login page.
  *
  * Uses one centered Caret surface, closer to the editor than to a generic SaaS form.
  */
-export function AuthPage() {
+export function AuthPage({ embedded = false, onClose }: AuthPageProps) {
   const { t } = useTranslation("common");
-  const navigate = useNavigate();
-  const signIn = useAuthStore((state) => state.signIn);
-  const signUp = useAuthStore((state) => state.signUp);
-  const signInWithOauth = useAuthStore((state) => state.signInWithOauth);
+  const signInWithGoogle = useAuthStore((state) => state.signInWithGoogle);
   const { theme, toggleTheme } = useTheme();
 
-  const [mode, setMode] = useState<AuthMode>("sign_in");
-  const [email, set_email] = useState("");
-  const [password, set_password] = useState("");
   const [error, set_error] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [isOauthLoading, setIsOauthLoading] = useState(false);
 
-  const is_sign_in = mode === "sign_in";
   const ThemeIcon = theme === "dark" ? Moon : Sun;
-  const panel_title = is_sign_in ? "Sign in" : "Create account";
-  const primary_action = is_sign_in ? t("auth.sign_in") : t("auth.sign_up");
+  const title_id = useId();
+
+  useEffect(() => {
+    if (!embedded || !onClose) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose?.();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [embedded, onClose]);
 
   /** Handle Google OAuth sign-in. */
   async function handleGoogleSignIn() {
     set_error(null);
     setIsOauthLoading(true);
 
-    const errorMessage = await signInWithOauth("google");
+    const errorMessage = await signInWithGoogle();
 
     if (errorMessage) {
       setIsOauthLoading(false);
@@ -49,31 +56,75 @@ export function AuthPage() {
     }
   }
 
-  /** Handle form submission for sign-in and sign-up. */
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    set_error(null);
-    setIsLoading(true);
+  const auth_surface = (
+    <section className="w-full max-w-[34rem]">
+      <div
+        role={embedded ? "dialog" : undefined}
+        aria-modal={embedded ? "true" : undefined}
+        aria-labelledby={embedded ? title_id : undefined}
+        className="overflow-hidden border border-border-subtle bg-surface shadow-subtle"
+      >
+        <div className="border-b border-border-subtle px-6 py-5 md:px-8">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-ui-sm uppercase tracking-[0.18em] text-text-secondary">
+              {t("auth.tagline", { defaultValue: "The AI-first document editor" })}
+            </p>
+            {embedded && onClose ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                aria-label={t("close", { defaultValue: "Close" })}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
+        </div>
 
-    const action = is_sign_in ? signIn : signUp;
-    const errorMessage = await action(email, password);
+        <div className="px-6 py-7 md:px-8 md:py-8">
+          <div className="mb-7 border-b border-border-subtle pb-6">
+            <div className="min-w-0">
+              <h1
+                id={title_id}
+                className="font-document text-h2 font-normal tracking-[-0.02em] text-text-primary"
+              >
+                {t("auth.sign_in", { defaultValue: "Sign in" })}
+              </h1>
+              <p className="mt-2 max-w-md text-ui-sm text-text-secondary">
+                {t("auth.google_only_hint", {
+                  defaultValue: "Use your Google account to continue to Caret.",
+                })}
+              </p>
+            </div>
+          </div>
 
-    setIsLoading(false);
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            onClick={handleGoogleSignIn}
+            disabled={isOauthLoading}
+            isLoading={isOauthLoading}
+            className="h-12 w-full"
+          >
+            {!isOauthLoading && <GoogleIcon />}
+            {t("auth.continue_with_google")}
+          </Button>
 
-    if (errorMessage) {
-      set_error(errorMessage);
-      return;
-    }
+          {error && (
+            <p className="mt-4 text-ui-sm text-error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 
-    if (is_sign_in) {
-      navigate("/documents");
-    }
-  }
-
-  /** Toggle between sign-in and sign-up modes. */
-  function toggleMode() {
-    setMode((prev) => (prev === "sign_in" ? "sign_up" : "sign_in"));
-    set_error(null);
+  if (embedded) {
+    return auth_surface;
   }
 
   return (
@@ -96,108 +147,7 @@ export function AuthPage() {
       </header>
 
       <main className="relative z-10 flex min-h-[calc(100vh-56px)] items-center justify-center px-6 py-14 md:py-20">
-        <section className="w-full max-w-[30rem]">
-          <div className="relative">
-            <div className="absolute -top-4 left-6 h-px w-20 bg-accent-caret" />
-
-            <div className="overflow-hidden rounded-[6px] border border-border-subtle bg-surface shadow-subtle">
-              <div className="border-b border-border-subtle bg-app/40 px-6 py-4 md:px-7">
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-ui-sm uppercase tracking-[0.18em] text-text-secondary">
-                    {t("auth.tagline", { defaultValue: "The AI-first document editor" })}
-                  </p>
-                  <div className="h-2 w-14 bg-accent-caret" />
-                </div>
-              </div>
-
-              <div className="px-6 py-6 md:px-7 md:py-7">
-                <div className="mb-6 flex items-start justify-between gap-4 border-b border-border-subtle pb-5">
-                  <div className="min-w-0">
-                    <h1 className="font-document text-h2 font-normal tracking-[-0.02em] text-text-primary">
-                      {panel_title}
-                    </h1>
-                  </div>
-                  <div className="mt-1 h-9 w-9 shrink-0 rounded-full border border-border-subtle bg-app" />
-                </div>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="md"
-                  onClick={handleGoogleSignIn}
-                  disabled={isOauthLoading || isLoading}
-                  isLoading={isOauthLoading}
-                  className="h-12 w-full"
-                >
-                  {!isOauthLoading && <GoogleIcon />}
-                  {t("auth.continue_with_google")}
-                </Button>
-
-                <div className="my-5 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-border-subtle" />
-                  <span className="text-ui-sm text-text-secondary">{t("auth.or_divider")}</span>
-                  <div className="h-px flex-1 bg-border-subtle" />
-                </div>
-
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                  <Input
-                    id="email"
-                    label={t("auth.email")}
-                    type="email"
-                    placeholder={t("auth.email_placeholder")}
-                    value={email}
-                    onChange={(e) => set_email(e.target.value)}
-                    required
-                    autoComplete="email"
-                  />
-
-                  <Input
-                    id="password"
-                    label={t("auth.password")}
-                    type="password"
-                    placeholder={t("auth.password_placeholder")}
-                    value={password}
-                    onChange={(e) => set_password(e.target.value)}
-                    required
-                    autoComplete={is_sign_in ? "current-password" : "new-password"}
-                    minLength={6}
-                  />
-
-                  {error && (
-                    <p className="text-ui-sm text-error" role="alert">
-                      {error}
-                    </p>
-                  )}
-
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="md"
-                    isLoading={isLoading}
-                    className="h-12 w-full"
-                  >
-                    {isLoading
-                      ? is_sign_in
-                        ? t("auth.signing_in")
-                        : t("auth.signing_up")
-                      : primary_action}
-                  </Button>
-                </form>
-
-                <p className="mt-5 text-center text-ui-sm text-text-secondary">
-                  {is_sign_in ? t("auth.no_account") : t("auth.has_account")}{" "}
-                  <button
-                    type="button"
-                    onClick={toggleMode}
-                    className="cursor-pointer text-accent-main hover:text-accent-caret hover:underline"
-                  >
-                    {is_sign_in ? t("auth.sign_up") : t("auth.sign_in")}
-                  </button>
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
+        {auth_surface}
       </main>
     </div>
   );

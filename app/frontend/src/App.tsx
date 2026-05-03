@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./stores/authStore";
-import { AuthPage } from "./features/auth";
 import { LandingPage } from "./features/landing";
 import { SettingsPage } from "./features/settings";
 import { CollabHarnessPage } from "./features/collaboration";
@@ -31,7 +30,7 @@ function App() {
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<AuthPage />} />
+        <Route path="/login" element={<LandingPage show_auth_modal />} />
         {isDevMode ? <Route path="/debug/collab-harness" element={<CollabHarnessPage />} /> : null}
 
         {/* Protected routes */}

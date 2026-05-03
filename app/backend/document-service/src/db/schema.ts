@@ -1,7 +1,7 @@
 /**
  * Drizzle ORM schema definitions for the Document Service.
- * Covers tables: user_profiles, workspaces, workspace_members,
- * folders, documents, document_members, document_versions.
+ * Covers tables: workspaces, workspace_members, folders,
+ * documents, document_members, document_versions.
  * See DATABASE.md for the full schema specification.
  */
 
@@ -69,32 +69,7 @@ export const document_member_role_enum = pgEnum("document_member_role", [
 export const document_status_enum = pgEnum("document_status", ["active", "archived"]);
 
 /* ============================================================
-   1) Users & Profiles
-   ============================================================ */
-
-/**
- * Application-level profile data for a Supabase user.
- * PK is user_id, which mirrors auth.users(id).
- */
-export const user_profiles = pgTable("user_profiles", {
-  /** FK to auth.users(id). Also serves as PK. */
-  user_id: uuid("user_id").primaryKey().notNull(),
-  /** Human-friendly display name. */
-  display_name: text("display_name"),
-  /** Avatar image URL (e.g. Supabase Storage). */
-  avatar_url: text("avatar_url"),
-  /** IETF locale tag (e.g. "en-US"). */
-  locale: text("locale"),
-  /** Row creation timestamp. */
-  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  /** Row last-update timestamp. */
-  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  /** Soft delete timestamp (null = not deleted). */
-  deleted_at: timestamp("deleted_at", { withTimezone: true }),
-});
-
-/* ============================================================
-   2) Workspaces (Tenant Boundary)
+   1) Workspaces (Tenant Boundary)
    ============================================================ */
 
 /**
@@ -169,7 +144,7 @@ export const workspace_members = pgTable(
 );
 
 /* ============================================================
-   3) Information Architecture (Folders & Documents)
+   2) Information Architecture (Folders & Documents)
    ============================================================ */
 
 /**
@@ -319,7 +294,7 @@ export const document_members = pgTable(
 );
 
 /* ============================================================
-   4) Document Versioning
+   3) Document Versioning
    ============================================================ */
 
 /**

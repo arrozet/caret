@@ -61,7 +61,7 @@ export function SettingsPage() {
     LANGUAGES[0];
   const current_theme_option = THEMES.find(({ value }) => value === theme) ?? THEMES[0];
   const provider =
-    typeof user?.app_metadata?.provider === "string" ? user.app_metadata.provider : "email";
+    typeof user?.app_metadata?.provider === "string" ? user.app_metadata.provider : "google";
   const provider_name = provider === "google" ? "Google" : provider;
   const display_name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
   const [is_theme_menu_open, set_is_theme_menu_open] = useState(false);

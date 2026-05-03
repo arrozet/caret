@@ -10,11 +10,12 @@ import {
 } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef } from "react";
+import { AuthPage } from "../../auth";
 import { Button } from "../../../components/ui/Button";
-import { useTheme } from "../../../hooks/useTheme";
 import { useAuthStore } from "../../../stores/authStore";
-import { Sun, Moon, Monitor, ArrowRight, Type, Users, Sparkles } from "lucide-react";
+import { Type, Users, Sparkles, User } from "lucide-react";
 import { CaretLogo } from "../../../components/ui/Logo";
+import { Avatar } from "../../../components/ui/Avatar";
 import { AnimatedMockup } from "./AnimatedMockup";
 
 /* ================================================================
@@ -166,9 +167,6 @@ function FeatureCard({ icon, title, description, index, variant = "secondary" }:
   );
 }
 
-/** Map theme value to its corresponding icon component. */
-const theme_icons = { light: Sun, dark: Moon, system: Monitor } as const;
-
 /* ================================================================
    Page
    ================================================================ */
@@ -192,15 +190,22 @@ const theme_icons = { light: Sun, dark: Moon, system: Monitor } as const;
  *  - Magnetic CTA buttons
  *  - Animated app mockup (AnimatedMockup)
  */
-export function LandingPage() {
+export function LandingPage({ show_auth_modal = false }: LandingPageProps) {
   const { t } = useTranslation("common");
   const navigate = useNavigate();
   const status = useAuthStore((state) => state.status);
+  const user = useAuthStore((state) => state.user);
   const isAuthenticated = status === "authenticated";
-  const { theme, toggleTheme } = useTheme();
+  const account_name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Guest";
+  const avatar_url =
+    typeof user?.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : undefined;
   const shouldReduceMotion = useReducedMotion() ?? false;
   const heroRef = useRef<HTMLElement>(null);
   const { x: mouseX, y: mouseY } = useMousePosition();
+
+  function closeAuthModal() {
+    navigate("/");
+  }
 
   /* Page-level scroll drives the top progress bar */
   const { scrollYProgress: pageProgress } = useScroll();
@@ -217,8 +222,6 @@ export function LandingPage() {
   /* Cursor-reactive background glows */
   const primaryGlow = useMotionTemplate`radial-gradient(600px circle at ${mouseX}px ${mouseY}px, rgb(var(--color-accent-main-rgb) / 0.1), transparent 70%)`;
   const caretGlow = useMotionTemplate`radial-gradient(400px circle at ${mouseX}px ${mouseY}px, rgb(var(--color-accent-caret-rgb) / 0.05), transparent 80%)`;
-
-  const ThemeIcon = theme_icons[theme];
 
   return (
     <div className="flex min-h-screen flex-col bg-app overflow-x-hidden relative z-0">
@@ -270,9 +273,30 @@ export function LandingPage() {
           transition={{ duration: 0.4, ease: "easeOut" }}
           className="flex items-center gap-2"
         >
-          <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label={t(`theme.${theme}`)}>
-            <ThemeIcon className="h-4 w-4" />
-          </Button>
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={() => navigate("/documents")}
+              className="rounded-full p-1 transition hover:bg-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-main/40 focus-visible:ring-offset-2"
+              aria-label="Open documents"
+            >
+              <Avatar
+                name={account_name}
+                src={avatar_url}
+                size="md"
+                className="border border-border-subtle bg-app"
+              />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-accent-caret bg-accent-caret text-white shadow-subtle transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-main/40 focus-visible:ring-offset-2"
+              aria-label="Sign in"
+            >
+              <User className="h-5 w-5" aria-hidden="true" />
+            </button>
+          )}
         </motion.div>
       </header>
 
@@ -333,23 +357,7 @@ export function LandingPage() {
                 collaborative. Distraction-free.
               </motion.p>
 
-              <motion.div
-                variants={itemVariants}
-                className="mt-10 flex flex-col sm:flex-row gap-4 justify-center"
-              >
-                <MagneticButton disabled={shouldReduceMotion}>
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={() => navigate(isAuthenticated ? "/documents" : "/login")}
-                    className="min-w-[200px] h-14 text-base shadow-elevated bg-accent-main text-white border border-accent-main hover:bg-[#0052A3] transition-all duration-300"
-                  >
-                    <span className="flex items-center justify-center gap-2 font-medium tracking-wide">
-                      {isAuthenticated ? "Go to Dashboard" : "Start writing"}
-                      <ArrowRight className="h-5 w-5" />
-                    </span>
-                  </Button>
-                </MagneticButton>
+              <motion.div variants={itemVariants} className="mt-10 flex justify-center">
                 <MagneticButton disabled={shouldReduceMotion}>
                   <Button
                     variant="secondary"
@@ -485,9 +493,8 @@ export function LandingPage() {
                 onClick={() => navigate(isAuthenticated ? "/documents" : "/login")}
                 className="min-w-[240px] h-20 text-xl shadow-strong bg-accent-main text-white border-2 border-accent-main hover:bg-transparent hover:text-accent-main transition-all duration-300 rounded-none"
               >
-                <span className="flex items-center justify-center gap-3 font-semibold uppercase tracking-wide">
-                  {isAuthenticated ? "Go to Dashboard" : "Get started free"}
-                  <ArrowRight className="h-6 w-6" />
+                <span className="font-semibold uppercase tracking-wide">
+                  {isAuthenticated ? "Open documents" : "Start writing for free"}
                 </span>
               </Button>
             </MagneticButton>
@@ -502,6 +509,23 @@ export function LandingPage() {
           <span>AI-first document editing</span>
         </div>
       </footer>
+
+      {show_auth_modal ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-app/78 px-6 py-20 backdrop-blur-[2px]"
+          onClick={closeAuthModal}
+        >
+          <div
+            className="relative z-10 w-full max-w-[33rem]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <AuthPage embedded onClose={closeAuthModal} />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
+}
+interface LandingPageProps {
+  show_auth_modal?: boolean;
 }
