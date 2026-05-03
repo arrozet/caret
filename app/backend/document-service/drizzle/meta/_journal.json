@@ -8,6 +8,13 @@
       "when": 1771950055630,
       "tag": "0000_rare_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777807765436,
+      "tag": "0001_bright_morbius",
+      "breakpoints": true
     }
   ]
 }

@@ -16,12 +16,8 @@ interface AuthState {
 
   /** Initialize the store by reading the current Supabase session. */
   initialize: () => Promise<void>;
-  /** Sign in with email and password. Returns an error message on failure. */
-  signIn: (email: string, password: string) => Promise<string | null>;
-  /** Create a new account with email and password. Returns an error message on failure. */
-  signUp: (email: string, password: string) => Promise<string | null>;
-  /** Sign in with a third-party OAuth provider (e.g. Google). Returns an error message on failure. */
-  signInWithOauth: (provider: "google" | "github") => Promise<string | null>;
+  /** Sign in with Google OAuth. Returns an error message on failure. */
+  signInWithGoogle: () => Promise<string | null>;
   /** Sign out the current user. */
   signOut: () => Promise<void>;
 }
@@ -67,24 +63,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
   },
 
-  async signIn(email: string, password: string): Promise<string | null> {
-    const { error } = await supabase_client.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return error?.message ?? null;
-  },
-
-  async signUp(email: string, password: string): Promise<string | null> {
-    const { error } = await supabase_client.auth.signUp({ email, password });
-    return error?.message ?? null;
-  },
-
-  async signInWithOauth(provider: "google" | "github"): Promise<string | null> {
+  async signInWithGoogle(): Promise<string | null> {
     const { error } = await supabase_client.auth.signInWithOAuth({
-      provider,
+      provider: "google",
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: `${window.location.origin}/documents`,
       },
     });
     return error?.message ?? null;

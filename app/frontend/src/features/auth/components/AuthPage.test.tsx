@@ -1,28 +1,16 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AuthPage } from "./AuthPage";
 
-const mock_navigate = vi.fn();
-const mock_sign_in = vi.fn();
-const mock_sign_up = vi.fn();
-const mock_sign_in_with_oauth = vi.fn();
+const mock_sign_in_with_google = vi.fn();
 const mock_toggle_theme = vi.fn();
 
 const translations: Record<string, string> = {
   app_name: "Caret",
   "auth.sign_in": "Sign In",
-  "auth.sign_up": "Sign Up",
-  "auth.email": "Email",
-  "auth.password": "Password",
-  "auth.email_placeholder": "you@example.com",
-  "auth.password_placeholder": "Enter your password",
-  "auth.no_account": "Don't have an account?",
-  "auth.has_account": "Already have an account?",
-  "auth.signing_in": "Signing in...",
-  "auth.signing_up": "Creating account...",
+  "auth.google_only_hint": "Use your Google account to continue to Caret.",
   "auth.continue_with_google": "Continue with Google",
-  "auth.or_divider": "or",
   "auth.surface_label": "Sign in",
   "theme.dark": "Dark",
 };
@@ -41,7 +29,6 @@ vi.mock("react-router-dom", () => ({
       {children}
     </a>
   ),
-  useNavigate: () => mock_navigate,
 }));
 
 vi.mock("react-i18next", () => ({
@@ -54,9 +41,7 @@ vi.mock("react-i18next", () => ({
 vi.mock("../../../stores/authStore", () => ({
   useAuthStore: (selector: (state: object) => unknown) =>
     selector({
-      signIn: mock_sign_in,
-      signUp: mock_sign_up,
-      signInWithOauth: mock_sign_in_with_oauth,
+      signInWithGoogle: mock_sign_in_with_google,
     }),
 }));
 
@@ -70,13 +55,27 @@ vi.mock("../../../hooks/useTheme", () => ({
 describe("AuthPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mock_sign_in_with_google.mockResolvedValue(null);
   });
 
-  it("renders a Caret-branded editorial sign-in experience", () => {
+  it("renders a Caret-branded Google-only sign-in experience", () => {
     render(<AuthPage />);
 
     expect(screen.getByRole("link", { name: /caret/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
-    expect(screen.queryByText("Welcome back")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByText(/use your google account to continue/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^email$/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sign up/i)).not.toBeInTheDocument();
+  });
+
+  it("starts the Google OAuth flow from the primary action", async () => {
+    render(<AuthPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /continue with google/i }));
+
+    await waitFor(() => {
+      expect(mock_sign_in_with_google).toHaveBeenCalledTimes(1);
+    });
   });
 });
