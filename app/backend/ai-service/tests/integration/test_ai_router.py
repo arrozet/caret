@@ -666,6 +666,38 @@ class TestStreamAiResponse:
         assert response.status_code == 200
         assert "text/event-stream" in response.headers["content-type"]
 
+    async def test_stream_ignores_client_model_selection(self, client_with_auth_and_db) -> None:
+        """POST /ai/conversations/{id}/stream must not forward a client-supplied model_id."""
+        conv_id = uuid.uuid4()
+        mock_conv = _make_mock_conv()
+        mock_conv.id = conv_id
+
+        async def _fake_stream(*args, **kwargs):
+            yield 'data: {"type": "done", "content": "ok", "message_id": null}\n\n'
+
+        with (
+            patch(
+                "repositories.ai_repository.AiConversationRepository.get_by_id_for_user",
+                new_callable=AsyncMock,
+                return_value=mock_conv,
+            ),
+            patch(
+                "services.ai_agent_service.AiAgentService.stream_response",
+                return_value=_fake_stream(),
+            ) as mock_stream_response,
+        ):
+            response = await client_with_auth_and_db.post(
+                f"/ai/conversations/{conv_id}/stream",
+                json={
+                    "message": "Hello there",
+                    "model_id": "moonshotai/kimi-k2.6",
+                },
+                headers={"Authorization": "Bearer fake-token"},
+            )
+
+        assert response.status_code == 200
+        assert mock_stream_response.call_args.kwargs["model_id"] is None
+
     async def test_stream_yields_sse_chunks(self, client_with_auth_and_db) -> None:
         """POST /ai/conversations/{id}/stream response body contains valid SSE data lines."""
         # Arrange

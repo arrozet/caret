@@ -392,7 +392,7 @@ async def stream_ai_response(
             user_message=body.message,
             user_id=uuid.UUID(user.user_id),
             document_context=body.document_context,
-            model_id=body.model_id,
+            model_id=None,
             document_id=body.document_id,  # Pass optional document_id for RAG retrieval
             agent_type=body.agent_type,  # Pass optional agent_type for agentic mode
             conversation_title=conversation.title,

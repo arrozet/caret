@@ -24,7 +24,13 @@ from pydantic_ai import (
 from pydantic_ai.messages import TextPart, TextPartDelta, ToolCallPart, ToolReturnPart
 
 from models.ai import AiMessageRole
-from services.ai_agent_service import AiAgentService, _build_model, _normalize_document_context
+from services.ai_agent_service import (
+    _DEFAULT_MODEL_FALLBACK_CHAIN,
+    AiAgentService,
+    _build_model,
+    _normalize_document_context,
+    _resolve_model_attempt_order,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -861,6 +867,80 @@ class TestAiAgentServiceStreaming:
         assert captured["args"][0] == "New request"
 
     @pytest.mark.asyncio
+    async def test_stream_response_retries_with_backend_fallback_models(self) -> None:
+        """Plain chat streaming should retry with the next backend fallback model."""
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        user_message = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.user,
+            content="Explain the draft",
+        )
+        assistant_message = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.assistant,
+            content="Fallback answer",
+        )
+
+        async def fake_stream_text(delta: bool = False) -> AsyncGenerator[str, None]:
+            yield "Fallback answer"
+
+        failing_ctx = MagicMock()
+        failing_ctx.__aenter__ = AsyncMock(side_effect=RuntimeError("primary unavailable"))
+        failing_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        success_result = MagicMock()
+        success_result.stream_text = fake_stream_text
+        success_ctx = MagicMock()
+        success_ctx.__aenter__ = AsyncMock(return_value=success_result)
+        success_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        first_agent = MagicMock()
+        first_agent.run_stream = MagicMock(return_value=failing_ctx)
+        second_agent = MagicMock()
+        second_agent.run_stream = MagicMock(return_value=success_ctx)
+
+        with (
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                side_effect=[user_message, assistant_message],
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "services.ai_agent_service._resolve_model_attempt_order",
+                return_value=["deepseek/deepseek-v4-flash", "minimax/minimax-m2.7"],
+            ),
+            patch(
+                "services.ai_agent_service._build_model",
+                side_effect=[MagicMock(name="deepseek-model"), MagicMock(name="minimax-model")],
+            ) as mock_build_model,
+            patch(
+                "services.ai_agent_service.Agent",
+                side_effect=[first_agent, second_agent, MagicMock()],
+            ),
+            patch.object(AiAgentService, "_maybe_set_generated_title", new_callable=AsyncMock),
+        ):
+            service = AiAgentService(session)
+            chunks = []
+            async for chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Explain the draft",
+            ):
+                chunks.append(json.loads(chunk.removeprefix("data: ").strip()))
+
+        assert [call.args[0] for call in mock_build_model.call_args_list] == [
+            "deepseek/deepseek-v4-flash",
+            "minimax/minimax-m2.7",
+        ]
+        assert chunks[-1]["type"] == "done"
+        assert chunks[-1]["content"] == "Fallback answer"
+
+    @pytest.mark.asyncio
     async def test_stream_response_general_uses_structured_document_context(self) -> None:
         """general agent streaming should normalize structured document context into deps."""
         # Arrange
@@ -1627,6 +1707,25 @@ class TestBuildModel:
 
             # Assert
             mock_model_cls.assert_called_once_with(custom_model_id, provider=mock_provider_cls())
+
+    def test_resolve_model_attempt_order_ignores_client_model_id(self) -> None:
+        """Client-selected model ids must not override the server-controlled fallback order."""
+        assert _resolve_model_attempt_order("moonshotai/kimi-k2.6") == list(
+            _DEFAULT_MODEL_FALLBACK_CHAIN
+        )
+
+    def test_resolve_model_attempt_order_promotes_server_default_first(self) -> None:
+        """The configured server model should be attempted first."""
+        with patch("services.ai_agent_service.settings") as mock_settings:
+            mock_settings.openrouter_model = "xiaomi/mimo-v2.5"
+
+            assert _resolve_model_attempt_order() == [
+                "xiaomi/mimo-v2.5",
+                "deepseek/deepseek-v4-flash",
+                "minimax/minimax-m2.7",
+                "xiaomi/mimo-v2.5-pro",
+                "moonshotai/kimi-k2.6",
+            ]
 
     def test_build_model_falls_back_to_openai(self) -> None:
         """_build_model should use OpenAI when only OPENAI_API_KEY is configured."""
