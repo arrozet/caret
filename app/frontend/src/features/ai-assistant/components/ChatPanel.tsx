@@ -12,6 +12,7 @@ import {
   Clock3,
   Search,
   ChevronsUpDown,
+  ChevronDown,
   FileText,
   LoaderCircle,
   PencilLine,
@@ -25,62 +26,8 @@ import { Button } from "../../../components/ui/Button";
 import { useAiStore } from "../../../stores/aiStore";
 import { useAiStream } from "../hooks/useAiStream";
 import type { ChatMessage, ChatMessageSegment } from "../hooks/useAiStream";
-import { deleteConversation, getModels, listConversations, touchConversation } from "../api/aiApi";
-import type { DocumentContextSnapshot, ModelInfo } from "../api/aiApi";
-
-/** Offline / error fallback only — order is arbitrary; server `default_model_id` wins after fetch. */
-const FALLBACK_MODELS: ModelInfo[] = [
-  {
-    id: "deepseek/deepseek-v4-flash",
-    name: "DeepSeek V4 Flash",
-    provider: "DeepSeek",
-    gateway: "openrouter",
-    is_free: false,
-    is_stealth: false,
-    context_window: 1_048_576,
-    description: "Primary model for fast, high-throughput general and coding workloads.",
-  },
-  {
-    id: "minimax/minimax-m2.7",
-    name: "MiniMax M2.7",
-    provider: "MiniMax",
-    gateway: "openrouter",
-    is_free: false,
-    is_stealth: false,
-    context_window: 196_608,
-    description: "First fallback model with strong agentic and planning capabilities.",
-  },
-  {
-    id: "xiaomi/mimo-v2.5",
-    name: "MiMo-V2.5",
-    provider: "Xiaomi",
-    gateway: "openrouter",
-    is_free: false,
-    is_stealth: false,
-    context_window: 1_048_576,
-    description: "Second fallback model optimized for multimodal and long-context tasks.",
-  },
-  {
-    id: "xiaomi/mimo-v2.5-pro",
-    name: "MiMo-V2.5-Pro",
-    provider: "Xiaomi",
-    gateway: "openrouter",
-    is_free: false,
-    is_stealth: false,
-    context_window: 1_048_576,
-    description: "Third fallback model focused on stronger complex reasoning performance.",
-  },
-  {
-    id: "moonshotai/kimi-k2.6",
-    name: "Kimi K2.6",
-    provider: "Moonshot AI",
-    gateway: "openrouter",
-    is_free: false,
-    is_stealth: false,
-    context_window: 256_000,
-    description: "Final fallback model for long-horizon coding and orchestration tasks.",
-  },
-];
+import { deleteConversation, listConversations, touchConversation } from "../api/aiApi";
+import type { DocumentContextSnapshot } from "../api/aiApi";
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -987,9 +934,7 @@ export function ChatPanel({
     setConversation,
     aiMode,
     selectedAgentType,
-    selectedModelId,
     setAiMode,
-    setSelectedModelId,
   } = useAiStore();
 
   const {
@@ -1005,14 +950,12 @@ export function ChatPanel({
   } = useAiStream();
 
   const [inputValue, setInputValue] = useState("");
-  const [models, setModels] = useState<ModelInfo[]>([]);
   const [recentConversations, setRecentConversations] = useState<
     Array<{ id: string; title: string | null }>
   >([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isModelOpen, setIsModelOpen] = useState(false);
+  const [isModeOpen, setIsModeOpen] = useState(false);
   const [historyQuery, setHistoryQuery] = useState("");
-  const [modelQuery, setModelQuery] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isUserScrolling = useRef(false);
@@ -1021,48 +964,15 @@ export function ChatPanel({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const historyPanelRef = useRef<HTMLDivElement>(null);
-  const modelPanelRef = useRef<HTMLDivElement>(null);
+  const modePanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     hasResolvedInitialConversationRef.current = false;
     clear();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRecentConversations([]);
     setIsHistoryOpen(false);
   }, [document_id, clear]);
-
-  // Fetch catalog; `default_model_id` comes from server OPENROUTER_MODEL (single backend source of truth).
-  useEffect(() => {
-    getModels()
-      .then((res) => {
-        setModels(res.models);
-        const defaultId = res.default_model_id ?? res.models[0]?.id;
-
-        if (!defaultId) {
-          return;
-        }
-
-        const isCurrentSelectionValid =
-          selectedModelId !== undefined && res.models.some((model) => model.id === selectedModelId);
-
-        if (selectedModelId === undefined || !isCurrentSelectionValid) {
-          setSelectedModelId(defaultId);
-        }
-      })
-      .catch(() => {
-        setModels(FALLBACK_MODELS);
-        const fallbackId = FALLBACK_MODELS[0]?.id;
-        if (
-          fallbackId &&
-          (selectedModelId === undefined || !FALLBACK_MODELS.some((m) => m.id === selectedModelId))
-        ) {
-          setSelectedModelId(fallbackId);
-        }
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const selectableModels = models.length > 0 ? models : FALLBACK_MODELS;
-  const selectedModel = selectableModels.find((model) => model.id === selectedModelId);
 
   const filteredRecentConversations = useMemo(() => {
     const needle = historyQuery.trim().toLowerCase();
@@ -1076,29 +986,14 @@ export function ChatPanel({
     });
   }, [recentConversations, historyQuery]);
 
-  const filteredModels = useMemo(() => {
-    const needle = modelQuery.trim().toLowerCase();
-    if (!needle) {
-      return selectableModels;
-    }
-
-    return selectableModels.filter((model) => {
-      return (
-        model.name.toLowerCase().includes(needle) ||
-        model.provider.toLowerCase().includes(needle) ||
-        model.id.toLowerCase().includes(needle)
-      );
-    });
-  }, [selectableModels, modelQuery]);
-
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (historyPanelRef.current && !historyPanelRef.current.contains(target)) {
         setIsHistoryOpen(false);
       }
-      if (modelPanelRef.current && !modelPanelRef.current.contains(target)) {
-        setIsModelOpen(false);
+      if (modePanelRef.current && !modePanelRef.current.contains(target)) {
+        setIsModeOpen(false);
       }
     };
 
@@ -1154,17 +1049,20 @@ export function ChatPanel({
   }, [activeConversationId, clear, document_id, setConversation]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadRecentConversations();
   }, [loadRecentConversations]);
 
   useEffect(() => {
     if (messages.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadRecentConversations();
     }
   }, [messages.length, loadRecentConversations]);
 
   useEffect(() => {
     if (wasLoadingRef.current && !is_loading && messages.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadRecentConversations();
     }
     wasLoadingRef.current = is_loading;
@@ -1202,14 +1100,13 @@ export function ChatPanel({
     isUserScrolling.current = false;
     const agentTypeToUse = aiMode === "agent" ? selectedAgentType : undefined;
     const currentContext = get_document_context?.();
-    await send_message(trimmed, document_id, currentContext, selectedModelId, agentTypeToUse);
+    await send_message(trimmed, document_id, currentContext, agentTypeToUse);
   }, [
     inputValue,
     is_loading,
     send_message,
     document_id,
     get_document_context,
-    selectedModelId,
     aiMode,
     selectedAgentType,
   ]);
@@ -1261,12 +1158,12 @@ export function ChatPanel({
     [activeConversationId, setConversation, clear],
   );
 
-  const handleSelectModel = useCallback(
-    (modelId: string) => {
-      setSelectedModelId(modelId || undefined);
-      setIsModelOpen(false);
+  const handleSelectMode = useCallback(
+    (mode: "ask" | "agent") => {
+      setAiMode(mode);
+      setIsModeOpen(false);
     },
-    [setSelectedModelId],
+    [setAiMode],
   );
 
   /**
@@ -1289,6 +1186,8 @@ export function ChatPanel({
   const has_messages = messages.length > 0;
   const is_agent_mode = aiMode === "agent";
   const think_label = t("thought_briefly");
+  const mode_label = aiMode === "agent" ? t("mode_agent") : t("mode_ask");
+  const mode_description = is_agent_mode ? "Tools on" : "Answers only";
 
   return (
     <aside
@@ -1315,7 +1214,7 @@ export function ChatPanel({
               type="button"
               onClick={() => {
                 setIsHistoryOpen((value) => !value);
-                setIsModelOpen(false);
+                setIsModeOpen(false);
                 setHistoryQuery("");
               }}
               className="inline-flex items-center gap-2 rounded-md border border-border-subtle px-3 py-1.5 text-ui-xs text-text-secondary transition-colors hover:border-accent-ai hover:text-text-primary"
@@ -1455,108 +1354,7 @@ export function ChatPanel({
 
       {/* Bottom controls and message bar */}
       <div className="shrink-0 border-t border-border-subtle bg-surface px-3 pb-3 pt-2">
-        <div className="mb-2 flex items-center gap-2">
-          <div className="relative" ref={modelPanelRef}>
-            <button
-              type="button"
-              onClick={() => {
-                setIsModelOpen((value) => !value);
-                setIsHistoryOpen(false);
-                setModelQuery("");
-              }}
-              className="inline-flex min-w-[190px] items-center justify-between gap-2 rounded-md border border-border-subtle bg-app px-3 py-2 text-ui-xs text-text-primary transition-colors hover:border-accent-ai"
-              aria-expanded={isModelOpen}
-              aria-label={t("model_selector")}
-            >
-              <span className="truncate">{selectedModel?.name ?? t("model_selector")}</span>
-              <ChevronsUpDown
-                className="h-3.5 w-3.5 shrink-0 text-text-secondary"
-                aria-hidden="true"
-              />
-            </button>
-
-            {isModelOpen && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setIsModelOpen(false)} />
-                <div className="absolute left-0 bottom-full z-40 mb-2 w-[320px] rounded-xl border border-border-subtle bg-surface p-3 shadow-elevated">
-                  <label className="flex items-center gap-2 rounded-lg border border-border-subtle px-3 py-2 text-ui-xs text-text-secondary">
-                    <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    <input
-                      value={modelQuery}
-                      onChange={(e) => setModelQuery(e.target.value)}
-                      placeholder={t("model_search_placeholder")}
-                      className="w-full bg-transparent outline-none placeholder:text-text-secondary/60"
-                    />
-                  </label>
-
-                  <div className="mt-3 max-h-[260px] overflow-y-auto pr-1">
-                    {filteredModels.length > 0 ? (
-                      <div className="space-y-1">
-                        {filteredModels.map((model) => (
-                          <button
-                            key={model.id}
-                            type="button"
-                            onClick={() => handleSelectModel(model.id)}
-                            className={[
-                              "flex w-full items-start justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-app",
-                              model.id === selectedModelId ? "bg-app" : "",
-                            ].join(" ")}
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate text-ui-sm text-text-primary">
-                                {model.name}
-                              </span>
-                              <span className="block truncate text-[11px] text-text-secondary">
-                                {model.provider}
-                              </span>
-                            </span>
-                            {model.id === selectedModelId && (
-                              <Check
-                                className="h-3.5 w-3.5 shrink-0 text-accent-ai"
-                                aria-hidden="true"
-                              />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="px-1 py-2 text-ui-sm text-text-secondary">
-                        {t("models_empty")}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="inline-flex rounded-md border border-border-subtle bg-app p-0.5">
-            <button
-              onClick={() => setAiMode("ask")}
-              className={[
-                "rounded-[4px] px-3 py-1.5 text-ui-xs font-medium transition-colors",
-                aiMode === "ask"
-                  ? "bg-surface text-text-primary shadow-sm"
-                  : "text-text-secondary hover:text-text-primary",
-              ].join(" ")}
-            >
-              {t("mode_ask")}
-            </button>
-            <button
-              onClick={() => setAiMode("agent")}
-              className={[
-                "rounded-[4px] px-3 py-1.5 text-ui-xs font-medium transition-colors",
-                aiMode === "agent"
-                  ? "bg-surface text-text-primary shadow-sm"
-                  : "text-text-secondary hover:text-text-primary",
-              ].join(" ")}
-            >
-              {t("mode_agent")}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-app px-3 py-2.5 transition-all duration-200 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20 shadow-sm">
+        <div className="rounded-[20px] border border-border-subtle bg-app px-3 py-3 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] transition-all duration-200 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20">
           <textarea
             ref={inputRef}
             value={inputValue}
@@ -1565,7 +1363,7 @@ export function ChatPanel({
             placeholder={t("input_placeholder")}
             disabled={is_loading}
             rows={1}
-            className="flex-1 resize-none bg-transparent text-ui-sm text-text-primary placeholder:text-text-secondary/60 outline-none leading-relaxed max-h-[120px] overflow-y-auto disabled:opacity-50 py-0.5"
+            className="w-full resize-none bg-transparent text-ui-sm text-text-primary placeholder:text-text-secondary/60 outline-none leading-relaxed max-h-[120px] overflow-y-auto disabled:opacity-50 py-0.5"
             aria-label={t("input_placeholder")}
             style={{
               height: "auto",
@@ -1577,28 +1375,96 @@ export function ChatPanel({
             }}
           />
 
-          {is_loading ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={stop_generating}
-              aria-label={t("stop_generating")}
-              className="shrink-0 p-1.5 text-accent-ai hover:text-accent-ai/80"
-            >
-              <Square className="h-4 w-4 fill-current" aria-hidden="true" strokeWidth={0} />
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSend}
-              disabled={!inputValue.trim()}
-              aria-label="Send message"
-              className="shrink-0 p-1.5 text-accent-ai hover:text-accent-ai/80 disabled:text-text-secondary/40"
-            >
-              <Send className="h-4 w-4" aria-hidden="true" strokeWidth={2} />
-            </Button>
-          )}
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-border-subtle/80 pt-2.5">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="relative" ref={modePanelRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModeOpen((value) => !value);
+                    setIsHistoryOpen(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border-subtle bg-surface px-2.5 py-1.5 text-ui-xs text-text-secondary transition-all duration-200 hover:border-accent-ai hover:text-text-primary"
+                  aria-expanded={isModeOpen}
+                  aria-label={mode_label}
+                >
+                  <span className="font-medium text-text-primary">{mode_label}</span>
+                  <ChevronDown
+                    className={[
+                      "h-3.5 w-3.5 shrink-0 text-text-secondary transition-transform duration-200",
+                      isModeOpen ? "rotate-180" : "rotate-0",
+                    ].join(" ")}
+                    aria-hidden="true"
+                  />
+                </button>
+
+                {isModeOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setIsModeOpen(false)} />
+                    <div className="absolute bottom-full left-0 z-40 mb-2 w-[220px] overflow-hidden rounded-2xl border border-border-subtle bg-surface p-1.5 shadow-elevated">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectMode("ask")}
+                        className={[
+                          "flex w-full items-start gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors hover:bg-app",
+                          aiMode === "ask" ? "bg-app" : "",
+                        ].join(" ")}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-ui-sm text-text-primary">{t("mode_ask")}</div>
+                          <div className="text-[11px] text-text-secondary">Answers only</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectMode("agent")}
+                        className={[
+                          "mt-1 flex w-full items-start gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors hover:bg-app",
+                          aiMode === "agent" ? "bg-app" : "",
+                        ].join(" ")}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-ui-sm text-text-primary">{t("mode_agent")}</div>
+                          <div className="text-[11px] text-text-secondary">
+                            Can use tools and propose edits
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <span className="truncate text-[11px] text-text-secondary">{mode_description}</span>
+            </div>
+
+            {is_loading ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={stop_generating}
+                aria-label={t("stop_generating")}
+                className="h-8 w-8 shrink-0 rounded-full p-0 text-accent-ai transition-all duration-200 hover:bg-accent-ai/10 hover:text-accent-ai hover:shadow-[0_0_0_1px_rgba(255,107,53,0.35)]"
+              >
+                <Square className="h-4 w-4 fill-current" aria-hidden="true" strokeWidth={0} />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSend}
+                disabled={!inputValue.trim()}
+                aria-label="Send message"
+                className="group h-9 w-9 shrink-0 rounded-full p-0 text-accent-ai transition-all duration-200 hover:bg-accent-ai/10 hover:text-accent-ai hover:shadow-[0_0_0_1px_rgba(255,107,53,0.35)] disabled:text-text-secondary/40"
+              >
+                <Send
+                  className="h-5 w-5 transition-transform duration-200 group-hover:scale-110"
+                  aria-hidden="true"
+                  strokeWidth={2.4}
+                />
+              </Button>
+            )}
+          </div>
         </div>
 
         <p className="mt-1.5 text-center text-ui-xs text-text-secondary/50">{t("keyboard_hint")}</p>

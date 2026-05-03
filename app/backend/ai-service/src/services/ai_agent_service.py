@@ -64,6 +64,14 @@ from schemas.ai import (
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_MODEL_FALLBACK_CHAIN: tuple[str, ...] = (
+    "deepseek/deepseek-v4-flash",
+    "minimax/minimax-m2.7",
+    "xiaomi/mimo-v2.5",
+    "xiaomi/mimo-v2.5-pro",
+    "moonshotai/kimi-k2.6",
+)
+
 _TITLE_MAX_LENGTH = 80
 _TITLE_FALLBACK_PREFIX_MAX_LENGTH = 60
 _TITLE_GENERATION_SYSTEM_PROMPT = """\
@@ -337,6 +345,19 @@ def _build_model(model_id: str | None = None) -> OpenAIChatModel | AnthropicMode
     raise RuntimeError(
         "No LLM API key configured. Set OPENROUTER_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY."
     )
+
+
+def _resolve_model_attempt_order(_client_model_id: str | None = None) -> list[str]:
+    """Return the server-controlled model attempt order, ignoring client overrides."""
+
+    preferred_model = settings.openrouter_model
+    ordered_models: list[str] = []
+
+    for model_id in (preferred_model, *_DEFAULT_MODEL_FALLBACK_CHAIN):
+        if model_id and model_id not in ordered_models:
+            ordered_models.append(model_id)
+
+    return ordered_models
 
 
 # ---------------------------------------------------------------------------
@@ -641,13 +662,6 @@ class AiAgentService:
                 system_prompt += f"\n\n{rag_context}"
 
         # 3. Build and run the agent with streaming ----------------------------
-        try:
-            model = _build_model(model_id)
-        except RuntimeError as exc:
-            error_chunk = StreamChunk(type="error", content=str(exc))
-            yield f"data: {error_chunk.model_dump_json()}\n\n"
-            return
-
         full_text = ""
         token_count = 0
         tool_call_traces: list[ToolCallTrace] = []
@@ -685,162 +699,219 @@ class AiAgentService:
                     exclude_current_document=exclude_current_document,
                 )
 
-            deps = GeneralAgentDeps(
-                document_content=normalized_document_context,
-                document_context=document_context,
-                selection=selection_payload,
-                search_workspace_context=search_workspace_context,
-            )
-            agent_instance = build_general_agent(model, system_prompt=system_prompt)
-            fallback_proposed_texts: list[str] = []
+            attempt_model_ids = _resolve_model_attempt_order(model_id)
 
-            try:
-                async for event in agent_instance.run_stream_events(
-                    user_message,
-                    message_history=message_history,
-                    deps=deps,
-                ):
-                    if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
-                        initial_text = event.part.content
-                        if initial_text:
-                            full_text += initial_text
-                            token_count += len(initial_text.split())
-                            delta_chunk = StreamChunk(type="delta", content=initial_text)
-                            yield f"data: {delta_chunk.model_dump_json()}\n\n"
-                        continue
+            for attempt_index, attempt_model_id in enumerate(attempt_model_ids):
+                attempt_full_text = ""
+                attempt_token_count = 0
+                attempt_tool_call_traces: list[ToolCallTrace] = []
+                fallback_proposed_texts: list[str] = []
 
-                    if isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
-                        delta = event.delta.content_delta
-                        if delta:
-                            full_text += delta
-                            token_count += len(delta.split())
-                            delta_chunk = StreamChunk(type="delta", content=delta)
-                            yield f"data: {delta_chunk.model_dump_json()}\n\n"
-                        continue
+                try:
+                    model = _build_model(attempt_model_id)
+                    deps = GeneralAgentDeps(
+                        document_content=normalized_document_context,
+                        document_context=document_context,
+                        selection=selection_payload,
+                        search_workspace_context=search_workspace_context,
+                    )
+                    agent_instance = build_general_agent(model, system_prompt=system_prompt)
 
-                    if isinstance(event, FunctionToolCallEvent):
-                        trace = ToolCallTrace(
-                            tool_name=event.part.tool_name,
-                            text_offset=len(full_text),
-                        )
-                        tool_call_traces.append(trace)
-                        tool_chunk = StreamChunk(
-                            type="tool_call",
-                            content="",
-                            tool_name=event.part.tool_name,
-                            tool_call=trace,
-                        )
-                        yield f"data: {tool_chunk.model_dump_json()}\n\n"
-
-                        if event.part.tool_name != "propose_document_replacement":
+                    async for event in agent_instance.run_stream_events(
+                        user_message,
+                        message_history=message_history,
+                        deps=deps,
+                    ):
+                        if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                            initial_text = event.part.content
+                            if initial_text:
+                                attempt_full_text += initial_text
+                                attempt_token_count += len(initial_text.split())
+                                delta_chunk = StreamChunk(type="delta", content=initial_text)
+                                yield f"data: {delta_chunk.model_dump_json()}\n\n"
                             continue
 
-                        args_dict: dict[str, object] = {}
-                        try:
-                            args_dict = event.part.args_as_dict()
-                        except Exception:
-                            args = getattr(event.part, "args", None)
-                            if isinstance(args, dict):
-                                args_dict = args
+                        if isinstance(event, PartDeltaEvent) and isinstance(
+                            event.delta, TextPartDelta
+                        ):
+                            delta = event.delta.content_delta
+                            if delta:
+                                attempt_full_text += delta
+                                attempt_token_count += len(delta.split())
+                                delta_chunk = StreamChunk(type="delta", content=delta)
+                                yield f"data: {delta_chunk.model_dump_json()}\n\n"
+                            continue
 
-                        proposed_text = args_dict.get("proposed_text")
-                        replacement_text = args_dict.get("replacement_text")
-                        candidate_text = proposed_text or replacement_text
+                        if isinstance(event, FunctionToolCallEvent):
+                            trace = ToolCallTrace(
+                                tool_name=event.part.tool_name,
+                                text_offset=len(attempt_full_text),
+                            )
+                            attempt_tool_call_traces.append(trace)
+                            tool_chunk = StreamChunk(
+                                type="tool_call",
+                                content="",
+                                tool_name=event.part.tool_name,
+                                tool_call=trace,
+                            )
+                            yield f"data: {tool_chunk.model_dump_json()}\n\n"
 
-                        if isinstance(candidate_text, str) and candidate_text.strip():
-                            fallback_proposed_texts.append(candidate_text)
-                        continue
+                            if event.part.tool_name != "propose_document_replacement":
+                                continue
 
-                    if isinstance(event, FunctionToolResultEvent):
-                        serialized_result = _serialize_tool_result(event.result.content)
-                        for trace in reversed(tool_call_traces):
-                            if trace.tool_name == event.result.tool_name:
-                                trace.result = serialized_result
-                                trace.result_summary = _summarize_tool_result(
-                                    trace.tool_name,
-                                    serialized_result,
-                                )
-                                result_chunk = StreamChunk(
-                                    type="tool_call",
-                                    content="",
-                                    tool_name=trace.tool_name,
-                                    tool_call=trace,
-                                )
-                                yield f"data: {result_chunk.model_dump_json()}\n\n"
-                                break
-                        continue
+                            args_dict: dict[str, object] = {}
+                            try:
+                                args_dict = event.part.args_as_dict()
+                            except Exception:
+                                args = getattr(event.part, "args", None)
+                                if isinstance(args, dict):
+                                    args_dict = args
 
-                    if isinstance(event, AgentRunResultEvent) and isinstance(
-                        event.result.output, str
-                    ):
-                        if not full_text:
-                            full_text = event.result.output
+                            proposed_text = args_dict.get("proposed_text")
+                            replacement_text = args_dict.get("replacement_text")
+                            candidate_text = proposed_text or replacement_text
 
-            except Exception as exc:
-                logger.exception("General agent streaming error: %s", exc)
-                error_chunk = StreamChunk(
-                    type="error", content="AI service error. Please try again."
-                )
-                yield f"data: {error_chunk.model_dump_json()}\n\n"
-                return
+                            if isinstance(candidate_text, str) and candidate_text.strip():
+                                fallback_proposed_texts.append(candidate_text)
+                            continue
 
-            changes_to_emit = list(deps.proposed_changes)
-            if not changes_to_emit and fallback_proposed_texts:
-                seen_texts: set[str] = set()
-                for proposed_text in fallback_proposed_texts:
-                    if proposed_text in seen_texts:
-                        continue
-                    seen_texts.add(proposed_text)
-                    changes_to_emit.append(
-                        {
-                            "operation": "replace_full",
-                            "proposed_text": proposed_text,
-                            "original_text": normalized_document_context or "",
-                        }
+                        if isinstance(event, FunctionToolResultEvent):
+                            serialized_result = _serialize_tool_result(event.result.content)
+                            for trace in reversed(attempt_tool_call_traces):
+                                if trace.tool_name == event.result.tool_name:
+                                    trace.result = serialized_result
+                                    trace.result_summary = _summarize_tool_result(
+                                        trace.tool_name,
+                                        serialized_result,
+                                    )
+                                    result_chunk = StreamChunk(
+                                        type="tool_call",
+                                        content="",
+                                        tool_name=trace.tool_name,
+                                        tool_call=trace,
+                                    )
+                                    yield f"data: {result_chunk.model_dump_json()}\n\n"
+                                    break
+                            continue
+
+                        if isinstance(event, AgentRunResultEvent) and isinstance(
+                            event.result.output, str
+                        ):
+                            if not attempt_full_text:
+                                attempt_full_text = event.result.output
+
+                    changes_to_emit = list(deps.proposed_changes)
+                    if not changes_to_emit and fallback_proposed_texts:
+                        seen_texts: set[str] = set()
+                        for proposed_text in fallback_proposed_texts:
+                            if proposed_text in seen_texts:
+                                continue
+                            seen_texts.add(proposed_text)
+                            changes_to_emit.append(
+                                {
+                                    "operation": "replace_full",
+                                    "proposed_text": proposed_text,
+                                    "original_text": normalized_document_context or "",
+                                }
+                            )
+
+                    for change in changes_to_emit:
+                        change_payload = DocumentChangePayload(
+                            operation=change["operation"],
+                            proposed_text=change["proposed_text"],
+                            original_text=change["original_text"],
+                            position_start=change.get("position_start"),
+                            position_end=change.get("position_end"),
+                        )
+                        change_chunk = StreamChunk(
+                            type="document_change",
+                            content="",
+                            document_change=change_payload,
+                        )
+                        yield f"data: {change_chunk.model_dump_json()}\n\n"
+
+                    full_text = attempt_full_text
+                    token_count = attempt_token_count
+                    tool_call_traces = attempt_tool_call_traces
+                    break
+                except Exception as exc:
+                    if attempt_full_text or attempt_tool_call_traces:
+                        logger.exception("General agent streaming error: %s", exc)
+                        error_chunk = StreamChunk(
+                            type="error", content="AI service error. Please try again."
+                        )
+                        yield f"data: {error_chunk.model_dump_json()}\n\n"
+                        return
+
+                    if attempt_index == len(attempt_model_ids) - 1:
+                        logger.exception("General agent streaming error: %s", exc)
+                        error_message = (
+                            str(exc)
+                            if isinstance(exc, RuntimeError)
+                            else "AI service error. Please try again."
+                        )
+                        error_chunk = StreamChunk(type="error", content=error_message)
+                        yield f"data: {error_chunk.model_dump_json()}\n\n"
+                        return
+
+                    logger.warning(
+                        "Model attempt %s failed before emitting output; retrying next fallback.",
+                        attempt_model_id,
                     )
 
-            for change in changes_to_emit:
-                change_payload = DocumentChangePayload(
-                    operation=change["operation"],
-                    proposed_text=change["proposed_text"],
-                    original_text=change["original_text"],
-                    position_start=change.get("position_start"),
-                    position_end=change.get("position_end"),
-                )
-                change_chunk = StreamChunk(
-                    type="document_change",
-                    content="",
-                    document_change=change_payload,
-                )
-                yield f"data: {change_chunk.model_dump_json()}\n\n"
-
         else:
-            agent: Agent[None, str] = Agent(
-                model=model,
-                system_prompt=system_prompt,
-                output_type=str,
-            )
+            attempt_model_ids = _resolve_model_attempt_order(model_id)
 
-            try:
-                async with agent.run_stream(
-                    user_message,
-                    message_history=message_history,
-                ) as result:
-                    async for delta in result.stream_text(delta=True):
-                        if delta:
-                            full_text += delta
-                            token_count += len(delta.split())  # approximate; LLM usage may override
+            for attempt_index, attempt_model_id in enumerate(attempt_model_ids):
+                attempt_full_text = ""
+                attempt_token_count = 0
 
-                            delta_chunk = StreamChunk(type="delta", content=delta)
-                            yield f"data: {delta_chunk.model_dump_json()}\n\n"
+                try:
+                    model = _build_model(attempt_model_id)
+                    agent: Agent[None, str] = Agent(
+                        model=model,
+                        system_prompt=system_prompt,
+                        output_type=str,
+                    )
 
-            except Exception as exc:
-                logger.exception("PydanticAI streaming error: %s", exc)
-                error_chunk = StreamChunk(
-                    type="error", content="AI service error. Please try again."
-                )
-                yield f"data: {error_chunk.model_dump_json()}\n\n"
-                return
+                    async with agent.run_stream(
+                        user_message,
+                        message_history=message_history,
+                    ) as result:
+                        async for delta in result.stream_text(delta=True):
+                            if delta:
+                                attempt_full_text += delta
+                                attempt_token_count += len(delta.split())
+                                delta_chunk = StreamChunk(type="delta", content=delta)
+                                yield f"data: {delta_chunk.model_dump_json()}\n\n"
+
+                    full_text = attempt_full_text
+                    token_count = attempt_token_count
+                    break
+                except Exception as exc:
+                    if attempt_full_text:
+                        logger.exception("PydanticAI streaming error: %s", exc)
+                        error_chunk = StreamChunk(
+                            type="error", content="AI service error. Please try again."
+                        )
+                        yield f"data: {error_chunk.model_dump_json()}\n\n"
+                        return
+
+                    if attempt_index == len(attempt_model_ids) - 1:
+                        logger.exception("PydanticAI streaming error: %s", exc)
+                        error_message = (
+                            str(exc)
+                            if isinstance(exc, RuntimeError)
+                            else "AI service error. Please try again."
+                        )
+                        error_chunk = StreamChunk(type="error", content=error_message)
+                        yield f"data: {error_chunk.model_dump_json()}\n\n"
+                        return
+
+                    logger.warning(
+                        "Model attempt %s failed before emitting output; retrying next fallback.",
+                        attempt_model_id,
+                    )
 
         # 4. Persist the completed assistant message ---------------------------
         assistant_msg = await self._msg_repo.create(
@@ -857,7 +928,7 @@ class AiAgentService:
                 conversation_id=conversation_id,
                 user_message=user_message,
                 assistant_message=full_text,
-                model_id=model_id,
+                model_id=None,
             )
 
         done_chunk = StreamChunk(

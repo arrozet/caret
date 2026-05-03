@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import type { ConversationListResponse, ModelsResponse } from "../api/aiApi";
+import type { ConversationListResponse } from "../api/aiApi";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -17,13 +17,7 @@ const mock_load_messages = vi.fn();
 const mock_clear = vi.fn();
 const mock_clear_pending_change = vi.fn();
 
-const { mock_get_models, mock_list_conversations, mock_touch_conversation } = vi.hoisted(() => ({
-  mock_get_models: vi.fn(
-    async (): Promise<ModelsResponse> => ({
-      models: [],
-      default_model_id: "mock-model",
-    }),
-  ),
+const { mock_list_conversations, mock_touch_conversation } = vi.hoisted(() => ({
   mock_list_conversations: vi.fn(
     async (): Promise<ConversationListResponse> => ({
       items: [],
@@ -94,11 +88,9 @@ vi.mock("../../../stores/aiStore", () => ({
     activeConversationId: mock_active_conversation_id,
     aiMode: mock_ai_mode,
     selectedAgentType: "general",
-    selectedModelId: undefined,
     closePanel: mock_close_panel,
     setConversation: mock_set_conversation,
     setAiMode: vi.fn(),
-    setSelectedModelId: vi.fn(),
   }),
 }));
 
@@ -119,7 +111,6 @@ vi.mock("react-i18next", () => ({
 
 /**
  * Mock aiApi to avoid real network calls.
- * getModels is included so the component's useEffect does not throw on mount.
  */
 vi.mock("../api/aiApi", () => ({
   deleteConversation: vi.fn().mockResolvedValue(undefined),
@@ -128,7 +119,6 @@ vi.mock("../api/aiApi", () => ({
   listConversations: mock_list_conversations,
   touchConversation: mock_touch_conversation,
   streamAiResponse: vi.fn(),
-  getModels: mock_get_models,
 }));
 
 // Import after mocking so the component sees the test doubles.
@@ -237,13 +227,12 @@ describe("ChatPanel", () => {
     const input = screen.getByRole("textbox", { name: "input_placeholder" });
     fireEvent.change(input, { target: { value: "Test message" } });
     fireEvent.keyDown(input, { key: "Enter", shiftKey: false });
-    expect(mock_send_message).toHaveBeenCalledWith(
-      "Test message",
-      "doc-1",
-      undefined,
-      undefined,
-      undefined,
-    );
+    expect(mock_send_message).toHaveBeenCalledWith("Test message", "doc-1", undefined, undefined);
+  });
+
+  it("does not render a model selector", () => {
+    render(<ChatPanel document_id="doc-1" />);
+    expect(screen.queryByRole("button", { name: "model_selector" })).not.toBeInTheDocument();
   });
 
   it("does not send an empty message on Enter", () => {
