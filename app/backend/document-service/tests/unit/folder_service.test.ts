@@ -573,33 +573,88 @@ describe("FolderService", () => {
   /* ── delete_folder ───────────────────────────────────── */
 
   /**
-   * Tests de delete_folder: soft-delete exitoso y errores de autorización.
+   * Tests de delete_folder: soft-delete exitoso, errores de autorización,
+   * y guarda de carpeta no vacía.
    */
   describe("delete_folder", () => {
-    /** verifica que hace soft-delete del subárbol y documentos relacionados */
+    /** verifica que rechaza eliminar una carpeta con documentos dentro */
+    it("should_reject_deleting_folder_with_documents", async () => {
+      folder_repo.find_by_id.mockResolvedValue(make_folder());
+      workspace_repo.find_membership.mockResolvedValue(make_membership());
+      const find_descendant_ids = vi.fn().mockResolvedValue([FOLDER_ID]);
+      folder_repo.find_descendant_ids = find_descendant_ids;
+      folder_repo.findDescendantIds = find_descendant_ids;
+
+      const find_ids_by_folder_ids = vi.fn().mockResolvedValue(["doc-1"]);
+      document_repo.find_ids_by_folder_ids = find_ids_by_folder_ids;
+      document_repo.findIdsByFolderIds = find_ids_by_folder_ids;
+
+      await expect(service.delete_folder(FOLDER_ID, USER_ID)).rejects.toThrow(
+        "This folder is not empty",
+      );
+      expect(folder_repo.soft_delete_many).not.toHaveBeenCalled();
+    });
+
+    /** verifica que rechaza eliminar una carpeta con subcarpetas dentro */
+    it("should_reject_deleting_folder_with_subfolders", async () => {
+      folder_repo.find_by_id.mockResolvedValue(make_folder());
+      workspace_repo.find_membership.mockResolvedValue(make_membership());
+      const find_descendant_ids = vi.fn().mockResolvedValue([FOLDER_ID, "child-folder-1"]);
+      folder_repo.find_descendant_ids = find_descendant_ids;
+      folder_repo.findDescendantIds = find_descendant_ids;
+
+      const find_ids_by_folder_ids = vi.fn().mockResolvedValue([]);
+      document_repo.find_ids_by_folder_ids = find_ids_by_folder_ids;
+      document_repo.findIdsByFolderIds = find_ids_by_folder_ids;
+
+      await expect(service.delete_folder(FOLDER_ID, USER_ID)).rejects.toThrow(
+        "This folder contains sub-folders",
+      );
+      expect(folder_repo.soft_delete_many).not.toHaveBeenCalled();
+    });
+
+    /** verifica que permite eliminar una carpeta vacía (sin documentos ni subcarpetas) */
+    it("should_allow_deleting_empty_folder", async () => {
+      folder_repo.find_by_id.mockResolvedValue(make_folder());
+      workspace_repo.find_membership.mockResolvedValue(make_membership());
+      const find_descendant_ids = vi.fn().mockResolvedValue([FOLDER_ID]);
+      folder_repo.find_descendant_ids = find_descendant_ids;
+      folder_repo.findDescendantIds = find_descendant_ids;
+
+      const find_ids_by_folder_ids = vi.fn().mockResolvedValue([]);
+      document_repo.find_ids_by_folder_ids = find_ids_by_folder_ids;
+      document_repo.findIdsByFolderIds = find_ids_by_folder_ids;
+
+      folder_repo.with_transaction.mockImplementation(async (cb) =>
+        cb({
+          folderRepository: folder_repo,
+          documentRepository: document_repo,
+          documentMemberRepository: document_member_repo,
+        }),
+      );
+
+      const soft_delete_many_folders = vi.fn().mockResolvedValue(1);
+      folder_repo.soft_delete_many = soft_delete_many_folders;
+      folder_repo.softDeleteMany = soft_delete_many_folders;
+
+      await service.delete_folder(FOLDER_ID, USER_ID);
+      expect(folder_repo.soft_delete_many).toHaveBeenCalledWith([FOLDER_ID]);
+    });
+
+    /** verifica que hace soft-delete de una carpeta vacía */
     it("should_soft_delete_folder_subtree_documents_and_memberships", async () => {
       // Arrange
       folder_repo.find_by_id.mockResolvedValue(make_folder());
       workspace_repo.find_membership.mockResolvedValue(make_membership());
-      const find_descendant_ids = vi
-        .fn()
-        .mockResolvedValue([FOLDER_ID, "child-folder-id", "grandchild-folder-id"]);
+      const find_descendant_ids = vi.fn().mockResolvedValue([FOLDER_ID]);
       folder_repo.find_descendant_ids = find_descendant_ids;
       folder_repo.findDescendantIds = find_descendant_ids;
 
-      const find_ids_by_folder_ids = vi.fn().mockResolvedValue(["doc-1", "doc-2"]);
+      const find_ids_by_folder_ids = vi.fn().mockResolvedValue([]);
       document_repo.find_ids_by_folder_ids = find_ids_by_folder_ids;
       document_repo.findIdsByFolderIds = find_ids_by_folder_ids;
 
-      const remove_by_document_ids = vi.fn().mockResolvedValue(2);
-      document_member_repo.remove_by_document_ids = remove_by_document_ids;
-      document_member_repo.removeByDocumentIds = remove_by_document_ids;
-
-      const soft_delete_many_documents = vi.fn().mockResolvedValue(2);
-      document_repo.soft_delete_many = soft_delete_many_documents;
-      document_repo.softDeleteMany = soft_delete_many_documents;
-
-      const soft_delete_many_folders = vi.fn().mockResolvedValue(3);
+      const soft_delete_many_folders = vi.fn().mockResolvedValue(1);
       folder_repo.soft_delete_many = soft_delete_many_folders;
       folder_repo.softDeleteMany = soft_delete_many_folders;
 
@@ -608,19 +663,7 @@ describe("FolderService", () => {
 
       // Assert
       expect(folder_repo.with_transaction).toHaveBeenCalledTimes(1);
-      expect(folder_repo.find_descendant_ids).toHaveBeenCalledWith(FOLDER_ID);
-      expect(document_repo.find_ids_by_folder_ids).toHaveBeenCalledWith([
-        FOLDER_ID,
-        "child-folder-id",
-        "grandchild-folder-id",
-      ]);
-      expect(document_member_repo.remove_by_document_ids).toHaveBeenCalledWith(["doc-1", "doc-2"]);
-      expect(document_repo.soft_delete_many).toHaveBeenCalledWith(["doc-1", "doc-2"], USER_ID);
-      expect(folder_repo.soft_delete_many).toHaveBeenCalledWith([
-        FOLDER_ID,
-        "child-folder-id",
-        "grandchild-folder-id",
-      ]);
+      expect(folder_repo.soft_delete_many).toHaveBeenCalledWith([FOLDER_ID]);
     });
 
     /** verifica que el cascade corre dentro de una transacción y aborta el resto ante un fallo */
@@ -629,6 +672,31 @@ describe("FolderService", () => {
       const operation_order: string[] = [];
       folder_repo.find_by_id.mockResolvedValue(make_folder());
       workspace_repo.find_membership.mockResolvedValue(make_membership());
+
+      let find_descendants_call_count = 0;
+      const find_descendant_ids = vi.fn().mockImplementation(async () => {
+        find_descendants_call_count += 1;
+        if (find_descendants_call_count === 1) {
+          return [FOLDER_ID];
+        }
+        operation_order.push("folders:descendants");
+        return [FOLDER_ID, "child-folder-id"];
+      });
+      folder_repo.find_descendant_ids = find_descendant_ids;
+      folder_repo.findDescendantIds = find_descendant_ids;
+
+      let find_docs_call_count = 0;
+      const find_ids_by_folder_ids = vi.fn().mockImplementation(async () => {
+        find_docs_call_count += 1;
+        if (find_docs_call_count === 1) {
+          return [];
+        }
+        operation_order.push("documents:lookup");
+        return ["doc-1", "doc-2"];
+      });
+      document_repo.find_ids_by_folder_ids = find_ids_by_folder_ids;
+      document_repo.findIdsByFolderIds = find_ids_by_folder_ids;
+
       folder_repo.with_transaction.mockImplementation(
         async (
           callback: (repositories: {
@@ -652,14 +720,6 @@ describe("FolderService", () => {
           }
         },
       );
-      folder_repo.find_descendant_ids.mockImplementation(async () => {
-        operation_order.push("folders:descendants");
-        return [FOLDER_ID, "child-folder-id"];
-      });
-      document_repo.find_ids_by_folder_ids.mockImplementation(async () => {
-        operation_order.push("documents:lookup");
-        return ["doc-1", "doc-2"];
-      });
       document_member_repo.remove_by_document_ids.mockImplementation(async () => {
         operation_order.push("memberships:remove");
         throw new Error("membership delete failed");

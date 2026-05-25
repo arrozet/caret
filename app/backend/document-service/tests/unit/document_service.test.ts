@@ -143,6 +143,9 @@ describe("DocumentService", () => {
     workspace_repo.findById.mockResolvedValue(make_workspace());
     document_member_repo.findMembership.mockResolvedValue(null);
     document_member_repo.listByUser.mockResolvedValue({ data: [], total: 0 });
+    (document_repo as Record<string, unknown>).findByTitleInFolder = vi
+      .fn()
+      .mockResolvedValue(null);
 
     /* Cast mocks to satisfy the constructor's type expectations */
     service = new DocumentService(
@@ -188,6 +191,30 @@ describe("DocumentService", () => {
         service.create_document({ title: "Test", workspace_id: WORKSPACE_ID }, USER_ID),
       ).rejects.toThrow(ForbiddenError);
 
+      expect(document_repo.create).not.toHaveBeenCalled();
+    });
+
+    it("should_reject_creating_document_with_duplicate_title_in_same_folder", async () => {
+      workspace_repo.findById.mockResolvedValue(make_workspace());
+      workspace_repo.findMembership.mockResolvedValue(make_membership());
+      workspace_repo.findFolderById.mockResolvedValue({
+        id: "folder-1",
+        workspace_id: WORKSPACE_ID,
+      });
+
+      (document_repo as Record<string, unknown>).findByTitleInFolder = vi
+        .fn()
+        .mockResolvedValue({ id: "existing-doc", title: "Duplicate Title" });
+
+      const dto = {
+        workspace_id: WORKSPACE_ID,
+        folder_id: "folder-1",
+        title: "Duplicate Title",
+      };
+
+      await expect(service.create_document(dto, USER_ID)).rejects.toThrow(
+        "already exists in this location",
+      );
       expect(document_repo.create).not.toHaveBeenCalled();
     });
   });

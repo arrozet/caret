@@ -6,7 +6,7 @@ import type { CreateFolderDto } from "../dtos/create_folder_dto.js";
 import type { UpdateFolderDto } from "../dtos/update_folder_dto.js";
 import type { FolderResponseDto } from "../dtos/folder_response_dto.js";
 import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
-import { NotFoundError, ForbiddenError } from "../lib/errors.js";
+import { NotFoundError, ForbiddenError, ConflictError } from "../lib/errors.js";
 
 /**
  * Business logic for folder lifecycle: create, read, update, delete.
@@ -261,12 +261,46 @@ export class FolderService {
   }
 
   /**
+   * Check whether the folder subtree contains any documents.
+   * Throws ConflictError if content must be resolved first.
+   */
+  private async assertFolderEmpty(folderId: string, userId: string): Promise<void> {
+    const folder = await this.folderRepository.findById(folderId);
+    if (!folder) {
+      throw new NotFoundError("Folder not found");
+    }
+
+    const membership = await this.workspaceRepository.findMembership(folder.workspace_id, userId);
+    if (!membership) {
+      throw new ForbiddenError("You are not a member of this workspace");
+    }
+
+    const folderIds = await this.folderRepository.findDescendantIds(folderId);
+    const documentIds = await this.documentRepository.findIdsByFolderIds(folderIds);
+
+    if (documentIds.length > 0) {
+      throw new ConflictError(
+        "This folder is not empty. Move or delete its contents before deleting this folder.",
+      );
+    }
+
+    const childFolderCount = folderIds.length - 1;
+    if (childFolderCount > 0) {
+      throw new ConflictError(
+        "This folder contains sub-folders. Move or delete them before deleting this folder.",
+      );
+    }
+  }
+
+  /**
    * Soft-delete a folder.
    * The caller must be an active member of the folder's workspace.
    * @param folder_id - Folder UUID.
    * @param user_id - Authenticated user's UUID.
    */
   async deleteFolder(folderId: string, userId: string): Promise<void> {
+    await this.assertFolderEmpty(folderId, userId);
+
     const folder = await this.folderRepository.findById(folderId);
     if (!folder) {
       throw new NotFoundError("Folder not found");

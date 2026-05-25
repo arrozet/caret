@@ -72,6 +72,8 @@ export class DocumentService {
       }
     }
 
+    await this.assertDocumentTitleAvailable(dto.workspace_id, dto.folder_id ?? null, dto.title);
+
     const visibility =
       this.getWorkspaceKind(workspace.settings) === "personal" ? "private" : "workspace";
 
@@ -285,6 +287,15 @@ export class DocumentService {
         }
         updateFields.folder_id = dto.folder_id;
       }
+    }
+
+    if (dto.title !== undefined) {
+      await this.assertDocumentTitleAvailable(
+        targetWorkspaceId,
+        dto.folder_id ?? updateFields.folder_id ?? doc.folder_id,
+        dto.title,
+        documentId,
+      );
     }
 
     /* If content was provided, create a new version snapshot */
@@ -518,6 +529,32 @@ export class DocumentService {
 
   async delete_document(documentId: string, userId: string): Promise<void> {
     return this.deleteDocument(documentId, userId);
+  }
+
+  /**
+   * Ensure no active document with the same title exists in the same folder.
+   * @param workspaceId - Workspace UUID.
+   * @param folderId - Target folder UUID (null = root).
+   * @param title - Proposed document title.
+   * @param excludeDocumentId - Optional document ID to exclude from the check.
+   */
+  private async assertDocumentTitleAvailable(
+    workspaceId: string,
+    folderId: string | null,
+    title: string,
+    excludeDocumentId?: string,
+  ): Promise<void> {
+    const existing = await this.documentRepository.findByTitleInFolder(
+      workspaceId,
+      folderId,
+      title,
+      excludeDocumentId,
+    );
+    if (existing) {
+      throw new ConflictError(
+        `A document named "${title}" already exists in this location. Please choose a different name.`,
+      );
+    }
   }
 
   async invite_document_collaborator(
