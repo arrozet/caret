@@ -20,8 +20,6 @@ export function useDeleteFolder() {
   return useMutation<void, Error, DeleteFolderVariables>({
     mutationFn: ({ folderId }) => deleteFolder(folderId),
     onSuccess: (_result, { workspaceId, documentIds }) => {
-      queryClient.removeQueries({ queryKey: ["folders", workspaceId], exact: true });
-
       const deleted_document_ids = new Set(documentIds);
       const cached_document_entries = queryClient.getQueriesData<DocumentResponse>({
         queryKey: ["document"],
