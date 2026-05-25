@@ -17,6 +17,8 @@ describe("FolderService", () => {
     findById: ReturnType<typeof vi.fn>;
     find_descendant_ids: ReturnType<typeof vi.fn>;
     findDescendantIds: ReturnType<typeof vi.fn>;
+    find_by_name_and_parent: ReturnType<typeof vi.fn>;
+    findByNameAndParent: ReturnType<typeof vi.fn>;
     with_transaction: ReturnType<typeof vi.fn>;
     withTransaction: ReturnType<typeof vi.fn>;
     list_by_workspace: ReturnType<typeof vi.fn>;
@@ -90,6 +92,8 @@ describe("FolderService", () => {
       findById: vi.fn(),
       find_descendant_ids: vi.fn(),
       findDescendantIds: vi.fn(),
+      find_by_name_and_parent: vi.fn(),
+      findByNameAndParent: vi.fn(),
       with_transaction: vi.fn(),
       withTransaction: vi.fn(),
       list_by_workspace: vi.fn(),
@@ -104,11 +108,14 @@ describe("FolderService", () => {
     };
     folder_repo.findById = folder_repo.find_by_id;
     folder_repo.findDescendantIds = folder_repo.find_descendant_ids;
+    folder_repo.findByNameAndParent = folder_repo.find_by_name_and_parent;
     folder_repo.withTransaction = folder_repo.with_transaction;
     folder_repo.listByWorkspace = folder_repo.list_by_workspace;
     folder_repo.listAllByWorkspace = folder_repo.list_all_by_workspace;
     folder_repo.softDelete = folder_repo.soft_delete;
     folder_repo.softDeleteMany = folder_repo.soft_delete_many;
+
+    folder_repo.find_by_name_and_parent.mockResolvedValue(null);
 
     workspace_repo = {
       find_membership: vi.fn(),

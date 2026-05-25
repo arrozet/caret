@@ -191,6 +191,10 @@ export const folders = pgTable(
     uniqueIndex("uq_folders_name_per_parent")
       .on(table.workspace_id, table.parent_folder_id, table.name)
       .where(sql`${table.deleted_at} IS NULL`),
+    /** Prevent duplicate folder names at the workspace root (parent_folder_id IS NULL). */
+    uniqueIndex("uq_folders_name_root")
+      .on(table.workspace_id, table.name)
+      .where(sql`${table.parent_folder_id} IS NULL AND ${table.deleted_at} IS NULL`),
   ],
 );
 

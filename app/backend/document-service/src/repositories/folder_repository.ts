@@ -81,6 +81,34 @@ export class FolderRepository {
   }
 
   /**
+   * Find an active folder by its name within a specific parent scope.
+   * Handles root-level (NULL parent) correctly.
+   * @param workspaceId - Workspace UUID.
+   * @param parentFolderId - Parent folder UUID (null = root level).
+   * @param name - Folder display name.
+   * @returns The matching folder row, or null.
+   */
+  async findByNameAndParent(workspaceId: string, parentFolderId: string | null, name: string) {
+    const rows = await this.db
+      .select()
+      .from(schema.folders)
+      .where(
+        and(
+          eq(schema.folders.workspace_id, workspaceId),
+          sql`${schema.folders.parent_folder_id} IS NOT DISTINCT FROM ${parentFolderId}`,
+          eq(schema.folders.name, name),
+          isNull(schema.folders.deleted_at),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  }
+
+  async find_by_name_and_parent(workspaceId: string, parentFolderId: string | null, name: string) {
+    return this.findByNameAndParent(workspaceId, parentFolderId, name);
+  }
+
+  /**
    * Find the IDs of a folder subtree, including the root folder itself.
    * Deleted folders are excluded from the traversal.
    * @param folderId - Root folder UUID.

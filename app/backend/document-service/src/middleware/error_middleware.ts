@@ -54,7 +54,10 @@ function formatUniqueViolationMessage(err: {
   constraint?: string;
   message?: string;
 }): string {
-  if (err.constraint === "uq_folders_name_per_parent") {
+  if (
+    err.constraint === "uq_folders_name_per_parent" ||
+    err.constraint === "uq_folders_name_root"
+  ) {
     return "A folder with this name already exists in this location.";
   }
   if (err.constraint === "uq_documents_title_per_folder") {

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uq_folders_name_root" ON "folders" USING btree ("workspace_id","name") WHERE "folders"."parent_folder_id" IS NULL AND "folders"."deleted_at" IS NULL;
