@@ -1083,10 +1083,16 @@ function WorkspaceSection({
     }
 
     try {
+      const deleted_folder_subtree_ids = get_folder_subtree_ids(folders, delete_folder.folder.id);
+
       await delete_folder_mutation.mutateAsync({
         folderId: delete_folder.folder.id,
         workspaceId: workspace.id,
-        documentIds: [],
+        documentIds: documents
+          .filter((document) =>
+            document.folder_id ? deleted_folder_subtree_ids.includes(document.folder_id) : false,
+          )
+          .map((document) => document.id),
       });
       if (selected_folder_id === delete_folder.folder.id) {
         set_selected_folder_id(null);
