@@ -38,6 +38,7 @@ export function TopBar() {
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const user = useAuthStore((state) => state.user);
+  const profile = useAuthStore((state) => state.profile);
 
   const isEditorPage = location.pathname.startsWith("/documents/");
   const isDocumentsPage = location.pathname === "/documents";
@@ -69,7 +70,7 @@ export function TopBar() {
     () => build_folder_path(folders, breadcrumb_folder_id),
     [folders, breadcrumb_folder_id],
   );
-  const account_name = user?.user_metadata?.full_name || "User";
+  const account_name = profile?.display_name || user?.user_metadata?.full_name || "User";
   const return_to = { pathname: location.pathname, state: location.state ?? null };
   const settings_return_to =
     location.state && typeof location.state === "object" && "return_to" in location.state
@@ -187,11 +188,7 @@ export function TopBar() {
           >
             <Avatar
               name={account_name}
-              src={
-                typeof user.user_metadata?.avatar_url === "string"
-                  ? user.user_metadata.avatar_url
-                  : undefined
-              }
+              src={profile?.avatar_url ?? undefined}
               size="md"
               className="border border-border-subtle bg-app"
             />

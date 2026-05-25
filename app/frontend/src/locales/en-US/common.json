@@ -44,7 +44,16 @@
     "about": "About Caret",
     "about_description": "Caret is an AI-first document editor for collaborative and structured writing.",
     "account_id": "Account ID",
-    "provider": "Auth Provider"
+    "provider": "Auth Provider",
+    "profile_edit_name": "Display name",
+    "profile_edit_avatar": "Avatar URL",
+    "profile_save": "Save",
+    "profile_saved": "Saved",
+    "profile_save_error": "Failed to save profile.",
+    "name_required": "Display name is required.",
+    "name_too_long": "Display name must be 100 characters or fewer.",
+    "avatar_url_invalid": "Please enter a valid URL.",
+    "service_unavailable": "Service temporarily unavailable. Please try again later."
   },
   "documents": {
     "title": "Documents",

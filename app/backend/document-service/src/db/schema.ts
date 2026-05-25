@@ -1,7 +1,7 @@
 /**
  * Drizzle ORM schema definitions for the Document Service.
- * Covers tables: workspaces, workspace_members, folders,
- * documents, document_members, document_versions.
+ * Covers tables: user_profiles, workspaces, workspace_members,
+ * folders, documents, document_members, document_versions.
  * See DATABASE.md for the full schema specification.
  */
 
@@ -294,7 +294,34 @@ export const document_members = pgTable(
 );
 
 /* ============================================================
-   3) Document Versioning
+    3) User Profiles
+    ============================================================ */
+
+/**
+ * Application-level user profile extending auth.users.
+ * Stores display preferences and avatar independently from
+ * identity provider metadata, so Google OAuth re-login
+ * does not overwrite customizations.
+ */
+export const user_profiles = pgTable("user_profiles", {
+  /** Primary key — matches auth.users(id). */
+  user_id: uuid("user_id").primaryKey().notNull(),
+  /** Human-friendly display name. */
+  display_name: text("display_name"),
+  /** Public avatar URL. */
+  avatar_url: text("avatar_url"),
+  /** IETF locale tag (e.g., en-US). */
+  locale: text("locale"),
+  /** Row creation timestamp. */
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Row last-update timestamp. */
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Soft delete timestamp (null = active). */
+  deleted_at: timestamp("deleted_at", { withTimezone: true }),
+});
+
+/* ============================================================
+    4) Document Versioning
    ============================================================ */
 
 /**

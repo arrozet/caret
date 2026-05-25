@@ -5,6 +5,7 @@ import { SettingsPage } from "./SettingsPage";
 
 const mock_navigate = vi.fn();
 const mock_sign_out = vi.fn();
+const mock_update_profile = vi.fn();
 const mock_set_theme = vi.fn();
 const mock_change_language = vi.fn();
 
@@ -39,7 +40,12 @@ vi.mock("../../../stores/authStore", () => ({
   useAuthStore: (selector: (state: object) => unknown) =>
     selector({
       user: mock_user,
+      profile: {
+        display_name: "Ruben Oliva",
+        avatar_url: "https://example.com/avatar.png",
+      },
       signOut: mock_sign_out,
+      updateProfile: mock_update_profile,
     }),
 }));
 
@@ -139,6 +145,75 @@ describe("SettingsPage", () => {
     await waitFor(() => {
       expect(mock_sign_out).toHaveBeenCalledTimes(1);
       expect(mock_navigate).toHaveBeenCalledWith("/login");
+    });
+  });
+
+  it("displays editable profile fields", () => {
+    render(<SettingsPage />);
+
+    const nameInput = screen.getByLabelText(/display name/i);
+    const avatarInput = screen.getByLabelText(/avatar url/i);
+
+    expect(nameInput).toBeInTheDocument();
+    expect(nameInput).toHaveValue("Ruben Oliva");
+    expect(avatarInput).toBeInTheDocument();
+    expect(avatarInput).toHaveValue("https://example.com/avatar.png");
+  });
+
+  it("validates empty display name on save", async () => {
+    render(<SettingsPage />);
+
+    const nameInput = screen.getByLabelText(/display name/i);
+    fireEvent.change(nameInput, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/display name is required/i);
+    });
+    expect(mock_update_profile).not.toHaveBeenCalled();
+  });
+
+  it("validates invalid avatar URL on save", async () => {
+    render(<SettingsPage />);
+
+    const avatarInput = screen.getByLabelText(/avatar url/i);
+    fireEvent.change(avatarInput, { target: { value: "not-a-url" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/valid url/i);
+    });
+    expect(mock_update_profile).not.toHaveBeenCalled();
+  });
+
+  it("saves profile changes via supabase", async () => {
+    mock_update_profile.mockResolvedValue(null);
+    render(<SettingsPage />);
+
+    const nameInput = screen.getByLabelText(/display name/i);
+    fireEvent.change(nameInput, { target: { value: "New Name" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      expect(mock_update_profile).toHaveBeenCalledWith({
+        full_name: "New Name",
+        avatar_url: "https://example.com/avatar.png",
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/saved/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows error on failed profile save", async () => {
+    mock_update_profile.mockResolvedValue("Network error");
+    render(<SettingsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/failed to save/i);
     });
   });
 });

@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGoogle } from "@fortawesome/free-brands-svg-icons";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   Globe,
   Palette,
@@ -51,7 +51,9 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation("common");
   const user = useAuthStore((state) => state.user);
+  const profile = useAuthStore((state) => state.profile);
   const signOut = useAuthStore((state) => state.signOut);
+  const updateProfile = useAuthStore((state) => state.updateProfile);
   const { theme, setTheme } = useTheme();
 
   const currentLanguage = i18n.language;
@@ -63,7 +65,16 @@ export function SettingsPage() {
   const provider =
     typeof user?.app_metadata?.provider === "string" ? user.app_metadata.provider : "google";
   const provider_name = provider === "google" ? "Google" : provider;
-  const display_name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
+  const display_name = profile?.display_name || user?.email?.split("@")[0] || "User";
+
+  const [profileName, setProfileName] = useState(profile?.display_name ?? "");
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState(profile?.avatar_url ?? "");
+  const [isSaving, setIsSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [avatarUrlError, setAvatarUrlError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [is_theme_menu_open, set_is_theme_menu_open] = useState(false);
   const [highlighted_theme_value, set_highlighted_theme_value] = useState<ThemeValue>(
     current_theme_option.value,
@@ -92,6 +103,66 @@ export function SettingsPage() {
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
+  const validateName = useCallback(
+    (value: string): string | null => {
+      if (!value.trim())
+        return t("settings.name_required", { defaultValue: "Display name is required." });
+      if (value.length > 100)
+        return t("settings.name_too_long", {
+          defaultValue: "Display name must be 100 characters or fewer.",
+        });
+      return null;
+    },
+    [t],
+  );
+
+  const validateAvatarUrl = useCallback(
+    (value: string): string | null => {
+      if (!value) return null;
+      try {
+        new URL(value);
+        return null;
+      } catch {
+        return t("settings.avatar_url_invalid", { defaultValue: "Please enter a valid URL." });
+      }
+    },
+    [t],
+  );
+
+  async function handleSaveProfile() {
+    const currentNameError = validateName(profileName);
+    const currentUrlError = validateAvatarUrl(profileAvatarUrl);
+    setNameError(currentNameError);
+    setAvatarUrlError(currentUrlError);
+    if (currentNameError || currentUrlError) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    const error = await updateProfile({
+      full_name: profileName.trim(),
+      avatar_url: profileAvatarUrl || undefined,
+    });
+
+    setIsSaving(false);
+
+    if (error) {
+      setSaveError(t("settings.profile_save_error", { defaultValue: "Failed to save profile." }));
+      return;
+    }
+
+    setSaveSuccess(true);
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    successTimerRef.current = setTimeout(() => setSaveSuccess(false), 2000);
+  }
 
   /** Change the application language. */
   function handleThemeChange(nextTheme: ThemeValue) {
@@ -271,15 +342,11 @@ export function SettingsPage() {
                 "Your editor identity stays lightweight in the chrome and lives here instead.",
             })}
           >
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4">
               <div className="flex items-center gap-4">
                 <Avatar
                   name={display_name}
-                  src={
-                    typeof user?.user_metadata?.avatar_url === "string"
-                      ? user.user_metadata.avatar_url
-                      : undefined
-                  }
+                  src={profile?.avatar_url ?? undefined}
                   size="lg"
                   className="border border-border-subtle bg-app"
                 />
@@ -298,6 +365,81 @@ export function SettingsPage() {
                   </div>
                 </div>
               </div>
+
+              <div>
+                <label htmlFor="profile-name" className="block text-ui-sm text-text-secondary mb-1">
+                  {t("settings.profile_edit_name", { defaultValue: "Display name" })}
+                </label>
+                <input
+                  id="profile-name"
+                  type="text"
+                  value={profileName}
+                  onChange={(e) => {
+                    setProfileName(e.target.value);
+                    if (nameError) setNameError(validateName(e.target.value));
+                  }}
+                  onBlur={() => setNameError(validateName(profileName))}
+                  className="block w-full rounded-[4px] border border-border-subtle bg-surface px-3 py-2 text-ui-base text-text-primary placeholder:text-text-secondary transition-all duration-[150ms] ease-out focus:outline-none focus:border-accent-main focus:ring-[3px] focus:ring-accent-main/40 disabled:bg-app disabled:opacity-60 disabled:cursor-not-allowed"
+                  maxLength={100}
+                  required
+                  aria-invalid={nameError ? true : undefined}
+                  aria-describedby={nameError ? "profile-name-error" : undefined}
+                />
+                {nameError && (
+                  <p id="profile-name-error" className="text-ui-sm text-error mt-1" role="alert">
+                    {nameError}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="profile-avatar"
+                  className="block text-ui-sm text-text-secondary mb-1"
+                >
+                  {t("settings.profile_edit_avatar", { defaultValue: "Avatar URL" })}
+                </label>
+                <input
+                  id="profile-avatar"
+                  type="url"
+                  value={profileAvatarUrl}
+                  onChange={(e) => {
+                    setProfileAvatarUrl(e.target.value);
+                    if (avatarUrlError) setAvatarUrlError(validateAvatarUrl(e.target.value));
+                  }}
+                  onBlur={() => setAvatarUrlError(validateAvatarUrl(profileAvatarUrl))}
+                  className="block w-full rounded-[4px] border border-border-subtle bg-surface px-3 py-2 text-ui-base text-text-primary placeholder:text-text-secondary transition-all duration-[150ms] ease-out focus:outline-none focus:border-accent-main focus:ring-[3px] focus:ring-accent-main/40 disabled:bg-app disabled:opacity-60 disabled:cursor-not-allowed"
+                  aria-invalid={avatarUrlError ? true : undefined}
+                  aria-describedby={avatarUrlError ? "profile-avatar-error" : undefined}
+                />
+                {avatarUrlError && (
+                  <p id="profile-avatar-error" className="text-ui-sm text-error mt-1" role="alert">
+                    {avatarUrlError}
+                  </p>
+                )}
+              </div>
+
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleSaveProfile}
+                disabled={isSaving || !!nameError}
+                isLoading={isSaving}
+              >
+                {t("settings.profile_save", { defaultValue: "Save" })}
+              </Button>
+
+              {saveError && (
+                <p className="text-ui-sm text-error" role="alert">
+                  {saveError}
+                </p>
+              )}
+              {saveSuccess && (
+                <p className="text-ui-sm text-success">
+                  {t("settings.profile_saved", { defaultValue: "Saved" })}
+                </p>
+              )}
             </div>
           </SettingsSection>
 
