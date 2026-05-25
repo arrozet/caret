@@ -72,13 +72,17 @@ export class DocumentService {
       }
     }
 
-    await this.assertDocumentTitleAvailable(dto.workspace_id, dto.folder_id ?? null, dto.title);
+    const resolvedTitle = await this.resolveUniqueDocumentTitle(
+      dto.workspace_id,
+      dto.folder_id ?? null,
+      dto.title,
+    );
 
     const visibility =
       this.getWorkspaceKind(workspace.settings) === "personal" ? "private" : "workspace";
 
     const doc = await this.documentRepository.create({
-      title: dto.title,
+      title: resolvedTitle,
       workspace_id: dto.workspace_id,
       folder_id: dto.folder_id ?? null,
       visibility,
@@ -555,6 +559,38 @@ export class DocumentService {
         `A document named "${title}" already exists in this location. Please choose a different name.`,
       );
     }
+  }
+
+  /**
+   * Resolve a unique document title by auto-incrementing a suffix ("Untitled 2", …)
+   * when the base title already exists in the same folder.
+   * @param workspaceId - Workspace UUID.
+   * @param folderId - Target folder UUID (null = root).
+   * @param title - Preferred base title.
+   * @returns A unique title guaranteed not to conflict.
+   */
+  private async resolveUniqueDocumentTitle(
+    workspaceId: string,
+    folderId: string | null,
+    title: string,
+  ): Promise<string> {
+    let candidate = title;
+    let existing = await this.documentRepository.findByTitleInFolder(
+      workspaceId,
+      folderId,
+      candidate,
+    );
+    let counter = 2;
+    while (existing) {
+      candidate = `${title} ${counter}`;
+      existing = await this.documentRepository.findByTitleInFolder(
+        workspaceId,
+        folderId,
+        candidate,
+      );
+      counter += 1;
+    }
+    return candidate;
   }
 
   async invite_document_collaborator(
