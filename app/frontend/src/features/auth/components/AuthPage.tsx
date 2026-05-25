@@ -7,6 +7,8 @@ import { CaretLogo } from "../../../components/ui/Logo";
 import { useTheme } from "../../../hooks/useTheme";
 import { useAuthStore } from "../../../stores/authStore";
 
+const SERVICE_UNAVAILABLE_MESSAGE = "Service temporarily unavailable. Please try again later.";
+
 interface AuthPageProps {
   embedded?: boolean;
   onClose?: () => void;
@@ -23,6 +25,7 @@ export function AuthPage({ embedded = false, onClose }: AuthPageProps) {
   const { theme, toggleTheme } = useTheme();
 
   const [error, set_error] = useState<string | null>(null);
+  const [isServiceError, setIsServiceError] = useState(false);
   const [isOauthLoading, setIsOauthLoading] = useState(false);
 
   const ThemeIcon = theme === "dark" ? Moon : Sun;
@@ -46,13 +49,25 @@ export function AuthPage({ embedded = false, onClose }: AuthPageProps) {
   /** Handle Google OAuth sign-in. */
   async function handleGoogleSignIn() {
     set_error(null);
+    setIsServiceError(false);
     setIsOauthLoading(true);
 
     const errorMessage = await signInWithGoogle();
 
     if (errorMessage) {
       setIsOauthLoading(false);
-      set_error(errorMessage);
+      console.error("Auth error:", errorMessage);
+      const isService =
+        errorMessage.toLowerCase().includes("network") ||
+        errorMessage.toLowerCase().includes("fetch") ||
+        errorMessage.toLowerCase().includes("unavailable") ||
+        errorMessage.toLowerCase().includes("timeout");
+      setIsServiceError(isService);
+      set_error(
+        isService
+          ? t("settings.service_unavailable", { defaultValue: SERVICE_UNAVAILABLE_MESSAGE })
+          : errorMessage,
+      );
     }
   }
 
@@ -114,9 +129,22 @@ export function AuthPage({ embedded = false, onClose }: AuthPageProps) {
           </Button>
 
           {error && (
-            <p className="mt-4 text-ui-sm text-error" role="alert">
-              {error}
-            </p>
+            <div className="mt-4">
+              <p className="text-ui-sm text-error" role="alert">
+                {error}
+              </p>
+              {isServiceError && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleGoogleSignIn}
+                  className="mt-2"
+                >
+                  {t("retry", { defaultValue: "Retry" })}
+                </Button>
+              )}
+            </div>
           )}
         </div>
       </div>
