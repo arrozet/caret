@@ -18,11 +18,12 @@ export function useCreateDocument() {
 
   return useMutation<DocumentResponse, Error, string | CreateDocumentVariables>({
     mutationFn: (variables) => {
+      const title = `Untitled ${Date.now()}`;
       if (typeof variables === "string") {
-        return createDocument("Untitled", variables);
+        return createDocument(title, variables);
       }
 
-      return createDocument("Untitled", variables.workspaceId, variables.folderId);
+      return createDocument(title, variables.workspaceId, variables.folderId);
     },
     onSuccess: (_document, variables) => {
       const workspaceId = typeof variables === "string" ? variables : variables.workspaceId;
