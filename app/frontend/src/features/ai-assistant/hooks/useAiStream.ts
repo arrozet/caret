@@ -359,7 +359,11 @@ export function useAiStream(): UseAiStreamReturn {
           } else if (chunk.type === "error") {
             setError(chunk.error ?? chunk.content ?? "AI service error");
             const currentStreamingId = streamingIdRef.current;
-            setMessages((prev) => prev.filter((msg) => msg.id !== currentStreamingId));
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === currentStreamingId ? { ...msg, is_streaming: false } : msg,
+              ),
+            );
             streamingIdRef.current = null;
           }
         }
@@ -384,7 +388,12 @@ export function useAiStream(): UseAiStreamReturn {
           );
         } else {
           setError(err instanceof Error ? err.message : "Streaming failed");
-          setMessages((prev) => prev.filter((msg) => msg.id !== currentStreamingId));
+          const currentStreamingId = streamingIdRef.current;
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === currentStreamingId ? { ...msg, is_streaming: false } : msg,
+            ),
+          );
         }
         streamingIdRef.current = null;
       } finally {
