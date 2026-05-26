@@ -1184,6 +1184,15 @@ export function ChatPanel({
   }, [resolve_pending_change_token, clear_pending_change]);
 
   const has_messages = messages.length > 0;
+
+  const last_user_message = useMemo(() => {
+    if (!has_messages) return "";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i].content;
+    }
+    return "";
+  }, [messages, has_messages]);
+
   const is_agent_mode = aiMode === "agent";
   const think_label = t("thought_briefly");
   const mode_label = aiMode === "agent" ? t("mode_agent") : t("mode_ask");
@@ -1346,9 +1355,31 @@ export function ChatPanel({
       {error && (
         <div
           role="alert"
-          className="mx-3 mb-2 rounded-[4px] bg-error/10 border border-error/30 px-3 py-2 text-ui-sm text-error"
+          className="mx-3 mb-2 rounded-[4px] bg-error/10 border border-error/30 px-3 py-2 text-ui-sm"
         >
-          {t("error.unavailable")}
+          <p className="text-error">{t("error.unavailable")}</p>
+          {last_user_message && !is_loading && (
+            <button
+              type="button"
+              onClick={() => {
+                setInputValue(last_user_message);
+                setTimeout(() => {
+                  const currentContext = get_document_context?.();
+                  send_message(
+                    last_user_message,
+                    document_id,
+                    currentContext,
+                    aiMode === "agent" ? selectedAgentType : undefined,
+                  );
+                }, 0);
+              }}
+              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-error/40 px-2.5 py-1 text-ui-xs text-error hover:bg-error/5 transition-colors"
+              aria-label="Retry"
+            >
+              <RefreshCw className="h-3 w-3" aria-hidden="true" strokeWidth={2} />
+              Retry
+            </button>
+          )}
         </div>
       )}
 

@@ -359,14 +359,19 @@ export function useAiStream(): UseAiStreamReturn {
           } else if (chunk.type === "error") {
             setError(chunk.error ?? chunk.content ?? "AI service error");
             const currentStreamingId = streamingIdRef.current;
-            setMessages((prev) => prev.filter((msg) => msg.id !== currentStreamingId));
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === currentStreamingId ? { ...msg, is_streaming: false } : msg,
+              ),
+            );
             streamingIdRef.current = null;
           }
         }
 
-        // If the stream ends without a 'done' chunk, finalise anyway.
+        // A stream that finishes without a terminal event was interrupted upstream.
         if (streamingIdRef.current) {
           const currentStreamingId = streamingIdRef.current;
+          setError("AI stream ended before completion. Please retry.");
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === currentStreamingId ? { ...msg, is_streaming: false } : msg,
@@ -384,7 +389,12 @@ export function useAiStream(): UseAiStreamReturn {
           );
         } else {
           setError(err instanceof Error ? err.message : "Streaming failed");
-          setMessages((prev) => prev.filter((msg) => msg.id !== currentStreamingId));
+          const currentStreamingId = streamingIdRef.current;
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === currentStreamingId ? { ...msg, is_streaming: false } : msg,
+            ),
+          );
         }
         streamingIdRef.current = null;
       } finally {

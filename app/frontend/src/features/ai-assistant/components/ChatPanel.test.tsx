@@ -273,6 +273,14 @@ describe("ChatPanel", () => {
     expect(screen.getByText("error.unavailable")).toBeInTheDocument();
   });
 
+  it("shows retry button when error occurs and a user message exists", () => {
+    mock_error = "Something failed";
+    mock_messages = [{ id: "m1", role: "user", content: "Summarize this", tool_calls: [] }];
+    render(<ChatPanel document_id="doc-1" />);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
   it("renders the aria-live messages region", () => {
     render(<ChatPanel document_id="doc-1" />);
     const log = screen.getByRole("log");
