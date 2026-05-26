@@ -24,6 +24,11 @@
   "model_stealth_label": "Oculto",
   "model_stealth_tooltip": "Modelo anónimo: el laboratorio detrás de él no se ha hecho público.",
   "model_stealth_notice": "El creador de este modelo no se ha hecho público.",
+  "suggested_prompts": {
+    "summarize": "Resumir este documento",
+    "improve_intro": "Mejorar la introducción",
+    "check_clarity": "Revisar la claridad"
+  },
   "error": {
     "unavailable": "El servicio de IA no está disponible temporalmente. Inténtalo de nuevo."
   }

@@ -13,9 +13,27 @@ const EMBEDDINGS_BASE = `${AI_BASE}/embeddings`;
 /** Maximum time to wait for the next SSE byte before treating the stream as interrupted. */
 export const STREAM_READ_TIMEOUT_MS = 30_000;
 
+/** Maximum time to wait for the SSE response to open before surfacing a retryable error. */
+export const STREAM_OPEN_TIMEOUT_MS = 30_000;
+
 // ---------------------------------------------------------------------------
 // Response shape types (mirrors the Python Pydantic DTOs)
 // ---------------------------------------------------------------------------
+
+/** Response shape for a persisted AI suggestion. */
+export interface SuggestionResponse {
+  id: string;
+  conversation_id: string;
+  document_id: string;
+  message_id: string | null;
+  status: string;
+  original_text: string | null;
+  suggested_text: string;
+  position_start: number | null;
+  position_end: number | null;
+  created_at: string;
+  updated_at: string;
+}
 
 /** A single AI conversation. */
 export interface ConversationResponse {
@@ -101,6 +119,8 @@ export interface DocumentChangePayload {
   position_start?: number | null;
   /** Optional end position for range-scoped edits. */
   position_end?: number | null;
+  /** UUID of the persisted suggestion, set after the agent run completes. */
+  suggestion_id?: string | null;
 }
 
 /** Structured snapshot of the live editor document context. */
@@ -309,6 +329,33 @@ function read_with_timeout(
   });
 }
 
+function create_timeout_controller(
+  signal: AbortSignal | undefined,
+  timeout_ms: number,
+): { signal: AbortSignal; clear: () => void; did_timeout: () => boolean } {
+  const controller = new AbortController();
+  let timed_out = false;
+  const timeout = window.setTimeout(() => {
+    timed_out = true;
+    controller.abort();
+  }, timeout_ms);
+
+  function handle_abort() {
+    controller.abort();
+  }
+
+  signal?.addEventListener("abort", handle_abort, { once: true });
+
+  return {
+    signal: controller.signal,
+    clear: () => {
+      window.clearTimeout(timeout);
+      signal?.removeEventListener("abort", handle_abort);
+    },
+    did_timeout: () => timed_out,
+  };
+}
+
 /**
  * Stream an AI response via Server-Sent Events.
  *
@@ -334,15 +381,26 @@ export async function* streamAiResponse(
 
   const api_base = (import.meta.env.VITE_API_BASE_URL as string) || "http://localhost:3000/api/v1";
 
-  const response = await fetch(`${api_base}${AI_BASE}/conversations/${conversation_id}/stream`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-    },
-    body: JSON.stringify({ message, document_context, document_id, agent_type }),
-    signal,
-  });
+  const open_timeout = create_timeout_controller(signal, STREAM_OPEN_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${api_base}${AI_BASE}/conversations/${conversation_id}/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ message, document_context, document_id, agent_type }),
+      signal: open_timeout.signal,
+    });
+  } catch (error) {
+    if (open_timeout.did_timeout()) {
+      throw new Error("AI stream stalled. Please retry.", { cause: error });
+    }
+    throw error;
+  } finally {
+    open_timeout.clear();
+  }
 
   if (!response.ok) {
     const error_body = await response.json().catch(() => ({}));
@@ -418,6 +476,21 @@ export interface IndexEmbeddingsResponse {
   document_id: string;
   /** Number of chunks that were embedded and stored. */
   chunks_indexed: number;
+}
+
+/**
+ * Update the lifecycle status of a persisted AI suggestion.
+ * @param suggestion_id - UUID of the suggestion to update.
+ * @param status - New status: "applied", "dismissed", or "superseded".
+ */
+export function updateSuggestionStatus(
+  suggestion_id: string,
+  status: "applied" | "dismissed" | "superseded",
+): Promise<SuggestionResponse> {
+  return api_fetch<SuggestionResponse>(`${AI_BASE}/suggestions/${suggestion_id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
 }
 
 /**

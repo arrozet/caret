@@ -582,6 +582,14 @@ function humanizeToolName(toolName: string) {
     .join(" ");
 }
 
+function humanizeAgentType(agentType: string) {
+  return agentType
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 /**
  * Displays a visible trace row for a tool used by the agent.
  * Shows a spinner while the run is active and a checkmark once completed.
@@ -935,6 +943,7 @@ export function ChatPanel({
     aiMode,
     selectedAgentType,
     setAiMode,
+    setSelectedAgentType,
   } = useAiStore();
 
   const {
@@ -1166,6 +1175,14 @@ export function ChatPanel({
     [setAiMode],
   );
 
+  const handleSelectAgentType = useCallback(
+    (agentType: string) => {
+      setSelectedAgentType(agentType);
+      setIsModeOpen(false);
+    },
+    [setSelectedAgentType],
+  );
+
   /**
    * Allow parent-owned accept/reject controls (outside this panel) to clear
    * the pending change stored in the streaming hook.
@@ -1196,7 +1213,7 @@ export function ChatPanel({
   const is_agent_mode = aiMode === "agent";
   const think_label = t("thought_briefly");
   const mode_label = aiMode === "agent" ? t("mode_agent") : t("mode_ask");
-  const mode_description = is_agent_mode ? "Tools on" : "Answers only";
+  const mode_description = is_agent_mode ? humanizeAgentType(selectedAgentType) : "Answers only";
 
   return (
     <aside
@@ -1385,6 +1402,33 @@ export function ChatPanel({
 
       {/* Bottom controls and message bar */}
       <div className="shrink-0 border-t border-border-subtle bg-surface px-3 pb-3 pt-2">
+        {/* Suggested prompt chips */}
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setInputValue(t("suggested_prompts.summarize"))}
+            className="rounded-full border border-border-subtle px-2.5 py-1 text-ui-xs text-text-secondary hover:border-accent-caret hover:text-text-primary transition-colors"
+          >
+            {t("suggested_prompts.summarize")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setInputValue(t("suggested_prompts.improve_intro"))}
+            className="rounded-full border border-border-subtle px-2.5 py-1 text-ui-xs text-text-secondary hover:border-accent-caret hover:text-text-primary transition-colors"
+          >
+            {t("suggested_prompts.improve_intro")}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setInputValue("Analyze the structure of this document and suggest improvements.")
+            }
+            className="rounded-full border border-border-subtle px-2.5 py-1 text-ui-xs text-text-secondary hover:border-accent-caret hover:text-text-primary transition-colors"
+          >
+            Analyze structure
+          </button>
+        </div>
+
         <div className="rounded-[20px] border border-border-subtle bg-app px-3 py-3 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] transition-all duration-200 focus-within:border-accent-ai focus-within:ring-1 focus-within:ring-accent-ai/20">
           <textarea
             ref={inputRef}
@@ -1461,6 +1505,47 @@ export function ChatPanel({
                           </div>
                         </div>
                       </button>
+
+                      {aiMode === "agent" && (
+                        <>
+                          <div className="mx-2 my-2 h-px bg-border-subtle/60" />
+                          <div className="px-2 pb-1">
+                            <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-text-secondary">
+                              Agent type
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAgentType("general")}
+                              className={[
+                                "flex w-full items-start gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors hover:bg-app",
+                                selectedAgentType === "general" ? "bg-app" : "",
+                              ].join(" ")}
+                            >
+                              <div className="min-w-0">
+                                <div className="text-ui-sm text-text-primary">General</div>
+                                <div className="text-[11px] text-text-secondary">
+                                  Document editing and metrics
+                                </div>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectAgentType("analyst")}
+                              className={[
+                                "mt-1 flex w-full items-start gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors hover:bg-app",
+                                selectedAgentType === "analyst" ? "bg-app" : "",
+                              ].join(" ")}
+                            >
+                              <div className="min-w-0">
+                                <div className="text-ui-sm text-text-primary">Analyst</div>
+                                <div className="text-[11px] text-text-secondary">
+                                  Summarization and structure
+                                </div>
+                              </div>
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </>
                 )}

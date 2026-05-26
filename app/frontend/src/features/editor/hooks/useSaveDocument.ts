@@ -19,8 +19,7 @@ export function useSaveDocument(documentId: string) {
     { title?: string; content_json?: Record<string, unknown>; content_text?: string }
   >({
     mutationFn: (data) => updateDocument(documentId, data),
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10_000),
+    retry: false,
     onSuccess: (updatedDoc) => {
       /* Update the single-document cache immediately */
       queryClient.setQueryData(["document", documentId], updatedDoc);

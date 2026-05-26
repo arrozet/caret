@@ -54,6 +54,7 @@ let mock_messages: Array<{
 let mock_is_loading = false;
 let mock_error: string | null = null;
 let mock_ai_mode: "ask" | "agent" = "ask";
+let mock_selected_agent_type = "general";
 let mock_active_conversation_id: string | null = null;
 
 vi.mock("../hooks/useAiStream", () => ({
@@ -81,16 +82,23 @@ vi.mock("../hooks/useAiStream", () => ({
  */
 const mock_close_panel = vi.fn();
 const mock_set_conversation = vi.fn();
+const mock_set_ai_mode = vi.fn((mode: "ask" | "agent") => {
+  mock_ai_mode = mode;
+});
+const mock_set_selected_agent_type = vi.fn((agent_type: string) => {
+  mock_selected_agent_type = agent_type;
+});
 
 vi.mock("../../../stores/aiStore", () => ({
   useAiStore: () => ({
     isPanelOpen: true,
     activeConversationId: mock_active_conversation_id,
     aiMode: mock_ai_mode,
-    selectedAgentType: "general",
+    selectedAgentType: mock_selected_agent_type,
     closePanel: mock_close_panel,
     setConversation: mock_set_conversation,
-    setAiMode: vi.fn(),
+    setAiMode: mock_set_ai_mode,
+    setSelectedAgentType: mock_set_selected_agent_type,
   }),
 }));
 
@@ -135,6 +143,7 @@ describe("ChatPanel", () => {
     mock_is_loading = false;
     mock_error = null;
     mock_ai_mode = "ask";
+    mock_selected_agent_type = "general";
     mock_active_conversation_id = null;
   });
 
@@ -233,6 +242,24 @@ describe("ChatPanel", () => {
   it("does not render a model selector", () => {
     render(<ChatPanel document_id="doc-1" />);
     expect(screen.queryByRole("button", { name: "model_selector" })).not.toBeInTheDocument();
+  });
+
+  it("shows the active agent type and closes the mode menu after selecting analyst", () => {
+    mock_ai_mode = "agent";
+
+    const { rerender } = render(<ChatPanel document_id="doc-1" />);
+
+    expect(screen.getByText("General")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "mode_agent" }));
+    fireEvent.click(screen.getByRole("button", { name: /analyst/i }));
+
+    expect(mock_set_selected_agent_type).toHaveBeenCalledWith("analyst");
+    expect(screen.queryByText("Agent type")).not.toBeInTheDocument();
+
+    rerender(<ChatPanel document_id="doc-1" />);
+
+    expect(screen.getByText("Analyst")).toBeInTheDocument();
   });
 
   it("does not send an empty message on Enter", () => {

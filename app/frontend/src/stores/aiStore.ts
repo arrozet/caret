@@ -35,6 +35,8 @@ interface AiState {
   setConversationForDocument: (documentId: string, id: string | null) => void;
   /** Switch between Ask and Agent modes. */
   setAiMode: (mode: AiMode) => void;
+  /** Set the active agent type slug (e.g. "general", "analyst"). */
+  setSelectedAgentType: (agentType: string) => void;
   /** Update (or clear) the globally pending document change. */
   setPendingDocumentChange: (change: DocumentChangePayload | null) => void;
 }
@@ -102,6 +104,10 @@ export const useAiStore = create<AiState>((set) => ({
 
   setAiMode(mode: AiMode) {
     set({ aiMode: mode });
+  },
+
+  setSelectedAgentType(agentType: string) {
+    set({ selectedAgentType: agentType });
   },
 
   setPendingDocumentChange(change: DocumentChangePayload | null) {

@@ -628,6 +628,7 @@ class AiAgentService:
             content=user_message,
         )
         await self._conv_repo.touch_updated_at(conversation_id)
+        await self._session.commit()
 
         # 2. Build history for the agent's context window ----------------------
         history_messages = await self._msg_repo.list_for_conversation(conversation_id)
@@ -816,12 +817,22 @@ class AiAgentService:
                             )
 
                     for change in changes_to_emit:
+                        persisted_suggestion = await self._suggestion_repo.create(
+                            conversation_id=conversation_id,
+                            document_id=document_id,  # type: ignore[arg-type]
+                            suggested_text=change["proposed_text"],
+                            original_text=change.get("original_text"),
+                            position_start=change.get("position_start"),
+                            position_end=change.get("position_end"),
+                            message_id=None,
+                        )
                         change_payload = DocumentChangePayload(
                             operation=change["operation"],
                             proposed_text=change["proposed_text"],
                             original_text=change["original_text"],
                             position_start=change.get("position_start"),
                             position_end=change.get("position_end"),
+                            suggestion_id=str(persisted_suggestion.id),
                         )
                         change_chunk = StreamChunk(
                             type="document_change",
@@ -845,6 +856,196 @@ class AiAgentService:
 
                     if attempt_index == len(attempt_model_ids) - 1:
                         logger.exception("General agent streaming error: %s", exc)
+                        error_message = (
+                            str(exc)
+                            if isinstance(exc, RuntimeError)
+                            else "AI service error. Please try again."
+                        )
+                        error_chunk = StreamChunk(type="error", content=error_message)
+                        yield f"data: {error_chunk.model_dump_json()}\n\n"
+                        return
+
+                    logger.warning(
+                        "Model attempt %s failed before emitting output; retrying next fallback.",
+                        attempt_model_id,
+                    )
+
+        elif agent_type == "analyst":
+            from agents.analyst_agent import (  # noqa: PLC0415
+                AnalystAgentDeps,
+                build_analyst_agent,
+            )
+            from services.embedding_service import EmbeddingService  # noqa: PLC0415
+
+            embedding_service = EmbeddingService(self._session)
+
+            async def analyst_search_workspace_context(
+                query: str,
+                exclude_current_document: bool = False,
+                top_k: int = 5,
+            ):
+                if document_id is None or user_id is None:
+                    return []
+                return await embedding_service.search_similar_chunks(
+                    query=query,
+                    document_id=document_id,
+                    user_id=user_id,
+                    top_k=top_k,
+                    exclude_current_document=exclude_current_document,
+                )
+
+            attempt_model_ids = _resolve_model_attempt_order(model_id)
+
+            for attempt_index, attempt_model_id in enumerate(attempt_model_ids):
+                attempt_full_text = ""
+                attempt_token_count = 0
+                attempt_tool_call_traces: list[ToolCallTrace] = []
+                fallback_proposed_texts: list[str] = []
+
+                try:
+                    model = _build_model(attempt_model_id)
+                    deps = AnalystAgentDeps(
+                        document_content=normalized_document_context,
+                        document_context=document_context,
+                        search_workspace_context=analyst_search_workspace_context,
+                    )
+                    agent_instance = build_analyst_agent(model, system_prompt=system_prompt)
+
+                    async for event in agent_instance.run_stream_events(
+                        user_message,
+                        message_history=message_history,
+                        deps=deps,
+                    ):
+                        if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                            initial_text = event.part.content
+                            if initial_text:
+                                attempt_full_text += initial_text
+                                attempt_token_count += len(initial_text.split())
+                                delta_chunk = StreamChunk(type="delta", content=initial_text)
+                                yield f"data: {delta_chunk.model_dump_json()}\n\n"
+                            continue
+
+                        if isinstance(event, PartDeltaEvent) and isinstance(
+                            event.delta, TextPartDelta
+                        ):
+                            delta = event.delta.content_delta
+                            if delta:
+                                attempt_full_text += delta
+                                attempt_token_count += len(delta.split())
+                                delta_chunk = StreamChunk(type="delta", content=delta)
+                                yield f"data: {delta_chunk.model_dump_json()}\n\n"
+                            continue
+
+                        if isinstance(event, FunctionToolCallEvent):
+                            trace = ToolCallTrace(
+                                tool_name=event.part.tool_name,
+                                text_offset=len(attempt_full_text),
+                            )
+                            attempt_tool_call_traces.append(trace)
+                            tool_chunk = StreamChunk(
+                                type="tool_call",
+                                content="",
+                                tool_name=event.part.tool_name,
+                                tool_call=trace,
+                            )
+                            yield f"data: {tool_chunk.model_dump_json()}\n\n"
+
+                            if event.part.tool_name != "propose_document_replacement":
+                                continue
+
+                            args_dict: dict[str, object] = {}
+                            try:
+                                args_dict = event.part.args_as_dict()
+                            except Exception:
+                                args = getattr(event.part, "args", None)
+                                if isinstance(args, dict):
+                                    args_dict = args
+
+                            proposed_text = args_dict.get("proposed_text")
+                            if isinstance(proposed_text, str) and proposed_text.strip():
+                                fallback_proposed_texts.append(proposed_text)
+                            continue
+
+                        if isinstance(event, FunctionToolResultEvent):
+                            serialized_result = _serialize_tool_result(event.result.content)
+                            for trace in reversed(attempt_tool_call_traces):
+                                if trace.tool_name == event.result.tool_name:
+                                    trace.result = serialized_result
+                                    trace.result_summary = _summarize_tool_result(
+                                        trace.tool_name,
+                                        serialized_result,
+                                    )
+                                    result_chunk = StreamChunk(
+                                        type="tool_call",
+                                        content="",
+                                        tool_name=trace.tool_name,
+                                        tool_call=trace,
+                                    )
+                                    yield f"data: {result_chunk.model_dump_json()}\n\n"
+                                    break
+                            continue
+
+                        if isinstance(event, AgentRunResultEvent) and isinstance(
+                            event.result.output, str
+                        ):
+                            if not attempt_full_text:
+                                attempt_full_text = event.result.output
+
+                    changes_to_emit = list(deps.proposed_changes)
+                    if not changes_to_emit and fallback_proposed_texts:
+                        seen_texts: set[str] = set()
+                        for proposed_text in fallback_proposed_texts:
+                            if proposed_text in seen_texts:
+                                continue
+                            seen_texts.add(proposed_text)
+                            changes_to_emit.append(
+                                {
+                                    "operation": "replace_full",
+                                    "proposed_text": proposed_text,
+                                    "original_text": normalized_document_context or "",
+                                }
+                            )
+
+                    for change in changes_to_emit:
+                        persisted_suggestion = await self._suggestion_repo.create(
+                            conversation_id=conversation_id,
+                            document_id=document_id,  # type: ignore[arg-type]
+                            suggested_text=change["proposed_text"],
+                            original_text=change.get("original_text"),
+                            position_start=change.get("position_start"),
+                            position_end=change.get("position_end"),
+                            message_id=None,
+                        )
+                        change_payload = DocumentChangePayload(
+                            operation=change["operation"],
+                            proposed_text=change["proposed_text"],
+                            original_text=change["original_text"],
+                            position_start=change.get("position_start"),
+                            position_end=change.get("position_end"),
+                            suggestion_id=str(persisted_suggestion.id),
+                        )
+                        change_chunk = StreamChunk(
+                            type="document_change",
+                            content="",
+                            document_change=change_payload,
+                        )
+                        yield f"data: {change_chunk.model_dump_json()}\n\n"
+
+                    full_text = attempt_full_text
+                    token_count = attempt_token_count
+                    tool_call_traces = attempt_tool_call_traces
+                    break
+                except Exception as exc:
+                    if attempt_full_text or attempt_tool_call_traces:
+                        logger.exception("Analyst agent streaming error: %s", exc)
+                        error_chunk = StreamChunk(
+                            type="error", content="AI service error. Please try again."
+                        )
+                        yield f"data: {error_chunk.model_dump_json()}\n\n"
+                        return
+
+                    if attempt_index == len(attempt_model_ids) - 1:
+                        logger.exception("Analyst agent streaming error: %s", exc)
                         error_message = (
                             str(exc)
                             if isinstance(exc, RuntimeError)
@@ -922,6 +1123,7 @@ class AiAgentService:
             tool_calls=tool_call_traces,
         )
         await self._conv_repo.touch_updated_at(conversation_id)
+        await self._session.commit()
 
         if should_generate_title:
             await self._maybe_set_generated_title(

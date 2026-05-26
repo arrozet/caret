@@ -163,8 +163,9 @@ class DocumentContextPayload(BaseModel):
 
 
 class SuggestionCreate(BaseModel):
-    """Internal schema used by the agent service to persist a new suggestion."""
+    """Request body for POST /suggestions."""
 
+    conversation_id: uuid.UUID = Field(..., description="Parent conversation UUID.")
     document_id: uuid.UUID
     message_id: uuid.UUID | None = None
     original_text: str | None = None
@@ -314,6 +315,10 @@ class DocumentChangePayload(BaseModel):
     position_end: int | None = Field(
         default=None,
         description="Optional end position for selection-scoped edits.",
+    )
+    suggestion_id: str | None = Field(
+        default=None,
+        description="UUID of the persisted suggestion, set after the agent run completes.",
     )
 
 

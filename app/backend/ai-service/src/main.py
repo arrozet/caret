@@ -9,6 +9,7 @@ from db.session import engine
 from routers.ai_router import meta_router as ai_meta_router
 from routers.ai_router import router as ai_router
 from routers.embedding_router import router as embedding_router
+from routers.suggestion_router import router as suggestion_router
 
 
 @asynccontextmanager
@@ -47,6 +48,7 @@ app.add_middleware(
 app.include_router(ai_router, prefix="/ai", tags=["ai"])
 app.include_router(ai_meta_router, prefix="/ai", tags=["ai"])
 app.include_router(embedding_router, prefix="/ai", tags=["embeddings"])
+app.include_router(suggestion_router, prefix="/ai", tags=["suggestions"])
 
 
 # ---------------------------------------------------------------------------

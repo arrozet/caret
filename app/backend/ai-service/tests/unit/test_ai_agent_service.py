@@ -45,6 +45,7 @@ def _make_mock_session() -> MagicMock:
     session.refresh = AsyncMock()
     session.delete = AsyncMock()
     session.execute = AsyncMock()
+    session.commit = AsyncMock()
     return session
 
 
@@ -318,6 +319,52 @@ class TestAiAgentServiceStreaming:
     Verifies the correct SSE event sequence (delta → done) and error handling
     for missing LLM API keys and agent exceptions, without calling real LLMs.
     """
+
+    @pytest.mark.asyncio
+    async def test_stream_response_commits_user_message_before_model_streaming(self) -> None:
+        """stream_response must commit the user turn before model streaming can fail or hang."""
+        # Arrange
+        session = _make_mock_session()
+        conv_id = uuid.uuid4()
+        user_message = _make_mock_message(
+            conversation_id=conv_id,
+            role=AiMessageRole.user,
+            content="Second request",
+        )
+
+        with (
+            patch(
+                "services.ai_agent_service.AiMessageRepository.create",
+                new_callable=AsyncMock,
+                return_value=user_message,
+            ),
+            patch(
+                "services.ai_agent_service.AiConversationRepository.touch_updated_at",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "services.ai_agent_service.AiMessageRepository.list_for_conversation",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "services.ai_agent_service._build_model",
+                side_effect=RuntimeError("model unavailable"),
+            ),
+        ):
+            service = AiAgentService(session)
+
+            # Act
+            chunks = []
+            async for chunk in service.stream_response(
+                conversation_id=conv_id,
+                user_message="Second request",
+            ):
+                chunks.append(chunk)
+
+        # Assert
+        session.commit.assert_awaited()
+        assert any('"type":"error"' in chunk for chunk in chunks)
 
     @pytest.mark.asyncio
     async def test_stream_response_general_falls_back_to_replacement_text_tool_args(self) -> None:

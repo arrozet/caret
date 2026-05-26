@@ -21,7 +21,7 @@ import {
   replace_collaboration_document_content,
 } from "../utils";
 import type { DocumentMetrics } from "../utils";
-import { indexDocumentEmbeddings } from "../../ai-assistant/api/aiApi";
+import { indexDocumentEmbeddings, updateSuggestionStatus } from "../../ai-assistant/api/aiApi";
 import type { DocumentChangePayload, DocumentContextSnapshot } from "../../ai-assistant/api/aiApi";
 import {
   CollaborationPresenceBar,
@@ -478,9 +478,17 @@ export function EditorPage() {
 
   const handleRejectPendingChange = useCallback(() => {
     set_is_accepting_change(false);
+    if (pending_change?.suggestion_id) {
+      updateSuggestionStatus(pending_change.suggestion_id, "dismissed").catch(() => {});
+    }
     setPendingDocumentChange(null);
     set_resolve_pending_change_token((prev) => prev + 1);
-  }, [setPendingDocumentChange, set_is_accepting_change, set_resolve_pending_change_token]);
+  }, [
+    pending_change,
+    setPendingDocumentChange,
+    set_is_accepting_change,
+    set_resolve_pending_change_token,
+  ]);
 
   /**
    * Accept the pending AI change.
@@ -514,6 +522,11 @@ export function EditorPage() {
       // Clear AI state before mutating the document so the autosave path isn't blocked.
       setPendingDocumentChange(null);
       set_resolve_pending_change_token((prev) => prev + 1);
+
+      if (pending_change?.suggestion_id) {
+        updateSuggestionStatus(pending_change.suggestion_id, "applied").catch(() => {});
+      }
+
       remember_document_context({
         content_json: proposed_json,
         content_text: proposed_text,
