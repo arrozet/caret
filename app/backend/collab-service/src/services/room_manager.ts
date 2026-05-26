@@ -160,6 +160,17 @@ export class RoomManager {
   is_room_empty(documentId: string): boolean {
     return this.isRoomEmpty(documentId);
   }
+
+  /**
+   * Returns identifiers for all rooms currently held in memory.
+   */
+  getAllDocumentIds(): string[] {
+    return Array.from(this.rooms.keys());
+  }
+
+  get_all_document_ids(): string[] {
+    return this.getAllDocumentIds();
+  }
 }
 
 export type { RoomManager as RoomManagerService };

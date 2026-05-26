@@ -4,6 +4,10 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import type * as schema from "../db/schema.js";
+import { CollabUpdateRepository } from "./collab_update_repository.js";
+import { CollabSnapshotRepository } from "./collab_snapshot_repository.js";
 import type { CollabUpdate, CollabSnapshot } from "../models/index.js";
 
 /**
@@ -182,5 +186,59 @@ export class InMemoryCollabRepository implements ICollabRepository {
   clear(): void {
     this.updates_store.clear();
     this.snapshots_store.clear();
+  }
+}
+
+/**
+ * Drizzle ORM-based repository implementing ICollabRepository.
+ * Delegates to CollabUpdateRepository and CollabSnapshotRepository.
+ * Used in production when DATABASE_URL is configured.
+ */
+export class CollabRepository implements ICollabRepository {
+  private update_repo: CollabUpdateRepository;
+  private snapshot_repo: CollabSnapshotRepository;
+
+  constructor(db: PostgresJsDatabase<typeof schema>) {
+    this.update_repo = new CollabUpdateRepository(db);
+    this.snapshot_repo = new CollabSnapshotRepository(db);
+  }
+
+  async save_update(document_id: string, update: Uint8Array): Promise<CollabUpdate> {
+    const max_seq = await this.update_repo.get_max_seq(document_id);
+    return this.update_repo.create({
+      document_id,
+      seq: max_seq + 1,
+      update: Buffer.from(update),
+    });
+  }
+
+  async get_updates(document_id: string): Promise<CollabUpdate[]> {
+    return this.update_repo.get_all_updates(document_id);
+  }
+
+  async save_snapshot(
+    document_id: string,
+    snapshot: Uint8Array,
+    state_vector: Uint8Array,
+  ): Promise<CollabSnapshot> {
+    const max_seq = await this.update_repo.get_max_seq(document_id);
+    return this.snapshot_repo.create({
+      document_id,
+      snapshot_seq: max_seq,
+      ydoc: Buffer.from(snapshot),
+      state_vector: Buffer.from(state_vector),
+    });
+  }
+
+  async get_latest_snapshot(document_id: string): Promise<CollabSnapshot | null> {
+    return this.snapshot_repo.get_latest_snapshot(document_id);
+  }
+
+  async delete_updates_before(document_id: string, snapshot_id: string): Promise<number> {
+    const snapshot = await this.snapshot_repo.find_by_id(snapshot_id);
+    if (!snapshot) {
+      return 0;
+    }
+    return this.update_repo.delete_updates_up_to_seq(document_id, snapshot.snapshot_seq);
   }
 }

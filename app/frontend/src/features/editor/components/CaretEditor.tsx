@@ -1,8 +1,10 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent, Editor } from "@tiptap/react";
+import { useEffect, useRef } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { SelectionMenu } from "./SelectionMenu";
 import type * as Y from "yjs";
+import type { WebsocketProvider } from "y-websocket";
 import { create_editor_extensions } from "../utils";
 
 /**
@@ -19,6 +21,10 @@ interface CaretEditorProps {
   onEditorReady?: (editor: Editor) => void;
   /** Shared Y.js document for real-time collaboration mode. */
   collaborationDocument?: Y.Doc | null;
+  /** WebSocket provider for collaboration cursor rendering. */
+  collaborationProvider?: WebsocketProvider | null;
+  /** Local user metadata for collaboration cursor label. */
+  localUser?: { id: string; name: string; color: string };
   /**
    * When true, the built-in toolbar is hidden. Use this when the parent
    * renders EditorToolbar externally (e.g. as a full-width bar).
@@ -43,12 +49,17 @@ export function CaretEditor({
   editable = true,
   onEditorReady,
   collaborationDocument = null,
+  collaborationProvider = null,
+  localUser,
   hideToolbar = false,
 }: CaretEditorProps) {
+  const ready_editor_ref = useRef<Editor | null>(null);
   const editor = useEditor(
     {
       extensions: create_editor_extensions({
         collaboration_document: collaborationDocument,
+        provider: collaborationProvider,
+        local_user: localUser,
       }),
       content: collaborationDocument
         ? undefined
@@ -67,14 +78,18 @@ export function CaretEditor({
           onUpdate(ed.getJSON(), ed.getText());
         }
       },
-      onCreate: ({ editor: ed }) => {
-        if (onEditorReady) {
-          onEditorReady(ed);
-        }
-      },
     },
-    [collaborationDocument, editable],
+    [collaborationDocument, collaborationProvider, editable],
   );
+
+  useEffect(() => {
+    if (!editor || !onEditorReady || ready_editor_ref.current === editor) {
+      return;
+    }
+
+    ready_editor_ref.current = editor;
+    onEditorReady(editor);
+  }, [editor, onEditorReady]);
 
   return (
     <div className="flex flex-col h-full w-full bg-app">

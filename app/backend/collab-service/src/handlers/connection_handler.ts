@@ -15,6 +15,7 @@ import * as awarenessProtocol from "y-protocols/awareness";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import type { RoomManager } from "../services/room_manager.js";
+import type { CollabPersistenceService } from "../services/collab_persistence_service.js";
 import type { AuthResult } from "../middleware/auth_middleware.js";
 import { logger } from "../lib/logger.js";
 
@@ -35,6 +36,8 @@ export interface ConnectionContext {
   auth: AuthResult;
   /** Room manager for document and participant management */
   roomManager: RoomManager;
+  /** Optional persistence service for persisting updates to DB */
+  persistenceService?: CollabPersistenceService | null;
 }
 
 /**
@@ -47,6 +50,11 @@ export interface ConnectionContext {
  */
 export class ConnectionHandler {
   /**
+   * Milliseconds of grace period before presence is expired after disconnect.
+   * Set to 0 in test environments for deterministic cleanup.
+   */
+  presenceExpirationMs = process.env.NODE_ENV === "test" ? 0 : 30_000;
+  /**
    * Tracks WebSocket connections per room for broadcasting.
    * Outer map: document_id -> inner map
    * Inner map: user_id -> WebSocket
@@ -58,6 +66,13 @@ export class ConnectionHandler {
    * Key: document_id, Value: Awareness instance
    */
   private awarenessMap: Map<string, awarenessProtocol.Awareness> = new Map();
+
+  /**
+   * Tracks delayed presence-expiration timers keyed by doc_id + user_id.
+   * Outer map: document_id -> inner map: user_id -> setTimeout handle
+   */
+  private presenceExpirationTimers: Map<string, Map<string, ReturnType<typeof setTimeout>>> =
+    new Map();
 
   /**
    * Handles a new WebSocket connection after authentication.
@@ -75,6 +90,17 @@ export class ConnectionHandler {
       return;
     }
     const { user_id, doc_id } = auth;
+
+    // Cancel any pending presence-expiration timer for this user (reconnect case)
+    const doc_timers_reconnect = this.presenceExpirationTimers.get(doc_id);
+    const existing_timer = doc_timers_reconnect?.get(user_id);
+    if (existing_timer) {
+      clearTimeout(existing_timer);
+      doc_timers_reconnect!.delete(user_id);
+      if (doc_timers_reconnect!.size === 0) {
+        this.presenceExpirationTimers.delete(doc_id);
+      }
+    }
 
     // Generate unique socket_id for this connection
     const socketId = `${user_id}_${Date.now()}`;
@@ -246,6 +272,14 @@ export class ConnectionHandler {
 
       const broadcast_message = encoding.toUint8Array(update_encoder);
       this.broadcastToRoom(doc_id, user_id, broadcast_message);
+
+      if (ctx.persistenceService) {
+        ctx.persistenceService
+          .persistUpdate(doc_id, Y.encodeStateAsUpdate(doc))
+          .catch((err: unknown) =>
+            logger.error("Failed to persist update", { doc_id, error: err }),
+          );
+      }
     }
   }
 
@@ -285,6 +319,36 @@ export class ConnectionHandler {
    * @param ctx - Connection context
    * @param awareness - Awareness instance for the document
    */
+  private cleanupPresence(
+    doc_id: string,
+    user_id: string,
+    clientId: number,
+    awareness: awarenessProtocol.Awareness,
+    roomManager: RoomManager,
+  ): void {
+    awarenessProtocol.removeAwarenessStates(awareness, [clientId], null);
+
+    // Broadcast removal
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MESSAGE_AWARENESS);
+    encoding.writeVarUint8Array(
+      encoder,
+      awarenessProtocol.encodeAwarenessUpdate(awareness, [clientId]),
+    );
+
+    const broadcastMessage = encoding.toUint8Array(encoder);
+    this.broadcastToRoom(doc_id, user_id, broadcastMessage);
+
+    this.untrackSocket(doc_id, user_id);
+    roomManager.leaveRoom(doc_id, user_id);
+
+    // Clean up awareness when room has no active participants
+    if (roomManager.isRoomEmpty(doc_id)) {
+      this.awarenessMap.delete(doc_id);
+      logger.debug("Room became empty, awareness cleaned up", { doc_id });
+    }
+  }
+
   private handleClose(ctx: ConnectionContext, awareness: awarenessProtocol.Awareness): void {
     const { auth } = ctx;
     const roomManager =
@@ -293,33 +357,34 @@ export class ConnectionHandler {
       return;
     }
     const { user_id, doc_id } = auth;
+    const clientId = awareness.clientID;
 
-    // Remove awareness state for this user
-    awarenessProtocol.removeAwarenessStates(awareness, [awareness.clientID], null);
-
-    // Remove socket from tracking
-    this.untrackSocket(doc_id, user_id);
-
-    // Leave the room
-    roomManager.leaveRoom(doc_id, user_id);
-
-    // Broadcast awareness removal to remaining peers
-    const encoder = encoding.createEncoder();
-    encoding.writeVarUint(encoder, MESSAGE_AWARENESS);
-    encoding.writeVarUint8Array(
-      encoder,
-      awarenessProtocol.encodeAwarenessUpdate(awareness, [awareness.clientID]),
-    );
-
-    const broadcast_message = encoding.toUint8Array(encoder);
-    this.broadcastToRoom(doc_id, user_id, broadcast_message);
-
-    // Clean up awareness when room has no active participants.
-    // The room itself is kept in memory to preserve Y.Doc state across brief reconnect gaps.
-    if (roomManager.isRoomEmpty(doc_id)) {
-      this.awarenessMap.delete(doc_id);
-      logger.debug("Room became empty, awareness cleaned up", { doc_id });
+    // Cancel any existing expiration timer for this client (reconnect case)
+    const doc_timers = this.presenceExpirationTimers.get(doc_id);
+    const existing = doc_timers?.get(user_id);
+    if (existing) {
+      clearTimeout(existing);
+      doc_timers!.delete(user_id);
+      if (doc_timers!.size === 0) {
+        this.presenceExpirationTimers.delete(doc_id);
+      }
     }
+
+    // Immediate cleanup when no grace period (e.g. tests), deferred otherwise
+    if (this.presenceExpirationMs <= 0) {
+      this.cleanupPresence(doc_id, user_id, clientId, awareness, roomManager);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.cleanupPresence(doc_id, user_id, clientId, awareness, roomManager);
+    }, this.presenceExpirationMs);
+
+    // Store timer so it can be cancelled on reconnect via handleConnection
+    if (!this.presenceExpirationTimers.has(doc_id)) {
+      this.presenceExpirationTimers.set(doc_id, new Map());
+    }
+    this.presenceExpirationTimers.get(doc_id)!.set(user_id, timer);
   }
 
   /**

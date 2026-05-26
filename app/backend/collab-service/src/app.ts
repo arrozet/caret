@@ -1,12 +1,16 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "http";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { AddressInfo } from "node:net";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { validateWsToken, type AuthResult } from "./middleware/auth_middleware.js";
 import { config } from "./lib/config.js";
 import { UnauthorizedError } from "./lib/errors.js";
 import { logger } from "./lib/logger.js";
 import { ConnectionHandler } from "./handlers/index.js";
-import { RoomManager } from "./services/room_manager.js";
+import { RoomManager, CollabPersistenceService, SnapshotScheduler } from "./services/index.js";
+import { CollabRepository } from "./repositories/collab_repository.js";
+import * as schema from "./db/schema.js";
 
 /**
  * Y.js protocol message type constants.
@@ -99,6 +103,18 @@ const wss = new WebSocketServer({ server: httpServer });
 const roomManager = new RoomManager();
 const connectionHandler = new ConnectionHandler();
 
+// Persistence layer (lazily initialized when DATABASE_URL is configured)
+let persistenceService: CollabPersistenceService | null = null;
+let snapshotScheduler: SnapshotScheduler | null = null;
+
+if (config.DATABASE_URL) {
+  const sql = postgres(config.DATABASE_URL);
+  const db = drizzle(sql, { schema });
+  const repository = new CollabRepository(db);
+  persistenceService = new CollabPersistenceService(repository);
+  snapshotScheduler = new SnapshotScheduler(roomManager, persistenceService);
+}
+
 /**
  * Handles a new WebSocket connection.
  * Validates the route, authenticates via JWT, and hands off to the ConnectionHandler.
@@ -124,6 +140,7 @@ export async function handleWsConnection(ws: WebSocket, req: IncomingMessage): P
       ws,
       auth,
       roomManager,
+      persistenceService,
     });
 
     logger.info("WebSocket connection accepted", { doc_id: docId, user_id: auth.user_id });
@@ -151,6 +168,10 @@ if (process.env.NODE_ENV !== "test") {
       port: config.PORT,
     });
   });
+
+  if (snapshotScheduler) {
+    snapshotScheduler.start();
+  }
 }
 
 export { handleWsConnection as handle_ws_connection };
@@ -251,6 +272,7 @@ export function createCollaborationServer(options?: {
         ws,
         auth,
         roomManager: testRoomManager,
+        persistenceService,
       });
     } catch (error) {
       if (error instanceof UnauthorizedError) {
