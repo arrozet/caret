@@ -191,6 +191,10 @@ export const folders = pgTable(
     uniqueIndex("uq_folders_name_per_parent")
       .on(table.workspace_id, table.parent_folder_id, table.name)
       .where(sql`${table.deleted_at} IS NULL`),
+    /** Prevent duplicate folder names at the workspace root (parent_folder_id IS NULL). */
+    uniqueIndex("uq_folders_name_root")
+      .on(table.workspace_id, table.name)
+      .where(sql`${table.parent_folder_id} IS NULL AND ${table.deleted_at} IS NULL`),
   ],
 );
 
@@ -258,6 +262,10 @@ export const documents = pgTable(
      */
     index("idx_documents_workspace_status_updated")
       .on(table.workspace_id, table.status, table.updated_at)
+      .where(sql`${table.deleted_at} IS NULL`),
+    /** Prevent duplicate document titles within the same folder (active only). */
+    uniqueIndex("uq_documents_title_per_folder")
+      .on(table.workspace_id, table.folder_id, table.title)
       .where(sql`${table.deleted_at} IS NULL`),
   ],
 );

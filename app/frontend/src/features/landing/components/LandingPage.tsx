@@ -195,10 +195,14 @@ export function LandingPage({ show_auth_modal = false }: LandingPageProps) {
   const navigate = useNavigate();
   const status = useAuthStore((state) => state.status);
   const user = useAuthStore((state) => state.user);
+  const profile = useAuthStore((state) => state.profile);
   const isAuthenticated = status === "authenticated";
-  const account_name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Guest";
-  const avatar_url =
-    typeof user?.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : undefined;
+  const account_name =
+    profile?.display_name ||
+    user?.user_metadata?.full_name ||
+    user?.email?.split("@")[0] ||
+    "Guest";
+  const avatar_url = profile?.avatar_url ?? undefined;
   const shouldReduceMotion = useReducedMotion() ?? false;
   const heroRef = useRef<HTMLElement>(null);
   const { x: mouseX, y: mouseY } = useMousePosition();

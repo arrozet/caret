@@ -150,6 +150,40 @@ export class DocumentRepository {
   }
 
   /**
+   * Find an active document by its title within a specific folder/workspace.
+   * @param workspaceId - Workspace UUID.
+   * @param folderId - Folder UUID (null = root level).
+   * @param title - Document title.
+   * @param excludeDocumentId - Optional document ID to exclude from matches.
+   * @returns The matching document row, or null.
+   */
+  async findByTitleInFolder(
+    workspaceId: string,
+    folderId: string | null,
+    title: string,
+    excludeDocumentId?: string,
+  ) {
+    const conditions = sql`workspace_id = ${workspaceId}
+      AND folder_id IS NOT DISTINCT FROM ${folderId}
+      AND title = ${title}
+      AND deleted_at IS NULL`;
+    if (excludeDocumentId) {
+      conditions.append(sql` AND id != ${excludeDocumentId}`);
+    }
+    const rows = await this.db.select().from(schema.documents).where(conditions).limit(1);
+    return rows[0] ?? null;
+  }
+
+  async find_by_title_in_folder(
+    workspaceId: string,
+    folderId: string | null,
+    title: string,
+    excludeDocumentId?: string,
+  ) {
+    return this.findByTitleInFolder(workspaceId, folderId, title, excludeDocumentId);
+  }
+
+  /**
    * Find active document IDs that belong to the provided workspace.
    * @param workspaceId - Workspace UUID.
    * @returns Document UUIDs.

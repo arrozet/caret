@@ -1041,7 +1041,11 @@ function WorkspaceSection({
       close_with_focus(set_create_folder, create_folder.return_focus_to, undefined);
       onToast(`Folder created: ${next_name}`);
     } catch (error) {
-      onToast(get_error_message(error));
+      if (error instanceof Error && /already exists/i.test(error.message)) {
+        onToast(`A folder named "${next_name}" already exists in this location.`);
+      } else {
+        onToast(get_error_message(error));
+      }
     }
   }
 
@@ -1065,7 +1069,11 @@ function WorkspaceSection({
       close_with_focus(set_rename_folder, rename_folder.return_focus_to, undefined);
       onToast(`Folder updated: ${next_name}`);
     } catch (error) {
-      onToast(get_error_message(error));
+      if (error instanceof Error && /already exists/i.test(error.message)) {
+        onToast(`A folder named "${next_name}" already exists in this location.`);
+      } else {
+        onToast(get_error_message(error));
+      }
     }
   }
 

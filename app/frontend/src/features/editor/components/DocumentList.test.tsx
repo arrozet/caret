@@ -1106,6 +1106,44 @@ describe("DocumentList", () => {
     );
   });
 
+  /** Verifies that non-empty folder deletion shows an error toast instead of proceeding. */
+  it("shows an error toast when trying to delete a non-empty folder", async () => {
+    current_workspaces = [{ id: "ws-personal", kind: "personal", name: "Personal", role: "owner" }];
+    current_workspace_documents = { "ws-personal": [] };
+    current_workspace_folders = {
+      "ws-personal": [
+        { id: "folder-a", workspace_id: "ws-personal", parent_folder_id: null, name: "Projects" },
+      ],
+    };
+    mock_delete_folder.mockRejectedValueOnce(
+      new Error(
+        "This folder is not empty. Move or delete its contents before deleting this folder.",
+      ),
+    );
+    render(<DocumentList />);
+    open_workspace("Personal");
+    fireEvent.click(screen.getByRole("button", { name: /delete folder projects/i }));
+    fireEvent.click(screen.getByRole("button", { name: /confirm delete folder/i }));
+    expect(await screen.findByText(/folder is not empty/i)).toBeTruthy();
+  });
+
+  /** Verifies that duplicate folder name on create shows a specific error. */
+  it("shows specific error when creating a folder with a duplicate name", async () => {
+    current_workspaces = [{ id: "ws-personal", kind: "personal", name: "Personal", role: "owner" }];
+    current_workspace_documents = { "ws-personal": [] };
+    current_workspace_folders = { "ws-personal": [] };
+    mock_create_folder.mockRejectedValueOnce(
+      new Error('A folder named "Projects" already exists in this location.'),
+    );
+    render(<DocumentList />);
+    open_workspace("Personal");
+    fireEvent.click(screen.getByRole("button", { name: /new folder/i }));
+    const folder_input = screen.getByLabelText(/folder name/i);
+    fireEvent.change(folder_input, { target: { value: "Projects" } });
+    fireEvent.click(screen.getByRole("button", { name: /create folder/i }));
+    expect(await screen.findByText(/already exists/i)).toBeTruthy();
+  });
+
   /** Verifies that workspace-local document creation uses the selected folder. */
   it("creates a document inside the selected folder", async () => {
     // Arrange

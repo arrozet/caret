@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uq_documents_title_per_folder" ON "documents" USING btree ("workspace_id","folder_id","title") WHERE "documents"."deleted_at" IS NULL;

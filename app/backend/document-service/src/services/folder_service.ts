@@ -6,7 +6,7 @@ import type { CreateFolderDto } from "../dtos/create_folder_dto.js";
 import type { UpdateFolderDto } from "../dtos/update_folder_dto.js";
 import type { FolderResponseDto } from "../dtos/folder_response_dto.js";
 import type { PaginationParams, PaginatedResponse } from "../lib/validation.js";
-import { NotFoundError, ForbiddenError } from "../lib/errors.js";
+import { NotFoundError, ForbiddenError, ConflictError } from "../lib/errors.js";
 
 /**
  * Business logic for folder lifecycle: create, read, update, delete.
@@ -62,6 +62,8 @@ export class FolderService {
       }
     }
 
+    await this.assertFolderNameAvailable(dto.workspace_id, dto.parent_folder_id ?? null, dto.name);
+
     const folder = await this.folderRepository.create({
       workspace_id: dto.workspace_id,
       parent_folder_id: dto.parent_folder_id ?? null,
@@ -75,6 +77,24 @@ export class FolderService {
 
   async create_folder(dto: CreateFolderDto, userId: string): Promise<FolderResponseDto> {
     return this.createFolder(dto, userId);
+  }
+
+  /**
+   * Ensure no active folder with the same name exists in the same parent scope.
+   */
+  private async assertFolderNameAvailable(
+    workspaceId: string,
+    parentFolderId: string | null,
+    name: string,
+  ): Promise<void> {
+    const existing = await this.folderRepository.findByNameAndParent(
+      workspaceId,
+      parentFolderId,
+      name,
+    );
+    if (existing) {
+      throw new ConflictError("A folder with this name already exists in this location.");
+    }
   }
 
   /**

@@ -143,6 +143,9 @@ describe("DocumentService", () => {
     workspace_repo.findById.mockResolvedValue(make_workspace());
     document_member_repo.findMembership.mockResolvedValue(null);
     document_member_repo.listByUser.mockResolvedValue({ data: [], total: 0 });
+    (document_repo as Record<string, unknown>).findByTitleInFolder = vi
+      .fn()
+      .mockResolvedValue(null);
 
     /* Cast mocks to satisfy the constructor's type expectations */
     service = new DocumentService(
@@ -189,6 +192,38 @@ describe("DocumentService", () => {
       ).rejects.toThrow(ForbiddenError);
 
       expect(document_repo.create).not.toHaveBeenCalled();
+    });
+
+    it("should_auto_increment_title_when_duplicate_exists", async () => {
+      workspace_repo.findById.mockResolvedValue(make_workspace());
+      workspace_repo.findMembership.mockResolvedValue(make_membership());
+      workspace_repo.findFolderById.mockResolvedValue({
+        id: "folder-1",
+        workspace_id: WORKSPACE_ID,
+      });
+      document_repo.create.mockResolvedValue(make_doc({ title: "Duplicate Title 2" }));
+      version_repo.create.mockResolvedValue(make_version(1));
+      document_repo.update = vi.fn().mockResolvedValue(make_doc({ title: "Duplicate Title 2" }));
+
+      const findByTitle = vi
+        .fn()
+        .mockResolvedValueOnce({ id: "existing-doc", title: "Duplicate Title" })
+        .mockResolvedValue(null);
+      (document_repo as Record<string, unknown>).findByTitleInFolder = findByTitle;
+
+      const dto = {
+        workspace_id: WORKSPACE_ID,
+        folder_id: "folder-1",
+        title: "Duplicate Title",
+      };
+
+      const result = await service.create_document(dto, USER_ID);
+
+      expect(result.title).toBe("Duplicate Title 2");
+      expect(findByTitle).toHaveBeenCalledTimes(2);
+      expect(document_repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Duplicate Title 2" }),
+      );
     });
   });
 
