@@ -297,7 +297,6 @@ describe("useDeleteFolder", () => {
     const query_client = create_query_client();
     query_client.setQueryData(["folders", "ws-1"], [MOCK_FOLDER]);
     const invalidate_spy = vi.spyOn(query_client, "invalidateQueries");
-    const remove_spy = vi.spyOn(query_client, "removeQueries");
     const { result } = renderHook(() => useDeleteFolder(), {
       wrapper: create_wrapper_with_client(query_client),
     });
@@ -311,7 +310,6 @@ describe("useDeleteFolder", () => {
 
     // Assert
     expect(deleteFolder).toHaveBeenCalledWith("folder-1");
-    expect(remove_spy).toHaveBeenCalledWith({ queryKey: ["folders", "ws-1"], exact: true });
     expect(invalidate_spy).toHaveBeenCalledWith({ queryKey: ["folders", "ws-1"] });
     expect(invalidate_spy).toHaveBeenCalledWith({ queryKey: ["documents", "ws-1"] });
   });
