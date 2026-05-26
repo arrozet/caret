@@ -31,9 +31,12 @@ export async function api_fetch<T>(path: string, options: RequestInit = {}): Pro
     headers["Authorization"] = `Bearer ${session.access_token}`;
   }
 
+  const signal = options.signal ?? AbortSignal.timeout(15_000);
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers,
+    signal,
   });
 
   if (!response.ok) {

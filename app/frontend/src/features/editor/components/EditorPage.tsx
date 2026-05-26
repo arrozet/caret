@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Loader2, ArrowLeft, Check, AlertCircle, Sparkles, UserPlus } from "lucide-react";
 import type { JSONContent, Editor } from "@tiptap/react";
@@ -18,8 +18,10 @@ import { useTabsStore, useAiStore, useAuthStore } from "../../../stores";
 import { useGhostText } from "../hooks/useGhostText";
 import {
   convert_ai_content_to_tiptap_json,
+  get_document_metrics,
   replace_collaboration_document_content,
 } from "../utils";
+import type { DocumentMetrics } from "../utils";
 import { indexDocumentEmbeddings } from "../../ai-assistant/api/aiApi";
 import type { DocumentChangePayload, DocumentContextSnapshot } from "../../ai-assistant/api/aiApi";
 import {
@@ -44,7 +46,7 @@ function getCollaborationWsUrl(): string {
   );
 }
 
-type SaveStatus = "idle" | "saving" | "saved" | "error";
+type SaveStatus = "idle" | "unsaved" | "saving" | "saved" | "error";
 
 interface DiffLine {
   type: "equal" | "removed" | "added";
@@ -197,6 +199,12 @@ export function EditorPage() {
   const workspace_invite_mutation = useInviteWorkspaceCollaborator(document?.workspace_id ?? "");
 
   const [save_status, set_save_status] = useState<SaveStatus>("idle");
+  const [editor_text, set_editor_text] = useState(document?.content_text ?? "");
+
+  const document_metrics = useMemo(
+    () => get_document_metrics(editor_text || (document?.content_text ?? "")),
+    [editor_text, document?.content_text],
+  );
   const [is_invite_dialog_open, set_is_invite_dialog_open] = useState(false);
   const [is_move_dialog_open, set_is_move_dialog_open] = useState(false);
   const [invite_email, set_invite_email] = useState("");
@@ -407,10 +415,17 @@ export function EditorPage() {
       }
 
       remember_document_context({ content_json: json, content_text: text });
+      set_editor_text(text);
+      set_save_status("unsaved");
 
       if (debounce_timer_ref.current) clearTimeout(debounce_timer_ref.current);
 
       debounce_timer_ref.current = setTimeout(async () => {
+        if (!navigator.onLine) {
+          set_save_status("error");
+          pending_content_ref.current = { json, text };
+          return;
+        }
         set_save_status("saving");
         try {
           await save_mutation.mutateAsync({
@@ -428,7 +443,15 @@ export function EditorPage() {
         }
       }, AUTOSAVE_DELAY_MS);
     },
-    [save_mutation, show_saved, document_id, debug_log, remember_document_context, set_save_status],
+    [
+      save_mutation,
+      show_saved,
+      document_id,
+      debug_log,
+      remember_document_context,
+      set_editor_text,
+      set_save_status,
+    ],
   );
 
   useEffect(() => {
@@ -653,7 +676,6 @@ export function EditorPage() {
               class_name="hidden md:block"
             />
           )}
-          <SaveStatusIndicator status={save_status} />
         </div>
       </div>
 
@@ -693,6 +715,8 @@ export function EditorPage() {
           </Suspense>
         )}
       </div>
+
+      <EditorStatusBar metrics={document_metrics} save_status={save_status} />
 
       {is_invite_dialog_open && current_workspace_kind === "shared" && (
         <div
@@ -846,13 +870,63 @@ interface SaveStatusIndicatorProps {
   status: SaveStatus;
 }
 
-function SaveStatusIndicator({ status }: SaveStatusIndicatorProps) {
-  if (status === "idle") return null;
+interface EditorStatusBarProps {
+  metrics: DocumentMetrics;
+  save_status: SaveStatus;
+}
 
-  const config: Record<
-    Exclude<SaveStatus, "idle">,
-    { label: string; icon: React.ReactNode; class_name: string }
-  > = {
+/** Persistent bottom bar for document metrics and autosave state. */
+function EditorStatusBar({ metrics, save_status }: EditorStatusBarProps) {
+  return (
+    <div className="shrink-0 border-t border-border-subtle bg-surface px-4 py-1.5 text-ui-xs text-text-secondary">
+      <div className="flex min-h-6 items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <StatusMetric
+            value={metrics.character_count}
+            singular_label="character"
+            plural_label="characters"
+          />
+          <StatusMetric value={metrics.word_count} singular_label="word" plural_label="words" />
+          <StatusMetric
+            value={metrics.paragraph_count}
+            singular_label="paragraph"
+            plural_label="paragraphs"
+          />
+        </div>
+        <SaveStatusIndicator status={save_status} />
+      </div>
+    </div>
+  );
+}
+
+interface StatusMetricProps {
+  value: number;
+  singular_label: string;
+  plural_label: string;
+}
+
+/** Small formatter for status-bar count labels. */
+function StatusMetric({ value, singular_label, plural_label }: StatusMetricProps) {
+  return (
+    <span className="shrink-0 tabular-nums">
+      {value.toLocaleString()} {value === 1 ? singular_label : plural_label}
+    </span>
+  );
+}
+
+/** Accessible autosave state label for the bottom status bar. */
+function SaveStatusIndicator({ status }: SaveStatusIndicatorProps) {
+  const config: Record<SaveStatus, { label: string; icon: React.ReactNode; class_name: string }> = {
+    idle: {
+      label: "Saved",
+      icon: <Check className="h-3.5 w-3.5" />,
+      class_name: "text-text-secondary",
+    },
+    unsaved: {
+      label: "Unsaved",
+      icon: <AlertCircle className="h-3.5 w-3.5" />,
+      class_name: "text-text-secondary",
+    },
     saving: {
       label: "Saving...",
       icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
@@ -873,7 +947,10 @@ function SaveStatusIndicator({ status }: SaveStatusIndicatorProps) {
   const { label, icon, class_name } = config[status];
 
   return (
-    <span className={`flex shrink-0 items-center gap-1.5 text-ui-sm ${class_name}`}>
+    <span
+      className={`flex shrink-0 items-center gap-1.5 tabular-nums ${class_name}`}
+      aria-live="polite"
+    >
       {icon}
       {label}
     </span>

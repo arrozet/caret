@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import type { JSONContent, Editor } from "@tiptap/react";
 import type { DocumentChangePayload } from "../../ai-assistant/api/aiApi";
@@ -478,6 +478,32 @@ describe("EditorPage", () => {
     expect(collab_call?.collaborationDocument).toEqual({ id: "collab-doc" });
   });
 
+  it("shows document metrics and save state in the bottom status bar", () => {
+    current_pending_change = null;
+
+    render(<EditorPage />);
+
+    expect(screen.getByText("14 characters")).toBeInTheDocument();
+    expect(screen.getByText("2 words")).toBeInTheDocument();
+    expect(screen.getByText("1 paragraph")).toBeInTheDocument();
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+  });
+
+  it("updates bottom status bar metrics and marks content unsaved on editor changes", () => {
+    current_pending_change = null;
+
+    render(<EditorPage />);
+
+    sync_editor_text("Draft words");
+    act(() => {
+      emit_editor_update();
+    });
+
+    expect(screen.getByText("11 characters")).toBeInTheDocument();
+    expect(screen.getByText("2 words")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
+  });
+
   it("passes structured document context to ChatPanel", async () => {
     current_pending_change = null;
     current_panel_open = true;
@@ -558,7 +584,9 @@ describe("EditorPage", () => {
     render(<EditorPage />);
 
     sync_editor_text("Cambios no guardados");
-    emit_editor_update();
+    act(() => {
+      emit_editor_update();
+    });
 
     await waitFor(
       () => {
@@ -581,7 +609,9 @@ describe("EditorPage", () => {
     render(<EditorPage />);
 
     sync_editor_text("Text after reconnect");
-    emit_editor_update();
+    act(() => {
+      emit_editor_update();
+    });
 
     await waitFor(
       () => {
@@ -605,7 +635,9 @@ describe("EditorPage", () => {
       updated_at: "2026-01-01T00:00:00.000Z",
     });
 
-    window.dispatchEvent(new Event("online"));
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
 
     await waitFor(
       () => {
