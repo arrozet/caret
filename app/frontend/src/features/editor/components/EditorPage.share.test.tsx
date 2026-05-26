@@ -109,6 +109,7 @@ vi.mock("../../collaboration", () => ({
     is_solo: true,
   }),
   CollaborationPresenceBar: () => <div />,
+  deriveUserColor: () => "#123456",
 }));
 
 vi.mock("../../ai-assistant/api/aiApi", () => ({

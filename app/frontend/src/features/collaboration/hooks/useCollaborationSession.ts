@@ -58,6 +58,7 @@ export function useCollaborationSession({
   const [is_synced, set_is_synced] = useState(false);
   const initial_content_ref = useRef<JSONContent | null>(initial_content);
   const has_synced_ref = useRef(false);
+  const session_id_ref = useRef(0);
 
   useEffect(() => {
     initial_content_ref.current = initial_content;
@@ -101,6 +102,10 @@ export function useCollaborationSession({
       return;
     }
 
+    session_id_ref.current += 1;
+    const session_id = session_id_ref.current;
+    let is_active = true;
+
     has_synced_ref.current = false;
     set_is_synced(false);
 
@@ -125,8 +130,16 @@ export function useCollaborationSession({
       setConnectionStatus(status);
     };
 
-    const handle_awareness_change = () => {
+    const publish_presence_users = () => {
+      if (!is_active || session_id_ref.current !== session_id) {
+        return;
+      }
+
       setUsers(extractPresenceUsers(session.provider));
+    };
+
+    const handle_awareness_change = () => {
+      void Promise.resolve().then(publish_presence_users);
     };
 
     const handle_sync = (is_synced: boolean) => {
@@ -143,10 +156,11 @@ export function useCollaborationSession({
     session.provider.on("status", handle_status);
     session.provider.on("sync", handle_sync);
     session.provider.awareness.on("change", handle_awareness_change);
-    handle_awareness_change();
+    publish_presence_users();
     session.provider.connect();
 
     return () => {
+      is_active = false;
       session.provider.off("status", handle_status);
       session.provider.off("sync", handle_sync);
       session.provider.awareness.off("change", handle_awareness_change);

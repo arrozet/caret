@@ -28,6 +28,7 @@ import {
   LOCAL_COLLAB_WS_BASE_URL,
   useCollaborationPresence,
   useCollaborationSession,
+  deriveUserColor,
 } from "../../collaboration";
 import type { CollaborationConnectionStatus, CollaborationPresenceUser } from "../../collaboration";
 
@@ -687,6 +688,12 @@ export function EditorPage() {
             content={document.content_json as JSONContent | undefined}
             onUpdate={handleUpdate}
             collaborationDocument={collaboration_document}
+            collaborationProvider={collaboration_session.provider}
+            localUser={{
+              id: auth_user?.id ?? "local-user",
+              name: auth_user?.user_metadata?.full_name ?? auth_user?.email ?? "User",
+              color: deriveUserColor(auth_user?.id ?? ""),
+            }}
             onEditorReady={(ed) => {
               editor_ref.current = ed;
               set_editor_instance(ed);

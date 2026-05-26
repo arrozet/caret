@@ -18,10 +18,13 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import Underline from "@tiptap/extension-underline";
 import type { JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import type { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 import { GhostText } from "../extensions/GhostText";
+import { CollaborationCursor } from "../extensions/CollaborationCursor";
 import { SuggestionDelete } from "../extensions/SuggestionDelete";
 import { SuggestionInsert } from "../extensions/SuggestionInsert";
+import { create_cursor_label } from "../../collaboration/components/RemoteCursor";
 
 /** Shared Y.js field used by the collaboration extension. */
 export const COLLABORATION_FIELD = "content";
@@ -81,18 +84,36 @@ export function create_document_schema_extensions() {
 /**
  * Full editor extension list, including collaboration and editor-only UI helpers.
  */
-export function create_editor_extensions(params: { collaboration_document?: Y.Doc | null } = {}) {
-  const { collaboration_document = null } = params;
+export function create_editor_extensions(
+  params: {
+    collaboration_document?: Y.Doc | null;
+    provider?: WebsocketProvider | null;
+    local_user?: { id: string; name: string; color: string };
+  } = {},
+) {
+  const { collaboration_document = null, provider = null, local_user } = params;
 
   return [
     create_starter_kit(collaboration_document),
     ...(collaboration_document
-      ? [
-          Collaboration.configure({
-            document: collaboration_document,
-            field: COLLABORATION_FIELD,
-          }),
-        ]
+      ? provider
+        ? [
+            Collaboration.configure({
+              document: collaboration_document,
+              field: COLLABORATION_FIELD,
+            }),
+            CollaborationCursor.configure({
+              provider,
+              user: local_user,
+              render: create_cursor_label,
+            }),
+          ]
+        : [
+            Collaboration.configure({
+              document: collaboration_document,
+              field: COLLABORATION_FIELD,
+            }),
+          ]
       : []),
     TextStyle,
     Color,

@@ -289,6 +289,7 @@ vi.mock("../../collaboration", () => ({
     is_solo: users.length <= 1,
   }),
   CollaborationPresenceBar: () => <div data-testid="collab-presence" />,
+  deriveUserColor: () => "#123456",
 }));
 
 vi.mock("../hooks/useGhostText", () => ({
@@ -476,6 +477,16 @@ describe("EditorPage", () => {
       (props) => props.collaborationDocument !== undefined,
     );
     expect(collab_call?.collaborationDocument).toEqual({ id: "collab-doc" });
+  });
+
+  it("passes local user id to collaboration cursor awareness", () => {
+    current_pending_change = null;
+    render(<EditorPage />);
+
+    expect(latest_caret_editor_props?.localUser).toMatchObject({
+      id: "user-1",
+      name: "test@caret.page",
+    });
   });
 
   it("shows document metrics and save state in the bottom status bar", () => {

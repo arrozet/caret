@@ -62,6 +62,8 @@ export function createCollaborationSession({
     params: {
       token,
     },
+    maxReconnectTimeout: 5000,
+    reconnectTimeoutBase: 1000,
   });
 
   return {

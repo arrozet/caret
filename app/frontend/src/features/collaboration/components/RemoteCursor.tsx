@@ -117,20 +117,27 @@ export function get_collaborators_with_cursors(
  * ```
  */
 export function create_cursor_label(user: { name: string; color: string }): HTMLElement {
+  const cursor = document.createElement("span");
+  cursor.className = [
+    "relative inline-block h-[1.35em] w-0 border-l-2 align-text-bottom",
+    "pointer-events-none z-[20]",
+  ].join(" ");
+  cursor.style.borderColor = user.color;
+
   const label = document.createElement("span");
   label.className = [
     "absolute -top-5 left-0",
     "px-1.5 py-0.5",
-    "rounded text-[10px] font-ui font-medium",
+    "rounded text-[10px] font-ui font-medium leading-none",
     "text-white whitespace-nowrap",
     "pointer-events-none",
-    "opacity-0 animate-fade-in",
     "z-[20]", // z-collab-cursors from FRONTEND.md
   ].join(" ");
   label.style.backgroundColor = user.color;
   label.textContent = user.name;
 
-  return label;
+  cursor.appendChild(label);
+  return cursor;
 }
 
 /**

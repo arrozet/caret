@@ -12,4 +12,4 @@ export { CollabSnapshotRepository } from "./collab_snapshot_repository.js";
 
 // In-memory repository for testing and local development
 export type { ICollabRepository } from "./collab_repository.js";
-export { InMemoryCollabRepository } from "./collab_repository.js";
+export { InMemoryCollabRepository, CollabRepository } from "./collab_repository.js";

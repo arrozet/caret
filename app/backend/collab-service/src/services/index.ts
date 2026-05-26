@@ -9,3 +9,4 @@
 
 export { RoomManager } from "./room_manager.js";
 export { CollabPersistenceService } from "./collab_persistence_service.js";
+export { SnapshotScheduler } from "./snapshot_scheduler.js";
