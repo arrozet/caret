@@ -4,11 +4,18 @@ import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import {
   COLLABORATION_FIELD,
+  create_editor_extensions,
   create_document_schema_extensions,
   replace_collaboration_document_content,
 } from "./editorExtensions";
 
 describe("editorExtensions", () => {
+  it("does not include pagination decorations in the editor extension list", () => {
+    const extensions = create_editor_extensions();
+
+    expect(extensions.map((extension) => extension.name)).not.toContain("pagination");
+  });
+
   it("replaces the current collaboration fragment with new JSON content", () => {
     const original_content: JSONContent = {
       type: "doc",

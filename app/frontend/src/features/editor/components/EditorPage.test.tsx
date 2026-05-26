@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { useEffect } from "react";
 import type { JSONContent, Editor } from "@tiptap/react";
 import type { DocumentChangePayload } from "../../ai-assistant/api/aiApi";
@@ -483,10 +483,13 @@ describe("EditorPage", () => {
 
     render(<EditorPage />);
 
+    const status_bar = screen.getByTestId("editor-status-bar");
+
     expect(screen.getByText("14 characters")).toBeInTheDocument();
     expect(screen.getByText("2 words")).toBeInTheDocument();
     expect(screen.getByText("1 paragraph")).toBeInTheDocument();
-    expect(screen.getByText("Saved")).toBeInTheDocument();
+    expect(within(status_bar).getByText("Saved")).toBeInTheDocument();
+    expect(within(status_bar).getByTestId("collab-presence")).toBeInTheDocument();
   });
 
   it("updates bottom status bar metrics and marks content unsaved on editor changes", () => {
@@ -502,6 +505,23 @@ describe("EditorPage", () => {
     expect(screen.getByText("11 characters")).toBeInTheDocument();
     expect(screen.getByText("2 words")).toBeInTheDocument();
     expect(screen.getByText("Unsaved")).toBeInTheDocument();
+  });
+
+  it("reserves the AI panel width when centering the toolbar over the editor canvas", () => {
+    current_pending_change = null;
+    current_panel_open = true;
+
+    render(<EditorPage />);
+
+    expect(screen.getByTestId("editor-toolbar-region")).toHaveClass("pr-[400px]");
+  });
+
+  it("does not show physical paper size controls", () => {
+    current_pending_change = null;
+
+    render(<EditorPage />);
+
+    expect(screen.queryByLabelText("Paper size")).not.toBeInTheDocument();
   });
 
   it("passes structured document context to ChatPanel", async () => {

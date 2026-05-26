@@ -11,9 +11,10 @@ describe("CaretEditor", () => {
   it("renders the editor container", () => {
     const { container } = render(<CaretEditor />);
 
-    /* The canvas wrapper with the paper sizing class should be present */
+    /* The canvas wrapper should be present for the continuous document surface. */
     const canvas = container.querySelector(".editor-canvas");
     expect(canvas).toBeInTheDocument();
+    expect(canvas?.className).not.toContain("paper-size-");
   });
 
   it("renders with default empty content", () => {

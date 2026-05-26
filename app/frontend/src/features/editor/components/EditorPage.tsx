@@ -4,7 +4,6 @@ import { Loader2, ArrowLeft, Check, AlertCircle, Sparkles, UserPlus } from "luci
 import type { JSONContent, Editor } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
 import { EditorToolbar } from "./EditorToolbar";
-import type { PaperSize } from "../extensions/pagination";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { useDocument } from "../hooks/useDocument";
@@ -30,6 +29,7 @@ import {
   useCollaborationPresence,
   useCollaborationSession,
 } from "../../collaboration";
+import type { CollaborationConnectionStatus, CollaborationPresenceUser } from "../../collaboration";
 
 const ChatPanel = lazy(() => import("../../ai-assistant").then((m) => ({ default: m.ChatPanel })));
 
@@ -222,8 +222,6 @@ export function EditorPage() {
   const last_known_document_context_ref = useRef<DocumentContextSnapshot | null>(null);
 
   const [resolve_pending_change_token, set_resolve_pending_change_token] = useState(0);
-  const [paper_size, set_paper_size] = useState<PaperSize>("a4");
-
   const [editor_instance, set_editor_instance] = useState<Editor | null>(null);
 
   const current_workspace =
@@ -643,21 +641,22 @@ export function EditorPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-app">
-      {/* Full-width toolbar — spans both editor and AI panel */}
-      <div className="shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle flex items-center gap-2 px-2">
-        <div className="flex min-w-0 flex-1 justify-center">
+      {/* Full-width toolbar with controls centered over the editor canvas. */}
+      <div className="relative shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle">
+        <div
+          className={["flex min-w-0 justify-center px-2", isPanelOpen ? "pr-[400px]" : ""].join(
+            " ",
+          )}
+          data-testid="editor-toolbar-region"
+        >
           {editor_instance ? (
             <div className="w-full max-w-[var(--max-width-document-wide)]">
-              <EditorToolbar
-                editor={editor_instance}
-                paperSize={paper_size}
-                setPaperSize={set_paper_size}
-              />
+              <EditorToolbar editor={editor_instance} />
             </div>
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 shrink-0 items-center gap-2">
           {current_workspace_kind === "personal" && shared_workspaces.length > 0 ? (
             <Button variant="ghost" size="sm" onClick={openMoveDialog} className="inline-flex">
               Move to workspace
@@ -669,13 +668,6 @@ export function EditorPage() {
               Share
             </Button>
           ) : null}
-          {collaboration_enabled && (
-            <CollaborationPresenceBar
-              connection_status={collaboration_session.connection_status}
-              users={collaboration_presence.users}
-              class_name="hidden md:block"
-            />
-          )}
         </div>
       </div>
 
@@ -699,8 +691,6 @@ export function EditorPage() {
               editor_ref.current = ed;
               set_editor_instance(ed);
             }}
-            paperSize={paper_size}
-            onPaperSizeChange={set_paper_size}
             hideToolbar
           />
         </div>
@@ -716,7 +706,14 @@ export function EditorPage() {
         )}
       </div>
 
-      <EditorStatusBar metrics={document_metrics} save_status={save_status} />
+      <EditorStatusBar
+        metrics={document_metrics}
+        save_status={save_status}
+        collaboration_status={
+          collaboration_enabled ? collaboration_session.connection_status : undefined
+        }
+        collaboration_users={collaboration_enabled ? collaboration_presence.users : undefined}
+      />
 
       {is_invite_dialog_open && current_workspace_kind === "shared" && (
         <div
@@ -873,12 +870,22 @@ interface SaveStatusIndicatorProps {
 interface EditorStatusBarProps {
   metrics: DocumentMetrics;
   save_status: SaveStatus;
+  collaboration_status?: CollaborationConnectionStatus;
+  collaboration_users?: CollaborationPresenceUser[];
 }
 
 /** Persistent bottom bar for document metrics and autosave state. */
-function EditorStatusBar({ metrics, save_status }: EditorStatusBarProps) {
+function EditorStatusBar({
+  metrics,
+  save_status,
+  collaboration_status,
+  collaboration_users,
+}: EditorStatusBarProps) {
   return (
-    <div className="shrink-0 border-t border-border-subtle bg-surface px-4 py-1.5 text-ui-xs text-text-secondary">
+    <div
+      className="shrink-0 border-t border-border-subtle bg-surface px-4 py-1.5 text-ui-xs text-text-secondary"
+      data-testid="editor-status-bar"
+    >
       <div className="flex min-h-6 items-center justify-between gap-4">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <StatusMetric
@@ -893,7 +900,16 @@ function EditorStatusBar({ metrics, save_status }: EditorStatusBarProps) {
             plural_label="paragraphs"
           />
         </div>
-        <SaveStatusIndicator status={save_status} />
+        <div className="flex shrink-0 items-center gap-3">
+          <SaveStatusIndicator status={save_status} />
+          {collaboration_status && collaboration_users ? (
+            <CollaborationPresenceBar
+              connection_status={collaboration_status}
+              users={collaboration_users}
+              class_name="shrink-0"
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   );
