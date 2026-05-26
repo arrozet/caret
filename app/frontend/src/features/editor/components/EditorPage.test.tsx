@@ -549,4 +549,72 @@ describe("EditorPage", () => {
       });
     });
   });
+
+  it("preserves pending content and shows error status on network failure", async () => {
+    current_pending_change = null;
+
+    mock_mutate_async.mockRejectedValueOnce(new Error("Network failure"));
+
+    render(<EditorPage />);
+
+    sync_editor_text("Cambios no guardados");
+    emit_editor_update();
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("Error saving")).toBeInTheDocument();
+      },
+      { timeout: 1_600 },
+    );
+
+    expect(mock_mutate_async).toHaveBeenCalledTimes(1);
+    const save_payload = mock_mutate_async.mock.calls[0][0] as { content_text?: string };
+    expect(save_payload.content_text).toBe("Cambios no guardados");
+  });
+
+  it("retries save on online event after previous save failure", async () => {
+    current_pending_change = null;
+
+    const fail_error = new Error("Network failure");
+    mock_mutate_async.mockRejectedValueOnce(fail_error);
+
+    render(<EditorPage />);
+
+    sync_editor_text("Text after reconnect");
+    emit_editor_update();
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("Error saving")).toBeInTheDocument();
+      },
+      { timeout: 1_600 },
+    );
+
+    mock_mutate_async.mockClear();
+    mock_mutate_async.mockResolvedValueOnce({
+      id: "doc-1",
+      workspace_id: "ws-1",
+      folder_id: null,
+      title: "Doc test",
+      status: "active",
+      visibility: "private",
+      owner_user_id: "user-1",
+      content_json: current_json,
+      content_text: current_text,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    });
+
+    window.dispatchEvent(new Event("online"));
+
+    await waitFor(
+      () => {
+        expect(mock_mutate_async).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 1_000 },
+    );
+
+    const retry_payload = mock_mutate_async.mock.calls[0][0] as { content_text?: string };
+    expect(retry_payload.content_text).toBe("Text after reconnect");
+  });
 });

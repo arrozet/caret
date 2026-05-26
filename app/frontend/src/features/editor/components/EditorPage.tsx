@@ -208,6 +208,7 @@ export function EditorPage() {
   const [is_accepting_change, set_is_accepting_change] = useState(false);
   const debounce_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pending_content_ref = useRef<{ json: JSONContent; text: string } | null>(null);
 
   const editor_ref = useRef<Editor | null>(null);
   const last_known_document_context_ref = useRef<DocumentContextSnapshot | null>(null);
@@ -416,17 +417,42 @@ export function EditorPage() {
             content_json: json as Record<string, unknown>,
             content_text: text,
           });
+          pending_content_ref.current = null;
           show_saved();
           if (document_id && text.trim()) {
             indexDocumentEmbeddings(document_id, text).catch(() => {});
           }
         } catch {
           set_save_status("error");
+          pending_content_ref.current = { json, text };
         }
       }, AUTOSAVE_DELAY_MS);
     },
     [save_mutation, show_saved, document_id, debug_log, remember_document_context, set_save_status],
   );
+
+  useEffect(() => {
+    function handleOnline() {
+      if (save_status === "error" && pending_content_ref.current) {
+        const pending = pending_content_ref.current;
+        set_save_status("saving");
+        save_mutation
+          .mutateAsync({
+            content_json: pending.json as Record<string, unknown>,
+            content_text: pending.text,
+          })
+          .then(() => {
+            show_saved();
+            pending_content_ref.current = null;
+          })
+          .catch(() => {
+            set_save_status("error");
+          });
+      }
+    }
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [save_status, save_mutation, show_saved]);
 
   const handleRejectPendingChange = useCallback(() => {
     set_is_accepting_change(false);
