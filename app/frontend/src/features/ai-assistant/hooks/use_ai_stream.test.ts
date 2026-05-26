@@ -360,6 +360,32 @@ describe("use_ai_stream", () => {
     expect(result.current.is_loading).toBe(false);
   });
 
+  /** Verifies that an interrupted stream surfaces retryable error state instead of completing silently. */
+  it("sets error state when the stream ends before a done chunk", async () => {
+    // Arrange
+    mock_conversation_id = "convo-interrupted";
+
+    vi.mocked(streamAiResponse).mockReturnValueOnce(
+      make_stream([{ type: "delta", content: "Partial response" }]),
+    );
+
+    const { result } = renderHook(() => useAiStream());
+
+    // Act
+    await act(async () => {
+      await result.current.send_message("Trigger interruption", "doc1");
+    });
+
+    // Assert
+    expect(result.current.error).toBe("AI stream ended before completion. Please retry.");
+    expect(result.current.is_loading).toBe(false);
+    expect(result.current.messages.at(-1)).toMatchObject({
+      role: "assistant",
+      content: "Partial response",
+      is_streaming: false,
+    });
+  });
+
   it("clears all state when clear() is called", async () => {
     mock_conversation_id = "convo-clear";
 

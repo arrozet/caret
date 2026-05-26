@@ -10,6 +10,9 @@ const AI_BASE = "/ai";
 /** Base URL for embedding service endpoints behind the AI gateway prefix. */
 const EMBEDDINGS_BASE = `${AI_BASE}/embeddings`;
 
+/** Maximum time to wait for the next SSE byte before treating the stream as interrupted. */
+export const STREAM_READ_TIMEOUT_MS = 30_000;
+
 // ---------------------------------------------------------------------------
 // Response shape types (mirrors the Python Pydantic DTOs)
 // ---------------------------------------------------------------------------
@@ -257,6 +260,55 @@ export interface StreamRequestOptions {
   signal?: AbortSignal;
 }
 
+function create_abort_error(): Error {
+  try {
+    return new DOMException("The operation was aborted.", "AbortError");
+  } catch {
+    const error = new Error("The operation was aborted.");
+    error.name = "AbortError";
+    return error;
+  }
+}
+
+function read_with_timeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal | undefined,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (signal?.aborted) {
+    return Promise.reject(create_abort_error());
+  }
+
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("AI stream stalled. Please retry."));
+    }, STREAM_READ_TIMEOUT_MS);
+
+    function handle_abort() {
+      cleanup();
+      reject(create_abort_error());
+    }
+
+    function cleanup() {
+      window.clearTimeout(timeout);
+      signal?.removeEventListener("abort", handle_abort);
+    }
+
+    signal?.addEventListener("abort", handle_abort, { once: true });
+
+    reader.read().then(
+      (result) => {
+        cleanup();
+        resolve(result);
+      },
+      (error: unknown) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
 /**
  * Stream an AI response via Server-Sent Events.
  *
@@ -306,10 +358,11 @@ export async function* streamAiResponse(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let completed = false;
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await read_with_timeout(reader, signal);
       if (done) break;
 
       // Decode the incoming bytes and append to the line buffer.
@@ -341,9 +394,14 @@ export async function* streamAiResponse(
 
         // Stop consuming once the stream signals completion or an error.
         if (chunk.type === "done" || chunk.type === "error") {
+          completed = true;
           return;
         }
       }
+    }
+
+    if (!completed) {
+      throw new Error("AI stream ended before completion. Please retry.");
     }
   } finally {
     reader.releaseLock();
