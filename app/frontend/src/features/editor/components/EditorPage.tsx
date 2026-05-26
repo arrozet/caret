@@ -1,10 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Loader2, ArrowLeft, Check, AlertCircle, Sparkles, UserPlus } from "lucide-react";
 import type { JSONContent, Editor } from "@tiptap/react";
 import { CaretEditor } from "./CaretEditor";
 import { EditorToolbar } from "./EditorToolbar";
-import type { PaperSize } from "../extensions/pagination";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { useDocument } from "../hooks/useDocument";
@@ -18,8 +17,10 @@ import { useTabsStore, useAiStore, useAuthStore } from "../../../stores";
 import { useGhostText } from "../hooks/useGhostText";
 import {
   convert_ai_content_to_tiptap_json,
+  get_document_metrics,
   replace_collaboration_document_content,
 } from "../utils";
+import type { DocumentMetrics } from "../utils";
 import { indexDocumentEmbeddings } from "../../ai-assistant/api/aiApi";
 import type { DocumentChangePayload, DocumentContextSnapshot } from "../../ai-assistant/api/aiApi";
 import {
@@ -28,6 +29,7 @@ import {
   useCollaborationPresence,
   useCollaborationSession,
 } from "../../collaboration";
+import type { CollaborationConnectionStatus, CollaborationPresenceUser } from "../../collaboration";
 
 const ChatPanel = lazy(() => import("../../ai-assistant").then((m) => ({ default: m.ChatPanel })));
 
@@ -44,7 +46,7 @@ function getCollaborationWsUrl(): string {
   );
 }
 
-type SaveStatus = "idle" | "saving" | "saved" | "error";
+type SaveStatus = "idle" | "unsaved" | "saving" | "saved" | "error";
 
 interface DiffLine {
   type: "equal" | "removed" | "added";
@@ -197,6 +199,12 @@ export function EditorPage() {
   const workspace_invite_mutation = useInviteWorkspaceCollaborator(document?.workspace_id ?? "");
 
   const [save_status, set_save_status] = useState<SaveStatus>("idle");
+  const [editor_text, set_editor_text] = useState(document?.content_text ?? "");
+
+  const document_metrics = useMemo(
+    () => get_document_metrics(editor_text || (document?.content_text ?? "")),
+    [editor_text, document?.content_text],
+  );
   const [is_invite_dialog_open, set_is_invite_dialog_open] = useState(false);
   const [is_move_dialog_open, set_is_move_dialog_open] = useState(false);
   const [invite_email, set_invite_email] = useState("");
@@ -208,13 +216,12 @@ export function EditorPage() {
   const [is_accepting_change, set_is_accepting_change] = useState(false);
   const debounce_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saved_indicator_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pending_content_ref = useRef<{ json: JSONContent; text: string } | null>(null);
 
   const editor_ref = useRef<Editor | null>(null);
   const last_known_document_context_ref = useRef<DocumentContextSnapshot | null>(null);
 
   const [resolve_pending_change_token, set_resolve_pending_change_token] = useState(0);
-  const [paper_size, set_paper_size] = useState<PaperSize>("a4");
-
   const [editor_instance, set_editor_instance] = useState<Editor | null>(null);
 
   const current_workspace =
@@ -406,27 +413,67 @@ export function EditorPage() {
       }
 
       remember_document_context({ content_json: json, content_text: text });
+      set_editor_text(text);
+      set_save_status("unsaved");
 
       if (debounce_timer_ref.current) clearTimeout(debounce_timer_ref.current);
 
       debounce_timer_ref.current = setTimeout(async () => {
+        if (!navigator.onLine) {
+          set_save_status("error");
+          pending_content_ref.current = { json, text };
+          return;
+        }
         set_save_status("saving");
         try {
           await save_mutation.mutateAsync({
             content_json: json as Record<string, unknown>,
             content_text: text,
           });
+          pending_content_ref.current = null;
           show_saved();
           if (document_id && text.trim()) {
             indexDocumentEmbeddings(document_id, text).catch(() => {});
           }
         } catch {
           set_save_status("error");
+          pending_content_ref.current = { json, text };
         }
       }, AUTOSAVE_DELAY_MS);
     },
-    [save_mutation, show_saved, document_id, debug_log, remember_document_context, set_save_status],
+    [
+      save_mutation,
+      show_saved,
+      document_id,
+      debug_log,
+      remember_document_context,
+      set_editor_text,
+      set_save_status,
+    ],
   );
+
+  useEffect(() => {
+    function handleOnline() {
+      if (save_status === "error" && pending_content_ref.current) {
+        const pending = pending_content_ref.current;
+        set_save_status("saving");
+        save_mutation
+          .mutateAsync({
+            content_json: pending.json as Record<string, unknown>,
+            content_text: pending.text,
+          })
+          .then(() => {
+            show_saved();
+            pending_content_ref.current = null;
+          })
+          .catch(() => {
+            set_save_status("error");
+          });
+      }
+    }
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [save_status, save_mutation, show_saved]);
 
   const handleRejectPendingChange = useCallback(() => {
     set_is_accepting_change(false);
@@ -594,21 +641,22 @@ export function EditorPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-app">
-      {/* Full-width toolbar — spans both editor and AI panel */}
-      <div className="shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle flex items-center gap-2 px-2">
-        <div className="flex min-w-0 flex-1 justify-center">
+      {/* Full-width toolbar with controls centered over the editor canvas. */}
+      <div className="relative shrink-0 z-30 w-full border-b border-border-subtle bg-surface shadow-subtle">
+        <div
+          className={["flex min-w-0 justify-center px-2", isPanelOpen ? "pr-[400px]" : ""].join(
+            " ",
+          )}
+          data-testid="editor-toolbar-region"
+        >
           {editor_instance ? (
             <div className="w-full max-w-[var(--max-width-document-wide)]">
-              <EditorToolbar
-                editor={editor_instance}
-                paperSize={paper_size}
-                setPaperSize={set_paper_size}
-              />
+              <EditorToolbar editor={editor_instance} />
             </div>
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 shrink-0 items-center gap-2">
           {current_workspace_kind === "personal" && shared_workspaces.length > 0 ? (
             <Button variant="ghost" size="sm" onClick={openMoveDialog} className="inline-flex">
               Move to workspace
@@ -620,14 +668,6 @@ export function EditorPage() {
               Share
             </Button>
           ) : null}
-          {collaboration_enabled && (
-            <CollaborationPresenceBar
-              connection_status={collaboration_session.connection_status}
-              users={collaboration_presence.users}
-              class_name="hidden md:block"
-            />
-          )}
-          <SaveStatusIndicator status={save_status} />
         </div>
       </div>
 
@@ -651,8 +691,6 @@ export function EditorPage() {
               editor_ref.current = ed;
               set_editor_instance(ed);
             }}
-            paperSize={paper_size}
-            onPaperSizeChange={set_paper_size}
             hideToolbar
           />
         </div>
@@ -667,6 +705,15 @@ export function EditorPage() {
           </Suspense>
         )}
       </div>
+
+      <EditorStatusBar
+        metrics={document_metrics}
+        save_status={save_status}
+        collaboration_status={
+          collaboration_enabled ? collaboration_session.connection_status : undefined
+        }
+        collaboration_users={collaboration_enabled ? collaboration_presence.users : undefined}
+      />
 
       {is_invite_dialog_open && current_workspace_kind === "shared" && (
         <div
@@ -820,13 +867,82 @@ interface SaveStatusIndicatorProps {
   status: SaveStatus;
 }
 
-function SaveStatusIndicator({ status }: SaveStatusIndicatorProps) {
-  if (status === "idle") return null;
+interface EditorStatusBarProps {
+  metrics: DocumentMetrics;
+  save_status: SaveStatus;
+  collaboration_status?: CollaborationConnectionStatus;
+  collaboration_users?: CollaborationPresenceUser[];
+}
 
-  const config: Record<
-    Exclude<SaveStatus, "idle">,
-    { label: string; icon: React.ReactNode; class_name: string }
-  > = {
+/** Persistent bottom bar for document metrics and autosave state. */
+function EditorStatusBar({
+  metrics,
+  save_status,
+  collaboration_status,
+  collaboration_users,
+}: EditorStatusBarProps) {
+  return (
+    <div
+      className="shrink-0 border-t border-border-subtle bg-surface px-4 py-1.5 text-ui-xs text-text-secondary"
+      data-testid="editor-status-bar"
+    >
+      <div className="flex min-h-6 items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <StatusMetric
+            value={metrics.character_count}
+            singular_label="character"
+            plural_label="characters"
+          />
+          <StatusMetric value={metrics.word_count} singular_label="word" plural_label="words" />
+          <StatusMetric
+            value={metrics.paragraph_count}
+            singular_label="paragraph"
+            plural_label="paragraphs"
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <SaveStatusIndicator status={save_status} />
+          {collaboration_status && collaboration_users ? (
+            <CollaborationPresenceBar
+              connection_status={collaboration_status}
+              users={collaboration_users}
+              class_name="shrink-0"
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface StatusMetricProps {
+  value: number;
+  singular_label: string;
+  plural_label: string;
+}
+
+/** Small formatter for status-bar count labels. */
+function StatusMetric({ value, singular_label, plural_label }: StatusMetricProps) {
+  return (
+    <span className="shrink-0 tabular-nums">
+      {value.toLocaleString()} {value === 1 ? singular_label : plural_label}
+    </span>
+  );
+}
+
+/** Accessible autosave state label for the bottom status bar. */
+function SaveStatusIndicator({ status }: SaveStatusIndicatorProps) {
+  const config: Record<SaveStatus, { label: string; icon: React.ReactNode; class_name: string }> = {
+    idle: {
+      label: "Saved",
+      icon: <Check className="h-3.5 w-3.5" />,
+      class_name: "text-text-secondary",
+    },
+    unsaved: {
+      label: "Unsaved",
+      icon: <AlertCircle className="h-3.5 w-3.5" />,
+      class_name: "text-text-secondary",
+    },
     saving: {
       label: "Saving...",
       icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
@@ -847,7 +963,10 @@ function SaveStatusIndicator({ status }: SaveStatusIndicatorProps) {
   const { label, icon, class_name } = config[status];
 
   return (
-    <span className={`flex shrink-0 items-center gap-1.5 text-ui-sm ${class_name}`}>
+    <span
+      className={`flex shrink-0 items-center gap-1.5 tabular-nums ${class_name}`}
+      aria-live="polite"
+    >
       {icon}
       {label}
     </span>

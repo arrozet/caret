@@ -33,10 +33,6 @@ import {
 export interface EditorToolbarProps {
   /** The Tiptap editor instance to control. */
   editor: Editor;
-  /** The current paper size */
-  paperSize?: "a4" | "a3" | "letter";
-  /** Function to change paper size */
-  setPaperSize?: (size: "a4" | "a3" | "letter") => void;
 }
 
 /**
@@ -151,37 +147,6 @@ function FontFamilySelect({ editor }: { editor: Editor }) {
 }
 
 /**
- * Paper size selector dropdown.
- */
-function PaperSizeSelect({
-  value,
-  onChange,
-}: {
-  value: "a4" | "a3" | "letter";
-  onChange: (val: "a4" | "a3" | "letter") => void;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as "a4" | "a3" | "letter")}
-      className="h-8 rounded-[4px] border border-border-subtle bg-surface px-2 text-ui-sm text-text-primary cursor-pointer focus:outline-none focus:border-accent-main focus:ring-1 focus:ring-accent-main/40"
-      aria-label="Paper size"
-      title="Paper size"
-    >
-      <option value="a4" className="bg-surface text-text-primary">
-        A4
-      </option>
-      <option value="letter" className="bg-surface text-text-primary">
-        Letter
-      </option>
-      <option value="a3" className="bg-surface text-text-primary">
-        A3
-      </option>
-    </select>
-  );
-}
-
-/**
  * Rich formatting toolbar for the Tiptap editor.
  *
  * Provides visible buttons for all common formatting operations:
@@ -192,7 +157,7 @@ function PaperSizeSelect({
  * Positioned at the top of the document surface, inside the editor
  * sheet container.
  */
-export function EditorToolbar({ editor, paperSize = "a4", setPaperSize }: EditorToolbarProps) {
+export function EditorToolbar({ editor }: EditorToolbarProps) {
   const addLink = useCallback(() => {
     const previousUrl = editor.getAttributes("link").href;
     const url = window.prompt("URL", previousUrl);
@@ -246,14 +211,6 @@ export function EditorToolbar({ editor, paperSize = "a4", setPaperSize }: Editor
       </ToolbarButton>
 
       <ToolbarDivider />
-
-      {/* Page Setup */}
-      {setPaperSize && (
-        <>
-          <PaperSizeSelect value={paperSize} onChange={setPaperSize} />
-          <ToolbarDivider />
-        </>
-      )}
 
       {/* Font family */}
       <FontFamilySelect editor={editor} />

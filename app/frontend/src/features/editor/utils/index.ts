@@ -14,3 +14,5 @@ export {
 } from "./editorExtensions";
 
 export { convert_ai_content_to_tiptap_json } from "./aiContentConverter";
+export { get_document_metrics } from "./documentMetrics";
+export type { DocumentMetrics } from "./documentMetrics";

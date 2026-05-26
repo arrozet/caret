@@ -20,8 +20,6 @@ import type { JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import * as Y from "yjs";
 import { GhostText } from "../extensions/GhostText";
-import { Pagination } from "../extensions/pagination";
-import type { PaperSize } from "../extensions/pagination";
 import { SuggestionDelete } from "../extensions/SuggestionDelete";
 import { SuggestionInsert } from "../extensions/SuggestionInsert";
 
@@ -83,11 +81,8 @@ export function create_document_schema_extensions() {
 /**
  * Full editor extension list, including collaboration and editor-only UI helpers.
  */
-export function create_editor_extensions(params: {
-  paper_size: PaperSize;
-  collaboration_document?: Y.Doc | null;
-}) {
-  const { paper_size, collaboration_document = null } = params;
+export function create_editor_extensions(params: { collaboration_document?: Y.Doc | null } = {}) {
+  const { collaboration_document = null } = params;
 
   return [
     create_starter_kit(collaboration_document),
@@ -134,9 +129,6 @@ export function create_editor_extensions(params: {
     TableRow,
     TableHeader,
     TableCell,
-    Pagination.configure({
-      paperSize: paper_size,
-    }),
     GhostText,
     SuggestionInsert,
     SuggestionDelete,

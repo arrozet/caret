@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { useEffect } from "react";
 import type { JSONContent, Editor } from "@tiptap/react";
 import type { DocumentChangePayload } from "../../ai-assistant/api/aiApi";
@@ -478,6 +478,52 @@ describe("EditorPage", () => {
     expect(collab_call?.collaborationDocument).toEqual({ id: "collab-doc" });
   });
 
+  it("shows document metrics and save state in the bottom status bar", () => {
+    current_pending_change = null;
+
+    render(<EditorPage />);
+
+    const status_bar = screen.getByTestId("editor-status-bar");
+
+    expect(screen.getByText("14 characters")).toBeInTheDocument();
+    expect(screen.getByText("2 words")).toBeInTheDocument();
+    expect(screen.getByText("1 paragraph")).toBeInTheDocument();
+    expect(within(status_bar).getByText("Saved")).toBeInTheDocument();
+    expect(within(status_bar).getByTestId("collab-presence")).toBeInTheDocument();
+  });
+
+  it("updates bottom status bar metrics and marks content unsaved on editor changes", () => {
+    current_pending_change = null;
+
+    render(<EditorPage />);
+
+    sync_editor_text("Draft words");
+    act(() => {
+      emit_editor_update();
+    });
+
+    expect(screen.getByText("11 characters")).toBeInTheDocument();
+    expect(screen.getByText("2 words")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
+  });
+
+  it("reserves the AI panel width when centering the toolbar over the editor canvas", () => {
+    current_pending_change = null;
+    current_panel_open = true;
+
+    render(<EditorPage />);
+
+    expect(screen.getByTestId("editor-toolbar-region")).toHaveClass("pr-[400px]");
+  });
+
+  it("does not show physical paper size controls", () => {
+    current_pending_change = null;
+
+    render(<EditorPage />);
+
+    expect(screen.queryByLabelText("Paper size")).not.toBeInTheDocument();
+  });
+
   it("passes structured document context to ChatPanel", async () => {
     current_pending_change = null;
     current_panel_open = true;
@@ -548,5 +594,79 @@ describe("EditorPage", () => {
         email: "juan@nombre.es",
       });
     });
+  });
+
+  it("preserves pending content and shows error status on network failure", async () => {
+    current_pending_change = null;
+
+    mock_mutate_async.mockRejectedValueOnce(new Error("Network failure"));
+
+    render(<EditorPage />);
+
+    sync_editor_text("Cambios no guardados");
+    act(() => {
+      emit_editor_update();
+    });
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("Error saving")).toBeInTheDocument();
+      },
+      { timeout: 1_600 },
+    );
+
+    expect(mock_mutate_async).toHaveBeenCalledTimes(1);
+    const save_payload = mock_mutate_async.mock.calls[0][0] as { content_text?: string };
+    expect(save_payload.content_text).toBe("Cambios no guardados");
+  });
+
+  it("retries save on online event after previous save failure", async () => {
+    current_pending_change = null;
+
+    const fail_error = new Error("Network failure");
+    mock_mutate_async.mockRejectedValueOnce(fail_error);
+
+    render(<EditorPage />);
+
+    sync_editor_text("Text after reconnect");
+    act(() => {
+      emit_editor_update();
+    });
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("Error saving")).toBeInTheDocument();
+      },
+      { timeout: 1_600 },
+    );
+
+    mock_mutate_async.mockClear();
+    mock_mutate_async.mockResolvedValueOnce({
+      id: "doc-1",
+      workspace_id: "ws-1",
+      folder_id: null,
+      title: "Doc test",
+      status: "active",
+      visibility: "private",
+      owner_user_id: "user-1",
+      content_json: current_json,
+      content_text: current_text,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+
+    await waitFor(
+      () => {
+        expect(mock_mutate_async).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 1_000 },
+    );
+
+    const retry_payload = mock_mutate_async.mock.calls[0][0] as { content_text?: string };
+    expect(retry_payload.content_text).toBe("Text after reconnect");
   });
 });
