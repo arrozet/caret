@@ -5,7 +5,7 @@ import { WebsocketProvider } from "y-websocket";
 export const LOCAL_COLLAB_WS_BASE_URL = "ws://localhost:3003/document";
 
 /** Production collaboration service endpoint contract. */
-export const PRODUCTION_COLLAB_WS_BASE_URL = "wss://collab.caret.page/document";
+export const PRODUCTION_COLLAB_WS_BASE_URL = "wss://ws.caret.page/document";
 
 /** Provider connection states exposed to hooks/UI. */
 export type CollaborationConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -62,8 +62,6 @@ export function createCollaborationSession({
     params: {
       token,
     },
-    maxReconnectTimeout: 5000,
-    reconnectTimeoutBase: 1000,
   });
 
   return {
