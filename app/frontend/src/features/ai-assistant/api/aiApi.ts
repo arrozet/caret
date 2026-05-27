@@ -1,5 +1,6 @@
 import { supabase_client } from "../../../lib/supabase";
 import { api_fetch } from "../../../lib/apiClient";
+import { runtime_config } from "../../../lib/runtimeConfig";
 
 /**
  * Base URL for AI service endpoints.
@@ -379,20 +380,21 @@ export async function* streamAiResponse(
     data: { session },
   } = await supabase_client.auth.getSession();
 
-  const api_base = (import.meta.env.VITE_API_BASE_URL as string) || "http://localhost:3000/api/v1";
-
   const open_timeout = create_timeout_controller(signal, STREAM_OPEN_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(`${api_base}${AI_BASE}/conversations/${conversation_id}/stream`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    response = await fetch(
+      `${runtime_config.api_base_url}${AI_BASE}/conversations/${conversation_id}/stream`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ message, document_context, document_id, agent_type }),
+        signal: open_timeout.signal,
       },
-      body: JSON.stringify({ message, document_context, document_id, agent_type }),
-      signal: open_timeout.signal,
-    });
+    );
   } catch (error) {
     if (open_timeout.did_timeout()) {
       throw new Error("AI stream stalled. Please retry.", { cause: error });

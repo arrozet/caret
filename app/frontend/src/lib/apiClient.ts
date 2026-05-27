@@ -1,12 +1,5 @@
 import { supabase_client } from "./supabase";
-
-/**
- * Base URL for all API requests routed through the API Gateway.
- * In development this points to the local docker-compose gateway.
- * In production this would be the deployed gateway URL.
- */
-const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string) || "http://localhost:3000/api/v1";
+import { runtime_config } from "./runtimeConfig";
 
 /**
  * Generic HTTP client that attaches the Supabase JWT to every request.
@@ -33,7 +26,7 @@ export async function api_fetch<T>(path: string, options: RequestInit = {}): Pro
 
   const signal = options.signal ?? AbortSignal.timeout(15_000);
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${runtime_config.api_base_url}${path}`, {
     ...options,
     headers,
     signal,

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase_client } from "../lib/supabase";
+import { get_auth_redirect_url } from "../lib/runtimeConfig";
 
 /** Possible states for the authentication lifecycle. */
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -126,7 +127,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const { error } = await supabase_client.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/documents`,
+        redirectTo: get_auth_redirect_url(),
       },
     });
     return error?.message ?? null;

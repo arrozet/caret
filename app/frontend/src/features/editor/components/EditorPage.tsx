@@ -12,6 +12,7 @@ import { useInviteDocumentCollaborator } from "../hooks/useInviteDocumentCollabo
 import { useInviteWorkspaceCollaborator } from "../hooks/useInviteWorkspaceCollaborator";
 import { useWorkspaces } from "../hooks/useWorkspaces";
 import { updateDocument } from "../api/documentApi";
+import { runtime_config } from "../../../lib/runtimeConfig";
 import { useFocusMode } from "../../../hooks/useFocusMode";
 import { useTabsStore, useAiStore, useAuthStore } from "../../../stores";
 import { useGhostText } from "../hooks/useGhostText";
@@ -25,7 +26,6 @@ import { indexDocumentEmbeddings, updateSuggestionStatus } from "../../ai-assist
 import type { DocumentChangePayload, DocumentContextSnapshot } from "../../ai-assistant/api/aiApi";
 import {
   CollaborationPresenceBar,
-  LOCAL_COLLAB_WS_BASE_URL,
   useCollaborationPresence,
   useCollaborationSession,
   deriveUserColor,
@@ -38,13 +38,11 @@ const ChatPanel = lazy(() => import("../../ai-assistant").then((m) => ({ default
 const AUTOSAVE_DELAY_MS = 1_000;
 
 function isCollaborationEnabled(): boolean {
-  return import.meta.env.VITE_ENABLE_COLLABORATION !== "false";
+  return runtime_config.collaboration_enabled;
 }
 
 function getCollaborationWsUrl(): string {
-  return (
-    (import.meta.env.VITE_COLLABORATION_WS_URL as string | undefined) ?? LOCAL_COLLAB_WS_BASE_URL
-  );
+  return runtime_config.collaboration_ws_url;
 }
 
 type SaveStatus = "idle" | "unsaved" | "saving" | "saved" | "error";

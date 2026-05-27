@@ -3,6 +3,7 @@ import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
+import { runtime_config } from "../../../lib/runtimeConfig";
 import { buildCollabProviderConfig } from "../utils/buildCollabWsEndpoint";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
@@ -12,7 +13,7 @@ interface AwarenessPeer {
   name: string;
 }
 
-const DEFAULT_WS_BASE_URL = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:3003";
+const DEFAULT_WS_BASE_URL = runtime_config.collaboration_ws_url.replace(/\/document\/?$/, "");
 const IS_DEV_MODE = import.meta.env.DEV;
 
 /**

@@ -39,6 +39,9 @@ VITE_API_URL=https://api.caret.page/api/v1
 VITE_COLLABORATION_WS_URL=wss://ws.caret.page/document
 VITE_COLLAB_WS_URL=wss://ws.caret.page/document
 VITE_ENABLE_COLLABORATION=true
+VITE_APP_ORIGIN=https://caret.page
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
 
 SUPABASE_URL=
 SUPABASE_ANON_KEY=

@@ -9,8 +9,9 @@ services:
         VITE_COLLABORATION_WS_URL: ${VITE_COLLABORATION_WS_URL:-wss://ws.caret.page/document}
         VITE_COLLAB_WS_URL: ${VITE_COLLAB_WS_URL:-wss://ws.caret.page/document}
         VITE_ENABLE_COLLABORATION: ${VITE_ENABLE_COLLABORATION:-true}
-        VITE_SUPABASE_URL: ${SUPABASE_URL:-}
-        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+        VITE_APP_ORIGIN: ${VITE_APP_ORIGIN:-https://caret.page}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-${SUPABASE_URL:-}}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-}}
     expose:
       - "8080"
     environment:
