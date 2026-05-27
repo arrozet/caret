@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase_client } from "../lib/supabase";
+import { get_auth_redirect_url } from "../lib/runtimeConfig";
 
 /** Possible states for the authentication lifecycle. */
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -91,7 +92,7 @@ function getProfileFallback(user: User): UserProfile {
  * Profile data lives in user_profiles table (not auth.users metadata)
  * so customizations survive Google OAuth re-login.
  */
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>()((set, get) => ({
   session: null,
   user: null,
   status: "loading",
@@ -126,7 +127,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     const { error } = await supabase_client.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/documents`,
+        redirectTo: get_auth_redirect_url(),
       },
     });
     return error?.message ?? null;
@@ -137,8 +138,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ session: null, user: null, profile: null, status: "unauthenticated" });
   },
 
-  async updateProfile(data) {
-    const userId = useAuthStore.getState().user?.id;
+  async updateProfile(data): Promise<string | null> {
+    const userId = get().user?.id;
     if (!userId) return "User not authenticated.";
 
     const { error } = await supabase_client.from("user_profiles").upsert({
