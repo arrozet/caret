@@ -252,7 +252,7 @@ export class DocumentService {
       title: string;
       workspace_id: string;
       folder_id: string | null;
-      visibility: string;
+      visibility: "private" | "public" | "workspace" | "link";
       updated_by_user_id: string;
       latest_version_id: string;
     }> = {

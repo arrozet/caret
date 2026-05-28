@@ -130,10 +130,10 @@ export class WorkspaceService {
     const sharedWithByWorkspaceId = new Map<string, string[]>();
     await Promise.all(
       rows.map(async (row) => {
-        const memberRows = await this.workspaceRepository.listActiveMemberEmailsByWorkspace(
+        const memberRows = (await this.workspaceRepository.listActiveMemberEmailsByWorkspace(
           row.id,
           userId,
-        );
+        )) as unknown as { email: string }[];
         const uniqueEmails = Array.from(new Set(memberRows.map((member) => member.email)));
         sharedWithByWorkspaceId.set(row.id, uniqueEmails);
       }),

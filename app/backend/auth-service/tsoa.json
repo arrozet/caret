@@ -1,0 +1,14 @@
+{
+  "entryFile": "src/app.ts",
+  "controllerPathGlobs": ["src/controllers/*_controller.ts"],
+  "noImplicitAdditionalProperties": "throw-on-extras",
+  "spec": {
+    "outputDirectory": "src/openapi",
+    "specFileBaseName": "swagger",
+    "specVersion": 3,
+    "basePath": "/",
+    "name": "Caret Auth Service API",
+    "description": "REST API documentation for the Caret Auth Service.",
+    "version": "0.1.0"
+  }
+}

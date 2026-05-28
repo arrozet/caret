@@ -11,6 +11,7 @@ import { ConnectionHandler } from "./handlers/index.js";
 import { RoomManager, CollabPersistenceService, SnapshotScheduler } from "./services/index.js";
 import { CollabRepository } from "./repositories/collab_repository.js";
 import * as schema from "./db/schema.js";
+import { asyncApiSpec, renderAsyncApiDocsHtml } from "./asyncapi/asyncapi_spec.js";
 
 /**
  * Y.js protocol message type constants.
@@ -86,6 +87,18 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
   if (req.method === "GET" && url.pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok" }));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/asyncapi.json") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(asyncApiSpec));
+    return;
+  }
+
+  if (req.method === "GET" && (url.pathname === "/docs" || url.pathname === "/docs/")) {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(renderAsyncApiDocsHtml());
     return;
   }
 
