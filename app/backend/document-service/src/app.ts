@@ -15,6 +15,8 @@ import { FolderRepository } from "./repositories/folder_repository.js";
 import { createDocumentRoutes } from "./routes/document_routes.js";
 import { createWorkspaceRoutes } from "./routes/workspace_routes.js";
 import { createFolderRoutes } from "./routes/folder_routes.js";
+import { registerOpenApiDocs } from "./openapi/openapi_docs.js";
+import openApiSpec from "./openapi/swagger.json" with { type: "json" };
 
 /**
  * Express app entry point for the Document Service.
@@ -56,6 +58,9 @@ const folderService = new FolderService(
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "document-service" });
 });
+
+/** OpenAPI JSON and Swagger UI documentation. */
+registerOpenApiDocs(app, openApiSpec);
 
 /** Protected API routes — auth_middleware validates JWT first. */
 app.use("/documents", authMiddleware, createDocumentRoutes(documentService));

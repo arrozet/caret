@@ -5,6 +5,8 @@ import { errorMiddleware } from "./middleware/error_middleware.js";
 import { registerRoutes } from "./routes/index.js";
 import { config } from "./lib/config.js";
 import { logger } from "./lib/logger.js";
+import { registerOpenApiDocs } from "./openapi/openapi_docs.js";
+import openApiSpec from "./openapi/swagger.json" with { type: "json" };
 
 const app = express();
 
@@ -13,6 +15,9 @@ app.use(corsMiddleware);
 app.use(rateLimitMiddleware);
 
 registerRoutes(app);
+
+/** OpenAPI JSON and Swagger UI documentation. */
+registerOpenApiDocs(app, openApiSpec);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "api-gateway" });

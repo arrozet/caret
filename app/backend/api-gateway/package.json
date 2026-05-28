@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/app.ts",
-    "build": "tsc",
+    "build": "bun run openapi:generate && tsc",
+    "openapi:generate": "tsoa spec",
     "start": "node dist/app.js",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
@@ -17,11 +18,12 @@
     "format:write": "prettier --write src"
   },
   "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "express-http-proxy": "^2.1.1",
     "express-rate-limit": "^7.5.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.5.0"
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -29,9 +31,11 @@
     "@types/express": "^5.0.3",
     "@types/express-http-proxy": "^1.6.6",
     "@types/node": "^22.0.0",
+    "@types/swagger-ui-express": "^4.1.8",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.8.1",
+    "tsoa": "6.6.0",
     "tsx": "^4.19.4",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.57.0",

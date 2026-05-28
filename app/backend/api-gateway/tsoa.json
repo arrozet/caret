@@ -1,0 +1,21 @@
+{
+  "entryFile": "src/app.ts",
+  "controllerPathGlobs": ["src/controllers/*_controller.ts"],
+  "noImplicitAdditionalProperties": "throw-on-extras",
+  "spec": {
+    "outputDirectory": "src/openapi",
+    "specFileBaseName": "swagger",
+    "specVersion": 3,
+    "basePath": "/",
+    "name": "Caret API Gateway",
+    "description": "Gateway discovery endpoints and proxy prefixes for the Caret public API.",
+    "version": "0.1.0",
+    "securityDefinitions": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
