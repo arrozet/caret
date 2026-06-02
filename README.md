@@ -15,27 +15,16 @@
   <a href="https://mintlify.wiki/arrozet/caret"><img alt="Documentation" src="https://img.shields.io/badge/docs-Mintlify-0F172A?style=flat-square&logo=readthedocs&logoColor=white" /></a>
 </p>
 
-![frontend:](https://img.shields.io/badge/frontend%3A-111111?style=flat-square)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tiptap](https://img.shields.io/badge/Tiptap-0D0D0D?style=flat-square&logo=tiptap&logoColor=white)
-![Yjs](https://img.shields.io/badge/Yjs-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
-
-![backend:](https://img.shields.io/badge/backend%3A-111111?style=flat-square)
 ![Node.js](https://img.shields.io/badge/Node.js-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
-![PydanticAI](https://img.shields.io/badge/PydanticAI-E92063?style=flat-square&logo=pydantic&logoColor=white)
-
-![data:](https://img.shields.io/badge/data%3A-111111?style=flat-square)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
-![pgvector](https://img.shields.io/badge/pgvector-336791?style=flat-square&logo=postgresql&logoColor=white)
-
-![platform:](https://img.shields.io/badge/platform%3A-111111?style=flat-square)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Coolify](https://img.shields.io/badge/Coolify-111827?style=flat-square&logo=docker&logoColor=white)
 ![Hetzner](https://img.shields.io/badge/Hetzner-D50C2D?style=flat-square&logo=hetzner&logoColor=white)
