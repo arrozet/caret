@@ -19,9 +19,7 @@ Caret brings the agentic workflow of modern coding tools into document writing. 
 
 ## Demo
 
-<video src="docs/video.mp4" controls width="100%">
-  Your browser does not support the video tag.
-</video>
+<img src="docs/demo.gif" alt="Caret product demo" width="100%" />
 
 ## Why Caret
 
