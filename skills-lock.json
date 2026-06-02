@@ -62,6 +62,12 @@
       "sourceType": "github",
       "computedHash": "466ba01941037ddc0b519273035eae1e1f591019bdeb0fd83cd8786c53a07f89"
     },
+    "create-readme": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/create-readme/SKILL.md",
+      "computedHash": "d0ece1b2164ce1376e4ab6e98d6ac079df3a2a94f5f02224362b6a1ce2516ae9"
+    },
     "critique": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
