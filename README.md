@@ -9,28 +9,40 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/arrozet/caret/actions/workflows/ci.yml">
-    <img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/ci.yml?branch=main&label=CI" />
-  </a>
-  <a href="https://github.com/arrozet/caret/actions/workflows/deploy-production.yml">
-    <img alt="Production deploy status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/deploy-production.yml?branch=prod&label=deploy" />
-  </a>
-  <a href="https://caret.page/">
-    <img alt="Live app" src="https://img.shields.io/badge/live-caret.page-16A34A" />
-  </a>
-  <a href="https://mintlify.wiki/arrozet/caret">
-    <img alt="Documentation" src="https://img.shields.io/badge/docs-Mintlify-0F172A" />
-  </a>
+  <a href="https://github.com/arrozet/caret/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/ci.yml?branch=main&label=CI&style=flat-square&logo=githubactions&logoColor=white" /></a>
+  <a href="https://github.com/arrozet/caret/actions/workflows/deploy-production.yml"><img alt="Production deploy status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/deploy-production.yml?branch=prod&label=deploy&style=flat-square&logo=githubactions&logoColor=white" /></a>
+  <a href="https://caret.page/"><img alt="Live app" src="https://img.shields.io/badge/live-caret.page-16A34A?style=flat-square&logo=googlechrome&logoColor=white" /></a>
+  <a href="https://mintlify.wiki/arrozet/caret"><img alt="Documentation" src="https://img.shields.io/badge/docs-Mintlify-0F172A?style=flat-square&logo=readthedocs&logoColor=white" /></a>
 </p>
 
-<p align="center">
-  <img alt="Deploy: Coolify" src="https://img.shields.io/badge/deploy-Coolify-111827" />
-  <img alt="Hosting: Hetzner" src="https://img.shields.io/badge/hosting-Hetzner-D50C2D" />
-  <img alt="DNS: Cloudflare" src="https://img.shields.io/badge/DNS-Cloudflare-F38020" />
-  <img alt="Database: Supabase" src="https://img.shields.io/badge/database-Supabase-3FCF8E" />
-  <img alt="Containers: Docker Compose" src="https://img.shields.io/badge/containers-Docker_Compose-2496ED" />
-  <img alt="CI/CD: GitHub Actions" src="https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF" />
-</p>
+![frontend:](https://img.shields.io/badge/frontend%3A-111111?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![Tiptap](https://img.shields.io/badge/Tiptap-0D0D0D?style=flat-square&logo=tiptap&logoColor=white)
+![Yjs](https://img.shields.io/badge/Yjs-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+
+![backend:](https://img.shields.io/badge/backend%3A-111111?style=flat-square)
+![Node.js](https://img.shields.io/badge/Node.js-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white)
+![Express](https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
+![PydanticAI](https://img.shields.io/badge/PydanticAI-E92063?style=flat-square&logo=pydantic&logoColor=white)
+
+![data:](https://img.shields.io/badge/data%3A-111111?style=flat-square)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
+![pgvector](https://img.shields.io/badge/pgvector-336791?style=flat-square&logo=postgresql&logoColor=white)
+
+![platform:](https://img.shields.io/badge/platform%3A-111111?style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Coolify](https://img.shields.io/badge/Coolify-111827?style=flat-square&logo=docker&logoColor=white)
+![Hetzner](https://img.shields.io/badge/Hetzner-D50C2D?style=flat-square&logo=hetzner&logoColor=white)
+![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=flat-square&logo=cloudflare&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)
+![Bun](https://img.shields.io/badge/Bun-000000?style=flat-square&logo=bun&logoColor=white)
+![uv](https://img.shields.io/badge/uv-DE5FE9?style=flat-square&logo=astral&logoColor=white)
 
 Caret brings the agentic workflow of modern coding tools into document writing. Instead of a detached chat sidebar, Caret gives AI real document context, rich editor awareness, collaborative state, and the ability to help draft, revise, structure, and improve documents directly.
 
