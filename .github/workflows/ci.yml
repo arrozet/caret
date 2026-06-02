@@ -23,15 +23,6 @@ jobs:
     defaults:
       run:
         working-directory: app/frontend
-    env:
-      VITE_API_BASE_URL: http://127.0.0.1:3000/api/v1
-      VITE_API_URL: http://127.0.0.1:3000/api/v1
-      VITE_COLLABORATION_WS_URL: ws://127.0.0.1:3003/document
-      VITE_COLLAB_WS_URL: ws://127.0.0.1:3003/document
-      VITE_ENABLE_COLLABORATION: "false"
-      VITE_APP_ORIGIN: http://127.0.0.1:5173
-      VITE_SUPABASE_URL: http://127.0.0.1:54321
-      VITE_SUPABASE_ANON_KEY: fake-anon-key
     steps:
       - name: Checkout
         uses: actions/checkout@v4
