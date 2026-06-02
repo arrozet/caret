@@ -1,30 +1,326 @@
-# Caret - Agentic AI-First Document Editor
+# Caret
 
-An agentic, AI-first document editor for collaborative and structured writing.
+<p align="center">
+  <img src="docs/logo.png" alt="Caret logo" width="120" />
+</p>
 
-## Vision
+<p align="center">
+  <strong>An agentic, AI-first, collaborative document editor for structured writing.</strong>
+</p>
 
-Caret addresses a critical gap in the market: while agentic IDEs like Cursor and Copilot have transformed code writing, document editing remains stagnant. Current solutions (Word's Copilot, Google Docs' Gemini) offer limited agentic capabilities—they're essentially chat toggles with minimal document interaction. Caret aims to change this by providing true agentic capabilities integrated into a rich document editor where AI can understand, modify, and enhance documents intelligently.
+<p align="center">
+  <a href="https://github.com/arrozet/caret/actions/workflows/ci.yml">
+    <img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/ci.yml?branch=main&label=CI&style=for-the-badge" />
+  </a>
+  <a href="https://github.com/arrozet/caret/actions/workflows/deploy-production.yml">
+    <img alt="Production deploy status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/deploy-production.yml?branch=prod&label=Deploy&style=for-the-badge" />
+  </a>
+  <a href="https://caret.page/">
+    <img alt="Live app" src="https://img.shields.io/badge/live-caret.page-16A34A?style=for-the-badge" />
+  </a>
+  <a href="https://mintlify.wiki/arrozet/caret">
+    <img alt="Documentation" src="https://img.shields.io/badge/docs-Mintlify-0F172A?style=for-the-badge" />
+  </a>
+</p>
 
-## Problem Statement
+<p align="center">
+  <img alt="Deploy: Coolify" src="https://img.shields.io/badge/deploy-Coolify-111827?style=for-the-badge" />
+  <img alt="Hosting: Hetzner" src="https://img.shields.io/badge/hosting-Hetzner-D50C2D?style=for-the-badge" />
+  <img alt="DNS: Cloudflare" src="https://img.shields.io/badge/DNS-Cloudflare-F38020?style=for-the-badge" />
+  <img alt="Database: Supabase" src="https://img.shields.io/badge/database-Supabase-3FCF8E?style=for-the-badge" />
+  <img alt="Containers: Docker Compose" src="https://img.shields.io/badge/containers-Docker_Compose-2496ED?style=for-the-badge" />
+  <img alt="CI/CD: GitHub Actions" src="https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?style=for-the-badge" />
+</p>
 
-As a student, I've encountered a key problem: **document writing is not as "agile" as code writing with modern AI tools**. No major company is effectively integrating AI into Word/Google Docs-like editors with genuine agentic capabilities.
+Caret brings the agentic workflow of modern coding tools into document writing. Instead of a detached chat sidebar, Caret gives AI real document context, rich editor awareness, collaborative state, and the ability to help draft, revise, structure, and improve documents directly.
 
-### Why Caret is Viable
+## Why Caret
 
-1.  **Less explored market**: Only lex.pages has achieved relative success with a similar concept, with limited visibility.
-2.  **Lower token costs**: Modifying documents is significantly cheaper than generating code (fewer tokens).
-3.  **High utility**: Essential for students, professionals, and anyone writing structured documents.
-4.  **Monetization potential**: Clear paths for premium features, API access, and enterprise solutions.
+Agentic IDEs have changed how developers write code, but document editing still feels mostly static. Most AI features in word processors behave like chat sidebars with limited document interaction; Caret is built around the idea that AI should work inside the document surface, with enough context to restructure drafts, adapt tone, coordinate feedback, and improve writing directly.
 
-## What's in a Name?
+The name comes from the caret (`^`): the insertion point where text begins. It is short, tied to writing, and quietly technical without sounding like another generic AI tool.
 
-**Caret** (^) - The caret symbol indicates the cursor position where text will be inserted. It was chosen because it is:
-- Concise and memorable.
-- Directly related to document writing and editing.
-- Technically meaningful yet distinctive.
+## Highlights
+
+- React 19 frontend with TypeScript, Vite, TailwindCSS v4, Tiptap 3, and Y.js.
+- Express API Gateway that exposes the public HTTP API under `/api/v1`.
+- Independent Node.js services for auth, documents, and realtime collaboration.
+- FastAPI AI service with PydanticAI, SQLAlchemy async, Alembic, and SSE streaming.
+- Supabase Cloud for PostgreSQL, Auth, and pgvector.
+- Production deployment with Docker Compose, Coolify, Hetzner VPS, and Cloudflare.
+
+## Architecture
+
+```text
+React/Tiptap frontend
+  | REST/SSE: /api/v1
+  v
+API Gateway :3000
+  | /auth, /documents, /workspaces, /folders
+  v
+Auth Service :3001 + Document Service :3002
+
+Frontend collaboration WebSocket
+  -> Collab Service :3003 /document/{doc_id}?token={jwt}
+
+AI requests
+  -> API Gateway -> AI Service :8000
+
+All services
+  -> Supabase Cloud PostgreSQL/Auth/pgvector
+```
+
+| Service | Stack | Local | Production |
+| --- | --- | --- | --- |
+| `frontend` | React, Vite, Tiptap | `http://localhost:5173` | `https://app.example.com` |
+| `api-gateway` | Express, TypeScript | `http://localhost:3000` | `https://api.example.com` |
+| `auth-service` | Express, TypeScript | `http://localhost:3001` | Internal |
+| `document-service` | Express, TypeScript, Drizzle | `http://localhost:3002` | Internal |
+| `collab-service` | ws, Y.js, TypeScript | `ws://localhost:3003` | `wss://ws.example.com/document` |
+| `ai-service` | FastAPI, PydanticAI | `http://localhost:8000` | Internal |
+
+> [!IMPORTANT]
+> Docker Compose does not run a local PostgreSQL database. Local and production environments connect to Supabase Cloud through `DATABASE_URL`.
+
+## Requirements
+
+- Docker and Docker Compose.
+- Bun for the frontend and Node.js services.
+- uv for the Python AI service.
+- A Supabase project with PostgreSQL/Auth.
+- At least one AI provider key for agentic features (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY`).
+
+## Local Setup
+
+Create a root `.env` file:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-supabase-jwt-secret
+DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+JWT_SECRET=replace-with-a-long-random-secret
+
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash
+```
+
+Start the full local stack:
+
+```bash
+docker compose up --build
+```
+
+Useful commands:
+
+```bash
+make up          # docker compose up --build
+make down        # stop containers
+make logs        # follow logs
+make ps          # show service status
+```
+
+Local URLs:
+
+| Target | URL |
+| --- | --- |
+| App | `http://localhost:5173` |
+| API Gateway | `http://localhost:3000` |
+| API health | `http://localhost:3000/health` |
+| AI Service | `http://localhost:8000` |
+| AI health | `http://localhost:8000/health` |
+| Collaboration WS | `ws://localhost:3003` |
+
+## Development Without Docker
+
+Use Bun for the frontend and Node.js services:
+
+```bash
+cd app/frontend
+bun install
+bun run dev
+```
+
+```bash
+cd app/backend/api-gateway
+bun install
+bun run dev
+```
+
+Use uv for the AI service:
+
+```bash
+cd app/backend/ai-service
+uv sync
+uv run fastapi dev src/app/main.py
+```
+
+> [!NOTE]
+> The project standardizes on Bun for JavaScript/TypeScript and uv for Python. Avoid mixing npm, yarn, pnpm, pip, Poetry, or Pipenv unless a future change explicitly documents it.
+
+## Quality And Tests
+
+The root `Makefile` exposes service-level tasks:
+
+```bash
+make frontend-lint
+make frontend-test-unit
+make api-gateway-test-unit
+make auth-service-test-integration
+make document-service-test-integration
+make collab-service-test-unit
+make ai-service-lint
+make ai-service-test-unit
+```
+
+GitHub Actions CI validates pushes to `main` and `prod` with formatting checks, linting, type/build checks, unit tests, integration tests, frontend E2E smoke tests, production compose validation, and production image builds.
+
+## Cloud Deployment
+
+Production runs on a Hetzner VPS managed by Coolify. Cloudflare manages DNS for your application domain; Supabase remains outside the VPS as the managed database, Auth, and pgvector platform.
+
+> [!NOTE]
+> Replace the example domains below with the real domains configured in your Cloudflare and Coolify environments.
+
+### Deployment Labels
+
+| Label | Value |
+| --- | --- |
+| Hosting | `Hetzner VPS` |
+| PaaS | `Coolify` |
+| Deployment unit | `docker-compose.prod.yml` |
+| Production branch | `prod` |
+| CI/CD | `GitHub Actions -> Coolify webhook` |
+| DNS | `Cloudflare` |
+| Database/Auth | `Supabase Cloud` |
+| Public app | `https://app.example.com` |
+| Public API | `https://api.example.com` |
+| Public WebSocket | `wss://ws.example.com/document` |
+| Operations | `https://ops.example.com` |
+
+### Cloudflare DNS
+
+Configure records as `DNS only` while certificates are being issued:
+
+| Name | Type | Target |
+| --- | --- | --- |
+| `app.example.com` | `A` | Hetzner IPv4 |
+| `www.example.com` | `CNAME` | `app.example.com` |
+| `api.example.com` | `A` | Hetzner IPv4 |
+| `ws.example.com` | `A` | Hetzner IPv4 |
+| `ops.example.com` | `A` | Hetzner IPv4 |
+
+### Firewall
+
+Allow only the required public ingress:
+
+| Port | Purpose |
+| --- | --- |
+| `22/tcp` | SSH, ideally restricted to trusted IPs |
+| `80/tcp` | HTTP and ACME validation |
+| `443/tcp` | HTTPS |
+| `ICMP` | Basic reachability checks |
+
+Do not expose internal ports such as `3001`, `3002`, or `8000` directly to the internet.
+
+### Coolify Resource
+
+In Coolify, create a `Caret` project and add a Docker Compose resource from GitHub:
+
+| Field | Value |
+| --- | --- |
+| Branch | `prod` |
+| Compose file | `docker-compose.prod.yml` |
+| Build pack | Docker Compose |
+
+Assign domains only to public services:
+
+| Service | Internal port | Domain |
+| --- | --- | --- |
+| `frontend` | `8080` | `https://app.example.com` |
+| `api-gateway` | `3000` | `https://api.example.com` |
+| `collab-service` | `3003` | `https://ws.example.com` |
+
+`auth-service`, `document-service`, and `ai-service` should remain internal to the Docker network.
+
+### Production Variables In Coolify
+
+Set these variables in the Coolify resource:
+
+```env
+ALLOWED_ORIGINS=https://app.example.com,https://www.example.com
+
+VITE_API_BASE_URL=https://api.example.com/api/v1
+VITE_API_URL=https://api.example.com/api/v1
+VITE_COLLABORATION_WS_URL=wss://ws.example.com/document
+VITE_COLLAB_WS_URL=wss://ws.example.com/document
+VITE_ENABLE_COLLABORATION=true
+VITE_APP_ORIGIN=https://app.example.com
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_JWT_SECRET=
+DATABASE_URL=
+JWT_SECRET=
+
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash
+```
+
+> [!WARNING]
+> Do not commit secrets to the repository. Runtime credentials live in Coolify; GitHub only needs CI/CD secrets.
+
+### Production CI/CD
+
+1. Create a Coolify deploy webhook for the Caret Docker Compose resource.
+2. Save the webhook in GitHub as `COOLIFY_DEPLOY_WEBHOOK_URL`.
+3. Optionally save `COOLIFY_DEPLOY_TOKEN` if the webhook requires a bearer token.
+4. Push or merge to `prod`.
+5. GitHub Actions runs `CI`.
+6. If `CI` passes, `deploy-production.yml` calls the Coolify webhook.
+7. The workflow runs production smoke checks.
+
+Built-in smoke checks:
+
+```text
+GET https://app.example.com/health
+GET https://api.example.com/health
+GET https://api.example.com/api/v1
+GET https://ws.example.com/health
+```
+
+## Repository Structure
+
+```text
+app/
+  frontend/                  React, Vite, Tiptap
+  backend/
+    api-gateway/             Public REST gateway
+    auth-service/            Auth/docs runtime service
+    document-service/        Workspaces, folders, and documents
+    collab-service/          WebSocket collaboration with Y.js
+    ai-service/              FastAPI agentic AI service
+docs/deployment/             Coolify and CI/CD deployment docs
+docker-compose.yml           Local stack
+docker-compose.prod.yml      Production stack
+Makefile                     Common local commands
+AGENTS.md                    System documentation hub for agents
+```
 
 ## Documentation
 
-- **[AGENTS.md](./AGENTS.md)** - Complete project architecture, backend microservices, tech stack, and development phases
-- **[FRONTEND.md](./FRONTEND.md)** - Comprehensive frontend design system: color palette, typography, components, animations, and accessibility guidelines
+- `AGENTS.md`: project vision, architecture, and agent working rules.
+- `.agents/skills/caret-frontend/SKILL.md`: frontend, UI, Tiptap, and collaboration.
+- `.agents/skills/caret-backend/SKILL.md`: backend services and protocols.
+- `.agents/skills/caret-database/SKILL.md`: Supabase, PostgreSQL, RLS, and pgvector.
+- `.agents/skills/caret-deployment/SKILL.md`: Docker, Coolify, Hetzner, Cloudflare, and CI/CD.
+- `.agents/skills/caret-testing/SKILL.md`: testing strategy.
+- `.agents/skills/caret-roadmap/SKILL.md`: project status and next steps.
