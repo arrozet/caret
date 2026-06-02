@@ -17,6 +17,12 @@
 
 Caret brings the agentic workflow of modern coding tools into document writing. Instead of a detached chat sidebar, Caret gives AI real document context, rich editor awareness, collaborative state, and the ability to help draft, revise, structure, and improve documents directly.
 
+## Demo
+
+<video src="docs/video.mp4" controls width="100%">
+  Your browser does not support the video tag.
+</video>
+
 ## Why Caret
 
 Agentic IDEs have changed how developers write code, but document editing still feels mostly static. Most AI features in word processors behave like chat sidebars with limited document interaction; Caret is built around the idea that AI should work inside the document surface, with enough context to restructure drafts, adapt tone, coordinate feedback, and improve writing directly.
