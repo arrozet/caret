@@ -117,7 +117,6 @@ jobs:
       run:
         working-directory: app/backend/ai-service
     env:
-      APP_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
       SUPABASE_URL: http://127.0.0.1:54321
       SUPABASE_ANON_KEY: fake-anon-key
