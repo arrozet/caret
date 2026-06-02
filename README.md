@@ -1,7 +1,7 @@
 # Caret
 
 <p align="center">
-  <img src="docs/logo.png" alt="Caret logo" width="120" />
+  <img src="app/frontend/public/logo.svg" alt="Caret logo" width="96" />
 </p>
 
 <p align="center">
@@ -10,26 +10,26 @@
 
 <p align="center">
   <a href="https://github.com/arrozet/caret/actions/workflows/ci.yml">
-    <img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/ci.yml?branch=main&label=CI&style=for-the-badge" />
+    <img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/ci.yml?branch=main&label=CI" />
   </a>
   <a href="https://github.com/arrozet/caret/actions/workflows/deploy-production.yml">
-    <img alt="Production deploy status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/deploy-production.yml?branch=prod&label=Deploy&style=for-the-badge" />
+    <img alt="Production deploy status" src="https://img.shields.io/github/actions/workflow/status/arrozet/caret/deploy-production.yml?branch=prod&label=deploy" />
   </a>
   <a href="https://caret.page/">
-    <img alt="Live app" src="https://img.shields.io/badge/live-caret.page-16A34A?style=for-the-badge" />
+    <img alt="Live app" src="https://img.shields.io/badge/live-caret.page-16A34A" />
   </a>
   <a href="https://mintlify.wiki/arrozet/caret">
-    <img alt="Documentation" src="https://img.shields.io/badge/docs-Mintlify-0F172A?style=for-the-badge" />
+    <img alt="Documentation" src="https://img.shields.io/badge/docs-Mintlify-0F172A" />
   </a>
 </p>
 
 <p align="center">
-  <img alt="Deploy: Coolify" src="https://img.shields.io/badge/deploy-Coolify-111827?style=for-the-badge" />
-  <img alt="Hosting: Hetzner" src="https://img.shields.io/badge/hosting-Hetzner-D50C2D?style=for-the-badge" />
-  <img alt="DNS: Cloudflare" src="https://img.shields.io/badge/DNS-Cloudflare-F38020?style=for-the-badge" />
-  <img alt="Database: Supabase" src="https://img.shields.io/badge/database-Supabase-3FCF8E?style=for-the-badge" />
-  <img alt="Containers: Docker Compose" src="https://img.shields.io/badge/containers-Docker_Compose-2496ED?style=for-the-badge" />
-  <img alt="CI/CD: GitHub Actions" src="https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?style=for-the-badge" />
+  <img alt="Deploy: Coolify" src="https://img.shields.io/badge/deploy-Coolify-111827" />
+  <img alt="Hosting: Hetzner" src="https://img.shields.io/badge/hosting-Hetzner-D50C2D" />
+  <img alt="DNS: Cloudflare" src="https://img.shields.io/badge/DNS-Cloudflare-F38020" />
+  <img alt="Database: Supabase" src="https://img.shields.io/badge/database-Supabase-3FCF8E" />
+  <img alt="Containers: Docker Compose" src="https://img.shields.io/badge/containers-Docker_Compose-2496ED" />
+  <img alt="CI/CD: GitHub Actions" src="https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF" />
 </p>
 
 Caret brings the agentic workflow of modern coding tools into document writing. Instead of a detached chat sidebar, Caret gives AI real document context, rich editor awareness, collaborative state, and the ability to help draft, revise, structure, and improve documents directly.
