@@ -1,0 +1,11 @@
+# Keep formatter-sensitive text files stable across Windows and Linux runners.
+* text=auto eol=lf
+
+# Binary assets should never be line-ending normalized.
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.webp binary
+*.gif binary
+*.pdf binary

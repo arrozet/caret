@@ -45,7 +45,7 @@ Caret production runs on a **Hetzner Cloud VPS** with **Coolify** as a self-host
 | Hosting | Hetzner VPS | Single VM, about 9 EUR/month, currently enough for the full stack |
 | PaaS | Coolify | Controls deployments, domains, logs, redeploys, and Docker Compose resources |
 | Containers | Docker Compose | Production compose file is the deployment unit |
-| CI/CD | GitHub Actions + Coolify | Automatic production deploys from the `prod` branch |
+| CI/CD | GitHub Actions + Coolify | CI validates `main`/`prod`; production deploys run after CI passes on `prod` |
 | DNS | Cloudflare | Manages `caret.page` and subdomains |
 | Database/Auth | Supabase Cloud | Managed PostgreSQL, Auth, and pgvector outside the VPS |
 | Firewall | Hetzner firewall | Allow only required public ingress |
@@ -101,15 +101,19 @@ The frontend must call `api.caret.page` for HTTP API traffic and connect directl
 ## CI/CD Pipeline (GitHub Actions)
 
 ```text
-Lint + type check (Bun/ESLint/tsc + uv/Ruff/pyright)
+Lint + type check (Bun/ESLint/tsc + uv/Ruff/mypy)
     -> Tests (unit -> integration -> E2E)
         -> Build Docker images / validate production compose
             -> Deploy `prod` branch through Coolify
 ```
 
+- Workflows are checked in under `.github/workflows/`.
+- `ci.yml` runs frontend, Node-service, AI-service, production compose, and production image validation on pushes to `main` and `prod`.
+- `deploy-production.yml` triggers Coolify after a successful `CI` workflow caused by a remote change on `prod`, or by manual dispatch from `prod`.
 - **Production**: deploy automatically from the `prod` branch.
 - **Development integration**: use `main` for normal integration work unless a workflow file says otherwise.
 - **Secrets**: GitHub Secrets for CI-only values; Coolify environment variables for runtime values.
+- **Production smoke tests**: frontend `/health`, API Gateway `/health`, API Gateway `/api/v1`, and collaboration `/health`; internal service health URLs are optional GitHub variables when reachable through a controlled route.
 - Never commit secrets to the repo.
 
 ## Deployment Configuration

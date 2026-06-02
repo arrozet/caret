@@ -14,7 +14,7 @@ Status markers: `[x]` done, `[~]` partially done, `[ ]` pending.
 - Real-time collaboration code exists across frontend and backend, including WebSocket service, Y.js sync, awareness UI, and persistence tables.
 - Collaboration persistence is partial: updates/snapshots can be written, but room startup does not yet restore persisted Y.js state.
 - Production deployment has moved to Hetzner VPS + Coolify + Docker Compose, with Supabase Cloud for PostgreSQL/Auth/pgvector.
-- GitHub Actions are intended for CI/CD, but no workflow files are currently checked into `.github/workflows`.
+- GitHub Actions CI/CD workflows are checked into `.github/workflows`, with production deploys gated behind successful CI on `prod`.
 
 ## Phase 1 - Skeleton And Auth
 
@@ -82,10 +82,10 @@ Status markers: `[x]` done, `[~]` partially done, `[ ]` pending.
 - [x] Production Docker Compose file exists.
 - [x] Hetzner VPS + Coolify deployment target documented.
 - [x] Cloudflare DNS/domain plan documented for `caret.page`, `api.caret.page`, `ws.caret.page`, and `ops.caret.page`.
-- [~] GitHub Actions CI/CD is intended, but workflow files are not present in repo.
+- [x] GitHub Actions CI/CD workflows are present for quality checks, production image builds, Coolify deploy trigger, and production smoke tests.
 - [~] Unit/integration tests exist across frontend, Node services, and AI service.
-- [ ] Add/commit GitHub Actions workflow files if CI should be reproducible from repo.
-- [ ] Add Playwright E2E smoke coverage if required.
+- [x] Add/commit GitHub Actions workflow files if CI should be reproducible from repo.
+- [x] Add Playwright E2E smoke coverage if required.
 - [ ] Run a WCAG/accessibility pass on critical screens.
 - [ ] Add production smoke tests for frontend, gateway, auth, CRUD, AI, and WebSocket collaboration.
 
@@ -93,7 +93,7 @@ Status markers: `[x]` done, `[~]` partially done, `[ ]` pending.
 
 - Wire `collab-service` room creation to `CollabPersistenceService.loadDocument`.
 - Add an integration test proving collaboration state survives room/server restart.
-- Add GitHub Actions workflows for lint, build/type checks, unit tests, integration tests, and Coolify deploy from `prod`.
+- Configure GitHub production environment reviewers and Coolify webhook secrets for the checked-in CI/CD workflows.
 - Verify production environment variables for `api.caret.page`, `ws.caret.page`, Supabase, and LLM providers.
 - Evaluate RAG quality with real document data and adjust chunking/retrieval thresholds.
 

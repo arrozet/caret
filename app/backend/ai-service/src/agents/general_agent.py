@@ -18,7 +18,7 @@ Architecture (BACKEND.md):
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NotRequired, TypedDict, cast
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
@@ -35,6 +35,16 @@ from schemas.embedding import ChunkResult
 # ---------------------------------------------------------------------------
 # Dependency injection container
 # ---------------------------------------------------------------------------
+
+
+class ProposedDocumentChange(TypedDict):
+    """Queued document change emitted by agent tools after streaming completes."""
+
+    operation: str
+    proposed_text: str
+    original_text: str
+    position_start: NotRequired[int | None]
+    position_end: NotRequired[int | None]
 
 
 @dataclass
@@ -59,7 +69,7 @@ class GeneralAgentDeps:
     document_content: str | None = None
     document_context: dict[str, Any] | str | None = None
     selection: dict[str, Any] | None = None
-    proposed_changes: list[dict[str, str]] = field(default_factory=list)
+    proposed_changes: list[ProposedDocumentChange] = field(default_factory=list)
     search_workspace_context: Callable[[str, bool, int], Awaitable[list[ChunkResult]]] | None = None
 
 
@@ -100,6 +110,14 @@ def get_selection_content(ctx: RunContext[GeneralAgentDeps]) -> str:
     return "(No selection available)"
 
 
+def _selection_offset(selection: dict[str, Any] | None, key: str) -> int | None:
+    """Read an integer editor selection offset from a loose selection payload."""
+    if selection is None:
+        return None
+    value = selection.get(key)
+    return value if isinstance(value, int) else None
+
+
 def propose_document_replacement(
     ctx: RunContext[GeneralAgentDeps],
     proposed_text: str,
@@ -125,8 +143,8 @@ def propose_document_replacement(
             "operation": "replace_full",
             "proposed_text": proposed_text,
             "original_text": original_text,
-            "position_start": ctx.deps.selection.get("from") if ctx.deps.selection else None,
-            "position_end": ctx.deps.selection.get("to") if ctx.deps.selection else None,
+            "position_start": _selection_offset(ctx.deps.selection, "from"),
+            "position_end": _selection_offset(ctx.deps.selection, "to"),
         }
     )
     return "Document replacement proposed. The user will be asked to accept or reject the change."
@@ -315,7 +333,7 @@ def build_general_agent(
         deps_type=GeneralAgentDeps,
         output_type=str,
         system_prompt=system_prompt or _SYSTEM_PROMPT,
-        tools=_GENERAL_AGENT_TOOLS,
+        tools=cast(Any, _GENERAL_AGENT_TOOLS),
     )
     return agent
 
@@ -347,7 +365,7 @@ def _make_sentinel_agent() -> "Agent[GeneralAgentDeps, str]":
         deps_type=GeneralAgentDeps,
         output_type=str,
         system_prompt=_SYSTEM_PROMPT,
-        tools=_GENERAL_AGENT_TOOLS,
+        tools=cast(Any, _GENERAL_AGENT_TOOLS),
     )
 
 

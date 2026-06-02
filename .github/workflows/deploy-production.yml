@@ -1,0 +1,109 @@
+name: Deploy Production
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    branches:
+      - prod
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy through Coolify
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_FRONTEND_URL || 'https://caret.page' }}
+    steps:
+      - name: Guard manual production branch
+        if: ${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/prod' }}
+        run: |
+          echo "Manual production deployments must be run from the prod branch."
+          exit 1
+
+      - name: Trigger Coolify deployment
+        env:
+          COOLIFY_DEPLOY_WEBHOOK_URL: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK_URL }}
+          COOLIFY_DEPLOY_TOKEN: ${{ secrets.COOLIFY_DEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${COOLIFY_DEPLOY_WEBHOOK_URL:-}" ]; then
+            echo "COOLIFY_DEPLOY_WEBHOOK_URL is required."
+            exit 1
+          fi
+
+          curl_args=(
+            --fail-with-body
+            --retry 3
+            --retry-delay 5
+            --request POST
+            "$COOLIFY_DEPLOY_WEBHOOK_URL"
+          )
+
+          if [ -n "${COOLIFY_DEPLOY_TOKEN:-}" ]; then
+            curl_args+=(--header "Authorization: Bearer $COOLIFY_DEPLOY_TOKEN")
+          fi
+
+          curl "${curl_args[@]}"
+
+      - name: Smoke test production endpoints
+        env:
+          PRODUCTION_FRONTEND_URL: ${{ vars.PRODUCTION_FRONTEND_URL || 'https://caret.page' }}
+          PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL || 'https://api.caret.page' }}
+          PRODUCTION_WS_URL: ${{ vars.PRODUCTION_WS_URL || 'https://ws.caret.page' }}
+          PRODUCTION_AUTH_HEALTH_URL: ${{ vars.PRODUCTION_AUTH_HEALTH_URL }}
+          PRODUCTION_DOCUMENT_HEALTH_URL: ${{ vars.PRODUCTION_DOCUMENT_HEALTH_URL }}
+          PRODUCTION_AI_HEALTH_URL: ${{ vars.PRODUCTION_AI_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+
+          check_url() {
+            local name="$1"
+            local url="$2"
+            local attempts="${3:-30}"
+            local delay_seconds="${4:-10}"
+
+            echo "Checking $name at $url"
+            for attempt in $(seq 1 "$attempts"); do
+              if curl --fail --silent --show-error --max-time 10 "$url" > /tmp/smoke-response.txt; then
+                echo "$name is healthy."
+                return 0
+              fi
+
+              echo "$name is not ready yet ($attempt/$attempts)."
+              sleep "$delay_seconds"
+            done
+
+            echo "$name did not become healthy."
+            cat /tmp/smoke-response.txt 2>/dev/null || true
+            return 1
+          }
+
+          check_url "frontend" "${PRODUCTION_FRONTEND_URL%/}/health"
+          check_url "api gateway health" "${PRODUCTION_API_URL%/}/health"
+          check_url "api gateway v1 metadata" "${PRODUCTION_API_URL%/}/api/v1"
+          check_url "collaboration service health" "${PRODUCTION_WS_URL%/}/health"
+
+          if [ -n "${PRODUCTION_AUTH_HEALTH_URL:-}" ]; then
+            check_url "auth service health" "$PRODUCTION_AUTH_HEALTH_URL" 12 5
+          fi
+
+          if [ -n "${PRODUCTION_DOCUMENT_HEALTH_URL:-}" ]; then
+            check_url "document service health" "$PRODUCTION_DOCUMENT_HEALTH_URL" 12 5
+          fi
+
+          if [ -n "${PRODUCTION_AI_HEALTH_URL:-}" ]; then
+            check_url "ai service health" "$PRODUCTION_AI_HEALTH_URL" 12 5
+          fi

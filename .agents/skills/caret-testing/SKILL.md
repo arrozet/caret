@@ -14,7 +14,7 @@ description: Caret testing strategy - Vitest for frontend and Node services, Pyt
 | Python AI service | Pytest, pytest-asyncio | `app/backend/ai-service` |
 | E2E | Not currently configured in repo | Add Playwright only when implementing E2E |
 
-There is currently no `.github/workflows` directory in the repo. Treat GitHub Actions as intended infrastructure, not as a checked-in workflow, until workflow files are added.
+GitHub Actions workflows are checked in under `.github/workflows`.
 
 ## Test Locations
 
@@ -113,15 +113,17 @@ make ai-service-test-unit
 
 ## CI Expectations
 
-Until workflows exist in `.github/workflows`, use this intended order when creating CI:
+The checked-in `CI` workflow follows this order:
 
 ```text
 1. Lint and format checks
 2. Type checks / builds
 3. Unit tests
 4. Integration tests
-5. E2E smoke tests when Playwright exists
-6. Deploy from `prod` only after checks pass
+5. Frontend E2E smoke tests
+6. Production compose validation
+7. Production image builds
+8. Deploy from `prod` only after checks pass
 ```
 
 ## Production Safety

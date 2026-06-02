@@ -12,6 +12,7 @@ Rule: never return SQLAlchemy models directly from a Router — map to Pydantic 
 
 import enum
 import uuid
+from datetime import datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
@@ -102,12 +103,12 @@ class AiConversation(Base):
     )
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[TIMESTAMP] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[TIMESTAMP] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -169,12 +170,12 @@ class AiMessage(Base):
         server_default=text("'[]'::jsonb"),
     )
 
-    created_at: Mapped[TIMESTAMP] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[TIMESTAMP] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -243,12 +244,12 @@ class AiSuggestion(Base):
     position_start: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     position_end: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
-    created_at: Mapped[TIMESTAMP] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[TIMESTAMP] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -317,12 +318,12 @@ class DocumentEmbedding(Base):
         nullable=False,
     )
 
-    created_at: Mapped[TIMESTAMP] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[TIMESTAMP] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
         server_default=func.now(),

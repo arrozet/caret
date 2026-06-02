@@ -275,7 +275,7 @@ class AiMessageRepository:
         role: AiMessageRole,
         content: str,
         token_count: int | None = None,
-        tool_calls: list[ToolCallTrace | dict[str, object] | str] | None = None,
+        tool_calls: Sequence[ToolCallTrace | dict[str, object] | str] | None = None,
     ) -> AiMessage:
         """
         Insert a new message row.
