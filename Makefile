@@ -8,7 +8,7 @@ COLLAB_DIR := app/backend/collab-service
 AI_DIR := app/backend/ai-service
 
 .PHONY: up up-nocache down logs ps \
-	frontend-lint frontend-lint-fix frontend-format-check frontend-format-write frontend-test-unit frontend-test-integration \
+	frontend-lint frontend-lint-fix frontend-format-check frontend-format-write frontend-test-unit frontend-test-integration frontend-test-e2e \
 	auth-service-lint auth-service-lint-fix auth-service-format-check auth-service-format-write auth-service-test-unit auth-service-test-integration \
 	document-service-lint document-service-lint-fix document-service-format-check document-service-format-write document-service-test-unit document-service-test-integration \
 	api-gateway-lint api-gateway-lint-fix api-gateway-format-check api-gateway-format-write api-gateway-test-unit api-gateway-test-integration \
@@ -48,6 +48,9 @@ frontend-test-unit:
 
 frontend-test-integration:
 	cd $(FRONTEND_DIR) && bun run test:integration
+
+frontend-test-e2e:
+	cd $(FRONTEND_DIR) && bun run test:e2e
 
 auth-service-lint:
 	cd $(AUTH_DIR) && bun run lint
