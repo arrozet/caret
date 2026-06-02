@@ -15,6 +15,25 @@
   <a href="https://mintlify.wiki/arrozet/caret"><img alt="Documentation" src="https://img.shields.io/badge/docs-Mintlify-0F172A?style=flat-square&logo=readthedocs&logoColor=white" /></a>
 </p>
 
+Caret brings the agentic workflow of modern coding tools into document writing. Instead of a detached chat sidebar, Caret gives AI real document context, rich editor awareness, collaborative state, and the ability to help draft, revise, structure, and improve documents directly.
+
+## Why Caret
+
+Agentic IDEs have changed how developers write code, but document editing still feels mostly static. Most AI features in word processors behave like chat sidebars with limited document interaction; Caret is built around the idea that AI should work inside the document surface, with enough context to restructure drafts, adapt tone, coordinate feedback, and improve writing directly.
+
+The name comes from the caret (`^`): the insertion point where text begins. It is short, tied to writing, and quietly technical without sounding like another generic AI tool.
+
+## Highlights
+
+- React 19 frontend with TypeScript, Vite, TailwindCSS v4, Tiptap 3, and Y.js.
+- Express API Gateway that exposes the public HTTP API under `/api/v1`.
+- Independent Node.js services for auth, documents, and realtime collaboration.
+- FastAPI AI service with PydanticAI, SQLAlchemy async, Alembic, and SSE streaming.
+- Supabase Cloud for PostgreSQL, Auth, and pgvector.
+- Production deployment with Docker Compose, Coolify, Hetzner VPS, and Cloudflare.
+
+## Tech Stack
+
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
@@ -32,23 +51,6 @@
 ![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-000000?style=flat-square&logo=bun&logoColor=white)
 ![uv](https://img.shields.io/badge/uv-DE5FE9?style=flat-square&logo=astral&logoColor=white)
-
-Caret brings the agentic workflow of modern coding tools into document writing. Instead of a detached chat sidebar, Caret gives AI real document context, rich editor awareness, collaborative state, and the ability to help draft, revise, structure, and improve documents directly.
-
-## Why Caret
-
-Agentic IDEs have changed how developers write code, but document editing still feels mostly static. Most AI features in word processors behave like chat sidebars with limited document interaction; Caret is built around the idea that AI should work inside the document surface, with enough context to restructure drafts, adapt tone, coordinate feedback, and improve writing directly.
-
-The name comes from the caret (`^`): the insertion point where text begins. It is short, tied to writing, and quietly technical without sounding like another generic AI tool.
-
-## Highlights
-
-- React 19 frontend with TypeScript, Vite, TailwindCSS v4, Tiptap 3, and Y.js.
-- Express API Gateway that exposes the public HTTP API under `/api/v1`.
-- Independent Node.js services for auth, documents, and realtime collaboration.
-- FastAPI AI service with PydanticAI, SQLAlchemy async, Alembic, and SSE streaming.
-- Supabase Cloud for PostgreSQL, Auth, and pgvector.
-- Production deployment with Docker Compose, Coolify, Hetzner VPS, and Cloudflare.
 
 ## Architecture
 
