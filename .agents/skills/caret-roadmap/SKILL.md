@@ -1,68 +1,105 @@
 ---
 name: caret-roadmap
-description: Caret engineering roadmap — execution phases, completed tasks, and pending work. Use when checking what has been built, what is next, what phase the project is in, or when planning new work in the Caret project.
+description: Caret engineering roadmap - current project status, completed phases, partial work, pending backend/frontend/database/collaboration/AI/deployment tasks, and next-step planning. Use when checking what has been built, what remains, what phase the project is in, or when planning new work in the Caret project.
 ---
 
 # Caret Roadmap
 
-**Status**: `[x]` Done · `[ ]` Pending · `[~]` Partial
+Status markers: `[x]` done, `[~]` partially done, `[ ]` pending.
 
-## Phase 1 — Skeleton (Setup & Auth) ✅
+## Current Snapshot
 
-- [x] Monorepo (Bun + uv), Docker Compose, testing frameworks
-- [x] React + Vite + Tailwind "Swiss Focus" tokens
-- [x] Supabase project (Auth + DB)
-- [x] Login/Signup with Supabase Auth
-- [x] API Gateway base routing + versioned paths `/api/v1/...`
+- Core editor, auth, document CRUD, workspaces, folders, sharing, settings, and document tabs are implemented.
+- AI service, AI panel, conversations/messages/suggestions, SSE streaming, embeddings, and RAG search are implemented in code.
+- Real-time collaboration code exists across frontend and backend, including WebSocket service, Y.js sync, awareness UI, and persistence tables.
+- Collaboration persistence is partial: updates/snapshots can be written, but room startup does not yet restore persisted Y.js state.
+- Production deployment has moved to Hetzner VPS + Coolify + Docker Compose, with Supabase Cloud for PostgreSQL/Auth/pgvector.
+- GitHub Actions CI/CD workflows are checked into `.github/workflows`, with production deploys gated behind successful CI on `prod`.
 
-## Phase 2 — Editor Core (CRUD) ✅
+## Phase 1 - Skeleton And Auth
 
-- [x] Tiptap Editor with Swiss Focus typography
-- [x] Core DB tables: `workspaces`, `folders`, `documents` + RLS + indexes
-- [x] Node.js Document Service (CRUD)
-- [x] Editor autosave (debounced)
-- [x] Formatting toolbar: bold, italic, underline, strike, headings, lists, blockquote, code, alignment, undo/redo
-- [x] Document rename + delete with confirmation
-- [x] Settings page (profile, language, theme)
-- [x] Document Tabs (multi-document editing)
-- [x] Context Menu on text selection (floating toolbar)
+- [x] Monorepo with frontend and backend service folders.
+- [x] Bun for frontend and Node services.
+- [x] uv for Python AI service.
+- [x] Docker Compose local development.
+- [x] React/Vite/Tailwind frontend foundation.
+- [x] Supabase Auth and cloud PostgreSQL.
+- [x] Supabase profile flow through `user_profiles`.
+- [x] API Gateway base routing under `/api/v1`.
 
-## Phase 3 — AI Brain (Agentic Service) ✅
+## Phase 2 - Editor Core
 
-- [x] Python/FastAPI service with PydanticAI (pydantic_ai 1.62.0)
-- [x] `ai_conversations`, `ai_messages`, `ai_suggestions` tables + Alembic migration
-- [x] "Caret AI Panel" UI + `Ctrl/Cmd+K` toggle
-- [x] SSE streaming pipeline in AI Service (OpenRouter / OpenAI / Anthropic)
-- [x] Frontend SSE consumer → chat message state (Tiptap integration deferred to Phase 4)
+- [x] Tiptap editor.
+- [x] Swiss Focus visual system in current frontend CSS.
+- [x] Workspaces, folders, documents, document members, and document versions.
+- [x] RLS policies for core document tables.
+- [x] Document service repositories, services, routes, and OpenAPI metadata.
+- [x] Document list and editor routes: `/documents`, `/documents/:id`.
+- [x] Autosave and document update flows.
+- [x] Formatting toolbar and editor utilities.
+- [x] Document rename/delete/move/share flows.
+- [x] Settings page.
+- [x] Document tabs.
 
-## Phase 4 — Context & RAG
+## Phase 3 - AI Brain
 
-- [ ] pgvector + `document_embeddings` table (chunk-level)
-- [ ] HNSW index for vector similarity
-- [ ] Embedding pipeline in Python (chunk → embed → store)
-- [ ] Contextual retrieval for chat queries
-- [ ] Ghost Text + inline suggestions UI
+- [x] FastAPI AI service with PydanticAI dependencies.
+- [x] SQLAlchemy async + Alembic AI tables.
+- [x] `ai_conversations`, `ai_messages`, `ai_suggestions`.
+- [x] `tool_calls` support on AI messages.
+- [x] AI assistant panel and frontend API client.
+- [x] SSE streaming endpoint and frontend stream consumer.
+- [x] OpenRouter/OpenAI/Anthropic-oriented provider config.
 
-## Phase 5 — Real-time Collaboration
-*Requires deployed infrastructure (ECS) to test end-to-end.*
+## Phase 4 - Context And RAG
 
-- [ ] WebSocket Server on AWS ECS (Fargate)
-- [ ] WebSocket JWT auth via query params
-- [ ] Y.js + Tiptap + WebSocket provider integration
-- [ ] Awareness (cursor positions, user names)
-- [ ] `document_collab_updates` + `document_collab_snapshots` tables
-- [ ] Periodic snapshot compaction job
-- [ ] AI streaming + Y.js CRDT consistency test
+- [x] `document_embeddings` table with pgvector.
+- [x] HNSW vector index and workspace-scoped embedding migration.
+- [x] Python embedding service for chunking, embedding, replacing, searching, and deleting chunks.
+- [x] Embedding router endpoints under `/ai/embeddings`.
+- [x] Agent-side `search_workspace_context` dependency.
+- [x] Frontend triggers embedding indexing from editor save flow.
+- [~] Ghost text and inline suggestion editor extensions exist, but validate product completeness before calling this phase done.
+- [~] RAG is implemented in code, but needs production data verification and quality evaluation.
 
-## Phase 6 — Production Polish
+## Phase 5 - Real-Time Collaboration
 
-- [ ] React Error Boundaries + offline detection
-- [ ] Playwright E2E for critical flows
-- [ ] Deploy Frontend (Vercel) + Backend (Lambda/ECS via SST)
-- [ ] WCAG AA accessibility audit
+- [x] `collab-service` WebSocket server on port 3003.
+- [x] Direct WebSocket endpoint `/document/{doc_id}?token={jwt}`.
+- [x] Supabase JWT validation on handshake.
+- [x] Y.js sync protocol and awareness protocol handling.
+- [x] Frontend collaboration client, hooks, presence components, and dev harness.
+- [x] AsyncAPI docs for collaboration service.
+- [x] `document_collab_updates` and `document_collab_snapshots` tables.
+- [x] Persistence repositories and snapshot scheduler.
+- [~] Persistence write path is wired when `DATABASE_URL` exists.
+- [ ] Restore persisted Y.js state when creating/loading a room.
+- [ ] Add regression test for room restart/load-from-DB behavior.
+- [ ] Validate production WebSocket behavior through `ws.caret.page`.
 
-## V2.0 Future
+## Phase 6 - Production And Quality
 
-- Redis hot cache for frequently accessed documents
-- BullMQ async task queues (PDF parsing, bulk embeddings)
-- Intelligent model router (high-end vs fast LLMs)
+- [x] Production Docker Compose file exists.
+- [x] Hetzner VPS + Coolify deployment target documented.
+- [x] Cloudflare DNS/domain plan documented for `caret.page`, `api.caret.page`, `ws.caret.page`, and `ops.caret.page`.
+- [x] GitHub Actions CI/CD workflows are present for quality checks, production image builds, Coolify deploy trigger, and production smoke tests.
+- [~] Unit/integration tests exist across frontend, Node services, and AI service.
+- [x] Add/commit GitHub Actions workflow files if CI should be reproducible from repo.
+- [x] Add Playwright E2E smoke coverage if required.
+- [ ] Run a WCAG/accessibility pass on critical screens.
+- [ ] Add production smoke tests for frontend, gateway, auth, CRUD, AI, and WebSocket collaboration.
+
+## Current High-Value Next Steps
+
+- Wire `collab-service` room creation to `CollabPersistenceService.loadDocument`.
+- Add an integration test proving collaboration state survives room/server restart.
+- Configure GitHub production environment reviewers and Coolify webhook secrets for the checked-in CI/CD workflows.
+- Verify production environment variables for `api.caret.page`, `ws.caret.page`, Supabase, and LLM providers.
+- Evaluate RAG quality with real document data and adjust chunking/retrieval thresholds.
+
+## Future
+
+- Redis or another hot cache only if profiling shows repeated document or collaboration bottlenecks.
+- Async queues for heavy background jobs such as bulk embeddings or document import/export.
+- Smarter model routing between fast and high-quality LLMs.
+- More robust document import/export workflows.

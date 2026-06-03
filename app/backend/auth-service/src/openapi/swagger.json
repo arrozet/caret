@@ -1,0 +1,67 @@
+{
+  "openapi": "3.0.0",
+  "components": {
+    "examples": {},
+    "headers": {},
+    "parameters": {},
+    "requestBodies": {},
+    "responses": {},
+    "schemas": {
+      "HealthResponseDto": {
+        "description": "Health response returned by service liveness endpoints.",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"],
+            "nullable": false,
+            "description": "Current service health status."
+          },
+          "service": {
+            "type": "string",
+            "enum": ["auth-service"],
+            "nullable": false,
+            "description": "Service identifier."
+          }
+        },
+        "required": ["status", "service"],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {}
+  },
+  "info": {
+    "title": "Caret Auth Service API",
+    "version": "0.1.0",
+    "description": "REST API documentation for the Caret Auth Service.",
+    "contact": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "GetHealth",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return liveness status for the Auth Service.",
+        "tags": ["Health"],
+        "security": [],
+        "parameters": []
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ]
+}

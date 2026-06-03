@@ -2,6 +2,8 @@
 
 Caret production is deployed from the `prod` branch to the Hetzner server managed by Coolify.
 
+GitHub Actions validates changes before production deployment. See `docs/deployment/ci-cd.md` for workflow triggers, required GitHub secrets, variables, and smoke checks.
+
 ## Domains
 
 Create these Cloudflare DNS records as `DNS only` while certificates are being issued:
@@ -26,6 +28,12 @@ Use the `Caret` project and add a Docker Compose resource from GitHub:
   - `collab-service` on port `3003` with domain `https://ws.caret.page`
 
 The remaining services are internal and should not receive public domains.
+
+## CI/CD Trigger
+
+Create a Coolify deploy webhook for the Caret Docker Compose resource and store it as the GitHub secret `COOLIFY_DEPLOY_WEBHOOK_URL`.
+
+The checked-in production deployment workflow runs only after the `CI` workflow succeeds on the `prod` branch, or when manually dispatched from the `prod` branch. Runtime environment variables remain in Coolify.
 
 ## Required Variables
 

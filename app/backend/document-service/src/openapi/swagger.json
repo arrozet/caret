@@ -1,0 +1,2037 @@
+{
+  "openapi": "3.0.0",
+  "components": {
+    "examples": {},
+    "headers": {},
+    "parameters": {},
+    "requestBodies": {},
+    "responses": {},
+    "schemas": {
+      "ErrorResponseDto": {
+        "description": "Standard JSON error payload returned by service error middleware.",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message."
+          }
+        },
+        "required": ["error"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "WorkspaceResponseDto": {
+        "description": "DTO for workspace API responses.\r\nShapes the workspace data returned to the client.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Workspace UUID."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["personal", "shared"],
+            "description": "Workspace kind, used to distinguish personal home workspaces."
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true,
+            "description": "URL-friendly slug."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "created_by_user_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "User who created the workspace."
+          },
+          "role": {
+            "type": "string",
+            "description": "Caller's role within this workspace (if applicable)."
+          },
+          "shared_with": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Other active member emails this workspace is shared with (excluding caller)."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Row creation timestamp (ISO 8601)."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Row last-update timestamp (ISO 8601)."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "slug",
+          "name",
+          "created_by_user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "CreateWorkspaceDto": {
+        "description": "DTO for creating a new workspace.\r\nValidated at the controller boundary.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Workspace display name (required)."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Optional URL-friendly slug. Auto-generated if omitted."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["personal", "shared"],
+            "description": "Workspace kind: shared by default, personal for private home workspaces."
+          }
+        },
+        "required": ["name"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "PaginatedResponse_WorkspaceResponseDto_": {
+        "description": "Paginated response envelope returned by list endpoints.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceResponseDto"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "properties": {
+              "offset": {
+                "type": "number",
+                "format": "double"
+              },
+              "limit": {
+                "type": "number",
+                "format": "double"
+              },
+              "total": {
+                "type": "number",
+                "format": "double"
+              }
+            },
+            "required": ["offset", "limit", "total"],
+            "type": "object"
+          }
+        },
+        "required": ["data", "pagination"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "UpdateWorkspaceDto": {
+        "description": "DTO for renaming an existing workspace.\r\nAll fields are optional so partial updates remain possible.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Updated workspace display name."
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "InviteWorkspaceMemberResponseDto": {
+        "description": "DTO returned after inviting a workspace member.",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace where the membership was created or reactivated."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User id of the invited member."
+          },
+          "email": {
+            "type": "string",
+            "description": "Email used for the invitation lookup."
+          },
+          "role": {
+            "type": "string",
+            "enum": ["member"],
+            "nullable": false,
+            "description": "Role assigned to the invited member."
+          }
+        },
+        "required": ["workspace_id", "user_id", "email", "role"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "InviteWorkspaceMemberDto": {
+        "description": "DTO for inviting a workspace member by email.\r\nValidated at the controller boundary.",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address of the target user to invite."
+          }
+        },
+        "required": ["email"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "HealthResponseDto": {
+        "description": "Health response returned by service liveness endpoints.",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"],
+            "nullable": false,
+            "description": "Current service health status."
+          },
+          "service": {
+            "type": "string",
+            "enum": ["document-service"],
+            "nullable": false,
+            "description": "Service identifier."
+          }
+        },
+        "required": ["status", "service"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "FolderResponseDto": {
+        "description": "DTO for folder API responses.\r\nShapes the folder data returned to the client.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Folder UUID."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace this folder belongs to."
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parent folder ID (null = workspace root)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Folder display name."
+          },
+          "sort_order": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Manual sort ordering (null = unset)."
+          },
+          "created_by_user_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "User who created this folder."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Row creation timestamp (ISO 8601)."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Row last-update timestamp (ISO 8601)."
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "parent_folder_id",
+          "name",
+          "sort_order",
+          "created_by_user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "CreateFolderDto": {
+        "description": "DTO for creating a new folder.\r\nValidated at the controller boundary before passing to the service layer.",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace the folder belongs to (required)."
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parent folder ID for nesting (null = workspace root)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Folder display name (required)."
+          },
+          "sort_order": {
+            "type": "number",
+            "format": "double",
+            "description": "Optional manual sort ordering within the parent."
+          }
+        },
+        "required": ["workspace_id", "name"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "PaginatedResponse_FolderResponseDto_": {
+        "description": "Paginated response envelope returned by list endpoints.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/FolderResponseDto"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "properties": {
+              "offset": {
+                "type": "number",
+                "format": "double"
+              },
+              "limit": {
+                "type": "number",
+                "format": "double"
+              },
+              "total": {
+                "type": "number",
+                "format": "double"
+              }
+            },
+            "required": ["offset", "limit", "total"],
+            "type": "object"
+          }
+        },
+        "required": ["data", "pagination"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "UpdateFolderDto": {
+        "description": "DTO for updating an existing folder.\r\nAll fields are optional — only provided fields will be updated.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Updated folder name."
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Move folder to a new parent (null = move to workspace root)."
+          },
+          "sort_order": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Updated manual sort ordering."
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Record_string.unknown_": {
+        "properties": {},
+        "additionalProperties": {},
+        "type": "object",
+        "description": "Construct a type with a set of properties K of type T"
+      },
+      "DocumentResponseDto": {
+        "description": "DTO for document API responses.\r\nShapes the document data returned to the client.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Document UUID."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace this document belongs to."
+          },
+          "folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Folder this document is in (null = workspace root)."
+          },
+          "title": {
+            "type": "string",
+            "description": "Document title."
+          },
+          "status": {
+            "type": "string",
+            "description": "Lifecycle status (active/archived)."
+          },
+          "visibility": {
+            "type": "string",
+            "description": "Access scope (private/workspace/link/public)."
+          },
+          "owner_user_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Document owner user ID."
+          },
+          "content_json": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Record_string.unknown_"
+              }
+            ],
+            "nullable": true,
+            "description": "Latest version content (ProseMirror JSON), if loaded."
+          },
+          "content_text": {
+            "type": "string",
+            "nullable": true,
+            "description": "Latest version plain text, if loaded."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Row creation timestamp (ISO 8601)."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Row last-update timestamp (ISO 8601)."
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "folder_id",
+          "title",
+          "status",
+          "visibility",
+          "owner_user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "CreateDocumentDto": {
+        "description": "DTO for creating a new document.\r\nValidated at the controller boundary before passing to the service layer.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Document title (required)."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace the document belongs to (required)."
+          },
+          "folder_id": {
+            "type": "string",
+            "description": "Optional folder placement within the workspace."
+          }
+        },
+        "required": ["title", "workspace_id"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "PaginatedResponse_DocumentResponseDto_": {
+        "description": "Paginated response envelope returned by list endpoints.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentResponseDto"
+            },
+            "type": "array"
+          },
+          "pagination": {
+            "properties": {
+              "offset": {
+                "type": "number",
+                "format": "double"
+              },
+              "limit": {
+                "type": "number",
+                "format": "double"
+              },
+              "total": {
+                "type": "number",
+                "format": "double"
+              }
+            },
+            "required": ["offset", "limit", "total"],
+            "type": "object"
+          }
+        },
+        "required": ["data", "pagination"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "UpdateDocumentDto": {
+        "description": "DTO for updating an existing document.\r\nAll fields are optional — only provided fields will be updated.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Updated document title."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Updated workspace UUID when moving the document."
+          },
+          "folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Updated folder UUID when moving the document."
+          },
+          "content_json": {
+            "$ref": "#/components/schemas/Record_string.unknown_",
+            "description": "Updated ProseMirror/Tiptap document JSON content."
+          },
+          "content_text": {
+            "type": "string",
+            "description": "Updated plain text extraction of the document content."
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "InviteDocumentMemberResponseDto": {
+        "description": "DTO returned after inviting a user to a single document.\r\nDistinguishes direct document shares from workspace membership invites.",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "Document UUID."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Invited user's UUID."
+          },
+          "email": {
+            "type": "string",
+            "description": "Invited user's email address."
+          },
+          "role": {
+            "type": "string",
+            "enum": ["owner", "editor", "commenter", "viewer"],
+            "description": "Direct document role granted to the invited user."
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["document"],
+            "nullable": false,
+            "description": "Share scope for this response."
+          }
+        },
+        "required": ["document_id", "user_id", "email", "role", "scope"],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "info": {
+    "title": "Caret Document Service API",
+    "version": "0.1.0",
+    "description": "REST API for Caret documents, folders, and workspaces.",
+    "contact": {}
+  },
+  "paths": {
+    "/workspaces": {
+      "post": {
+        "operationId": "CreateWorkspace",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a workspace and add the caller as owner.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkspaceDto"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "ListWorkspaces",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "$ref": "#/components/schemas/WorkspaceResponseDto"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PaginatedResponse_WorkspaceResponseDto_"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List workspaces visible to the caller.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "/workspaces/{id}": {
+      "get": {
+        "operationId": "GetWorkspace",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get a workspace by ID.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "UpdateWorkspace",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Rename a workspace.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspaceDto"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "DeleteWorkspace",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Soft-delete a workspace.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/workspaces/{id}/invite": {
+      "post": {
+        "operationId": "InviteWorkspaceCollaborator",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteWorkspaceMemberResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace or user not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Invite a collaborator to a workspace by email.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteWorkspaceMemberDto"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "GetHealth",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return liveness status for the Document Service.",
+        "tags": ["Health"],
+        "security": [],
+        "parameters": []
+      }
+    },
+    "/folders": {
+      "post": {
+        "operationId": "CreateFolder",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a folder in a workspace.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFolderDto"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "ListFolders",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "$ref": "#/components/schemas/FolderResponseDto"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PaginatedResponse_FolderResponseDto_"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List folders in a workspace, optionally scoped by parent folder.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "parent_folder_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "/folders/all": {
+      "get": {
+        "operationId": "ListAllFolders",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "$ref": "#/components/schemas/FolderResponseDto"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PaginatedResponse_FolderResponseDto_"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List all folders in a workspace as a flat tree-building payload.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "/folders/{id}": {
+      "get": {
+        "operationId": "GetFolder",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get a folder by ID.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "UpdateFolder",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Update folder name, parent, or sort order.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFolderDto"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "DeleteFolder",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Soft-delete a folder and nested content.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/documents": {
+      "post": {
+        "operationId": "CreateDocument",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a document in a workspace.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDocumentDto"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "ListDocuments",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "$ref": "#/components/schemas/DocumentResponseDto"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PaginatedResponse_DocumentResponseDto_"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List documents in a workspace.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "/documents/shared": {
+      "get": {
+        "operationId": "ListSharedDocuments",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "$ref": "#/components/schemas/DocumentResponseDto"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PaginatedResponse_DocumentResponseDto_"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List documents shared directly with the caller.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          }
+        ]
+      }
+    },
+    "/documents/{id}": {
+      "get": {
+        "operationId": "GetDocument",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get a document by ID.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "UpdateDocument",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Update document metadata or content.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocumentDto"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "DeleteDocument",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Soft-delete a document.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/documents/{id}/invite": {
+      "post": {
+        "operationId": "InviteDocumentCollaborator",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteDocumentMemberResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document or user not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Invite a collaborator to a document by email.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteWorkspaceMemberDto"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ]
+}

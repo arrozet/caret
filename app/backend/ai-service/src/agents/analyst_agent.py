@@ -11,12 +11,22 @@ Tools:
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NotRequired, TypedDict, cast
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
 
 from schemas.embedding import ChunkResult
+
+
+class ProposedDocumentChange(TypedDict):
+    """Queued document change emitted by analyst tools after streaming completes."""
+
+    operation: str
+    proposed_text: str
+    original_text: str
+    position_start: NotRequired[int | None]
+    position_end: NotRequired[int | None]
 
 
 @dataclass
@@ -34,7 +44,7 @@ class AnalystAgentDeps:
 
     document_content: str | None = None
     document_context: dict[str, Any] | str | None = None
-    proposed_changes: list[dict[str, str]] = field(default_factory=list)
+    proposed_changes: list[ProposedDocumentChange] = field(default_factory=list)
     search_workspace_context: Callable[[str, bool, int], Awaitable[list[ChunkResult]]] | None = None
 
 
@@ -148,6 +158,6 @@ def build_analyst_agent(
         deps_type=AnalystAgentDeps,
         output_type=str,
         system_prompt=system_prompt or _ANALYST_SYSTEM_PROMPT,
-        tools=_ANALYST_AGENT_TOOLS,
+        tools=cast(Any, _ANALYST_AGENT_TOOLS),
     )
     return agent

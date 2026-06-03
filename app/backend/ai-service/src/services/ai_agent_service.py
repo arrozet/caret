@@ -16,7 +16,7 @@ SSE event format (NDJSON over text/event-stream):
 import json
 import logging
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from typing import Any
 
 from pydantic import BaseModel
@@ -45,7 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.models_catalog import MODELS_BY_ID
-from models.ai import AiMessageRole
+from models.ai import AiMessage, AiMessageRole
 from repositories.ai_repository import (
     AiConversationRepository,
     AiMessageRepository,
@@ -61,6 +61,7 @@ from schemas.ai import (
     StreamChunk,
     ToolCallTrace,
 )
+from schemas.embedding import ChunkResult
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ Rules:
 
 
 def _normalize_tool_call_traces(
-    raw_tool_calls: list[ToolCallTrace | dict[str, Any] | str] | None,
+    raw_tool_calls: Sequence[ToolCallTrace | dict[str, Any] | str] | None,
 ) -> list[ToolCallTrace]:
     """Coerce legacy stored tool-call payloads into structured trace entries."""
 
@@ -218,6 +219,15 @@ def _normalize_document_context(
     return json.dumps(document_context, ensure_ascii=False)
 
 
+def _coerce_document_context_payload(
+    document_context: BaseModel | dict[str, Any] | str | None,
+) -> dict[str, Any] | str | None:
+    """Convert request document context into the payload shape accepted by agent deps."""
+    if isinstance(document_context, BaseModel):
+        return document_context.model_dump(mode="json", exclude_none=True)
+    return document_context
+
+
 def _normalize_whitespace(value: str) -> str:
     """Collapse repeated whitespace into single spaces."""
 
@@ -250,7 +260,7 @@ def _sanitize_generated_title(title: str | None) -> str | None:
     return sanitized or None
 
 
-def _build_message_history(history_messages: list) -> list[ModelMessage]:
+def _build_message_history(history_messages: Sequence[AiMessage]) -> list[ModelMessage]:
     """Convert persisted chat rows into structured PydanticAI message history."""
     history: list[ModelMessage] = []
     for message in history_messages:
@@ -277,7 +287,7 @@ def _build_message_history(history_messages: list) -> list[ModelMessage]:
             )
         elif message.role == AiMessageRole.tool:
             history.append(
-                ModelResponse(
+                ModelRequest(
                     parts=[ToolReturnPart(tool_name="tool", content=message.content)],
                     timestamp=message.created_at,
                 )
@@ -689,7 +699,7 @@ class AiAgentService:
                 query: str,
                 exclude_current_document: bool = False,
                 top_k: int = 5,
-            ):
+            ) -> list[ChunkResult]:
                 if document_id is None or user_id is None:
                     return []
                 return await embedding_service.search_similar_chunks(
@@ -710,18 +720,18 @@ class AiAgentService:
 
                 try:
                     model = _build_model(attempt_model_id)
-                    deps = GeneralAgentDeps(
+                    general_deps = GeneralAgentDeps(
                         document_content=normalized_document_context,
-                        document_context=document_context,
+                        document_context=_coerce_document_context_payload(document_context),
                         selection=selection_payload,
                         search_workspace_context=search_workspace_context,
                     )
-                    agent_instance = build_general_agent(model, system_prompt=system_prompt)
+                    general_agent_instance = build_general_agent(model, system_prompt=system_prompt)
 
-                    async for event in agent_instance.run_stream_events(
+                    async for event in general_agent_instance.run_stream_events(
                         user_message,
                         message_history=message_history,
-                        deps=deps,
+                        deps=general_deps,
                     ):
                         if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
                             initial_text = event.part.content
@@ -801,7 +811,7 @@ class AiAgentService:
                             if not attempt_full_text:
                                 attempt_full_text = event.result.output
 
-                    changes_to_emit = list(deps.proposed_changes)
+                    changes_to_emit = list(general_deps.proposed_changes)
                     if not changes_to_emit and fallback_proposed_texts:
                         seen_texts: set[str] = set()
                         for proposed_text in fallback_proposed_texts:
@@ -883,7 +893,7 @@ class AiAgentService:
                 query: str,
                 exclude_current_document: bool = False,
                 top_k: int = 5,
-            ):
+            ) -> list[ChunkResult]:
                 if document_id is None or user_id is None:
                     return []
                 return await embedding_service.search_similar_chunks(
@@ -899,22 +909,22 @@ class AiAgentService:
             for attempt_index, attempt_model_id in enumerate(attempt_model_ids):
                 attempt_full_text = ""
                 attempt_token_count = 0
-                attempt_tool_call_traces: list[ToolCallTrace] = []
-                fallback_proposed_texts: list[str] = []
+                analyst_attempt_tool_call_traces: list[ToolCallTrace] = []
+                analyst_fallback_proposed_texts: list[str] = []
 
                 try:
                     model = _build_model(attempt_model_id)
-                    deps = AnalystAgentDeps(
+                    analyst_deps = AnalystAgentDeps(
                         document_content=normalized_document_context,
-                        document_context=document_context,
+                        document_context=_coerce_document_context_payload(document_context),
                         search_workspace_context=analyst_search_workspace_context,
                     )
-                    agent_instance = build_analyst_agent(model, system_prompt=system_prompt)
+                    analyst_agent_instance = build_analyst_agent(model, system_prompt=system_prompt)
 
-                    async for event in agent_instance.run_stream_events(
+                    async for event in analyst_agent_instance.run_stream_events(
                         user_message,
                         message_history=message_history,
-                        deps=deps,
+                        deps=analyst_deps,
                     ):
                         if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
                             initial_text = event.part.content
@@ -941,7 +951,7 @@ class AiAgentService:
                                 tool_name=event.part.tool_name,
                                 text_offset=len(attempt_full_text),
                             )
-                            attempt_tool_call_traces.append(trace)
+                            analyst_attempt_tool_call_traces.append(trace)
                             tool_chunk = StreamChunk(
                                 type="tool_call",
                                 content="",
@@ -953,22 +963,22 @@ class AiAgentService:
                             if event.part.tool_name != "propose_document_replacement":
                                 continue
 
-                            args_dict: dict[str, object] = {}
+                            analyst_args_dict: dict[str, object] = {}
                             try:
-                                args_dict = event.part.args_as_dict()
+                                analyst_args_dict = event.part.args_as_dict()
                             except Exception:
                                 args = getattr(event.part, "args", None)
                                 if isinstance(args, dict):
-                                    args_dict = args
+                                    analyst_args_dict = args
 
-                            proposed_text = args_dict.get("proposed_text")
+                            proposed_text = analyst_args_dict.get("proposed_text")
                             if isinstance(proposed_text, str) and proposed_text.strip():
-                                fallback_proposed_texts.append(proposed_text)
+                                analyst_fallback_proposed_texts.append(proposed_text)
                             continue
 
                         if isinstance(event, FunctionToolResultEvent):
                             serialized_result = _serialize_tool_result(event.result.content)
-                            for trace in reversed(attempt_tool_call_traces):
+                            for trace in reversed(analyst_attempt_tool_call_traces):
                                 if trace.tool_name == event.result.tool_name:
                                     trace.result = serialized_result
                                     trace.result_summary = _summarize_tool_result(
@@ -991,13 +1001,13 @@ class AiAgentService:
                             if not attempt_full_text:
                                 attempt_full_text = event.result.output
 
-                    changes_to_emit = list(deps.proposed_changes)
-                    if not changes_to_emit and fallback_proposed_texts:
-                        seen_texts: set[str] = set()
-                        for proposed_text in fallback_proposed_texts:
-                            if proposed_text in seen_texts:
+                    changes_to_emit = list(analyst_deps.proposed_changes)
+                    if not changes_to_emit and analyst_fallback_proposed_texts:
+                        analyst_seen_texts: set[str] = set()
+                        for proposed_text in analyst_fallback_proposed_texts:
+                            if proposed_text in analyst_seen_texts:
                                 continue
-                            seen_texts.add(proposed_text)
+                            analyst_seen_texts.add(proposed_text)
                             changes_to_emit.append(
                                 {
                                     "operation": "replace_full",
@@ -1033,10 +1043,10 @@ class AiAgentService:
 
                     full_text = attempt_full_text
                     token_count = attempt_token_count
-                    tool_call_traces = attempt_tool_call_traces
+                    tool_call_traces = analyst_attempt_tool_call_traces
                     break
                 except Exception as exc:
-                    if attempt_full_text or attempt_tool_call_traces:
+                    if attempt_full_text or analyst_attempt_tool_call_traces:
                         logger.exception("Analyst agent streaming error: %s", exc)
                         error_chunk = StreamChunk(
                             type="error", content="AI service error. Please try again."

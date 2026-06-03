@@ -1,111 +1,133 @@
 ---
 name: caret-testing
-description: Caret testing strategy — testing pyramid, unit/integration/E2E test guidelines, Vitest, Pytest, Playwright, CI pipeline order, and production smoke tests. Use when writing tests, setting up test infrastructure, reviewing test coverage, or when any testing question arises in the Caret project.
+description: Caret testing strategy - Vitest for frontend and Node services, Pytest for the FastAPI AI service, unit/integration test layout, Makefile targets, deterministic mocks, collaboration protocol tests, AI/RAG tests, and CI expectations. Use when writing tests, fixing tests, setting up test infrastructure, reviewing coverage, or choosing verification commands in the Caret project.
 ---
 
 # Caret Testing
 
-## Principles
+## Current Tools
 
-- **Pyramid**: unit (majority) → integration (selective) → E2E (few, critical)
-- **AAA pattern**: every test must be structured as Arrange / Act / Assert and each phase must be marked with an inline comment (`// Arrange`, `// Act`, `// Assert` in TS/JS; `# Arrange`, `# Act`, `# Assert` in Python)
-- **Docstrings everywhere**: every test file, every `describe`/class block, and every individual `it`/test function must have a docstring explaining *what* is validated and *why* (JSDoc `/** */` in TypeScript, `"""..."""` in Python)
-- **Deterministic**: no real time, random values, or external dependencies in unit tests
-- **Network-free unit tests**: mock HTTP, DB, WebSocket, and LLM clients
-- **No secrets in tests**: use GitHub Secrets (CI) or managed secrets (staging/prod)
+| Area | Tooling | Location |
+|---|---|---|
+| Frontend | Vitest 4, jsdom, React Testing Library | `app/frontend` |
+| Node services | Vitest 3, node environment | `app/backend/*-service` |
+| Python AI service | Pytest, pytest-asyncio | `app/backend/ai-service` |
+| E2E | Not currently configured in repo | Add Playwright only when implementing E2E |
 
-## AAA Pattern & Docstring Convention
+GitHub Actions workflows are checked in under `.github/workflows`.
 
-### TypeScript (Vitest)
-```ts
-/** Unit tests for <module>. Validates <what and why>. */
-describe("<subject>", () => {
-  /** <what this group tests> */
-  describe("<scenario>", () => {
-    it("<expected behaviour>", () => {
-      // Arrange
-      const input = ...;
+## Test Locations
 
-      // Act
-      const result = fn(input);
+```text
+app/frontend/src/**/*.test.ts
+app/frontend/src/**/*.test.tsx
+app/frontend/src/**/*.integration.test.tsx
 
-      // Assert
-      expect(result).toBe(...);
-    });
-  });
-});
+app/backend/api-gateway/tests/unit/*.test.ts
+app/backend/api-gateway/tests/integration/*.test.ts
+app/backend/auth-service/tests/unit/*.test.ts
+app/backend/auth-service/tests/integration/*.test.ts
+app/backend/document-service/tests/unit/*.test.ts
+app/backend/document-service/tests/integration/*.test.ts
+app/backend/collab-service/tests/unit/*.test.ts
+app/backend/collab-service/tests/integration/*.test.ts
+
+app/backend/ai-service/tests/unit/test_*.py
+app/backend/ai-service/tests/integration/test_*.py
 ```
 
-### Python (Pytest)
-```python
-class TestSomething:
-    """Unit tests for Something. Validates <what and why>."""
+Frontend has split Vitest configs:
 
-    def test_something(self):
-        """Verifies that <expected behaviour> when <condition>."""
-        # Arrange
-        value = ...
+- `vitest.unit.config.ts`
+- `vitest.integration.config.ts`
+- `src/test/setup.ts`
 
-        # Act
-        result = fn(value)
+`src/test/setup.ts` installs `@testing-library/jest-dom` and mocks browser APIs such as `matchMedia` and `scrollIntoView`.
 
-        # Assert
-        assert result == ...
+## Commands
+
+Use the nearest package/service command for focused work.
+
+```text
+cd app/frontend && bun run test:unit
+cd app/frontend && bun run test:integration
+
+cd app/backend/api-gateway && bun run test:unit
+cd app/backend/auth-service && bun run test:unit
+cd app/backend/document-service && bun run test:unit
+cd app/backend/collab-service && bun run test:unit
+
+cd app/backend/ai-service && uv run pytest tests/unit -q
+cd app/backend/ai-service && uv run pytest tests/integration -q
 ```
 
-## Test Tools by Layer
+Root `Makefile` wrappers exist for lint, format, unit, and integration targets per service, for example:
 
-| Layer | Frontend | Node.js services | Python AI Service |
-|---|---|---|---|
-| Unit | Vitest + React Testing Library | Vitest | Pytest |
-| Integration | — | Supertest | FastAPI TestClient |
-| E2E | Playwright | — | — |
-
-## What to Test
-
-### Unit Tests
-- **Frontend**: pure utilities, hooks/stores with mocked IO, component state transitions
-- **Node.js**: domain logic, auth helpers, request validation, DTO mapping, error handling
-- **Python**: prompt assembly, tool selection, data transforms, streaming chunk logic (no real LLM)
-- Table-driven tests for protocol/state-machine logic (CRDT merges, streaming, retries)
-
-### Integration Tests
-- **APIs**: status codes, error payloads, pagination, JWT auth, versioned paths (`/api/v1/...`)
-- **DB/RLS**: validate RLS policies and permissions — run against **dedicated test Supabase project**, never production
-- **Collaboration**: Y.js update application, snapshot invariants, WebSocket auth handshake
-- **AI protocol**: SSE chunks applied as Tiptap Transactions maintaining CRDT consistency
-
-### E2E Tests (Playwright — critical paths only)
-- Signup/login and session persistence
-- Document CRUD: create → edit → autosave → reload
-- Collaboration: two browser contexts editing concurrently + presence/cursors
-- AI interactions: open panel, stream response, apply suggestion (CRDT-compatible)
-- Use ephemeral test workspaces/documents; always tear down after run
-- Targeted `axe-core` accessibility checks on critical screens
-
-## CI Pipeline Order (GitHub Actions)
-
-```
-1. Lint + type check  (fail fast — blocks everything if fails)
-2. Unit tests
-3. Integration tests
-4. E2E tests          (smoke subset on every push; full suite on PRs to main)
-5. Deploy             (only if all above pass)
+```text
+make frontend-test-unit
+make document-service-test-integration
+make collab-service-test-unit
+make ai-service-test-unit
 ```
 
-- **Every push**: lint + unit + hermetic integration + E2E smoke subset
-- **PRs to `main`**: full E2E against staging
-- **Nightly**: full E2E + browser matrix + heavy collaboration scenarios
+## Test Principles
+
+- Keep unit tests deterministic and network-free.
+- Mock HTTP, DB, Supabase, WebSocket, and LLM clients in unit tests.
+- Put API boundary behavior in integration tests.
+- Add regression tests for bug fixes at the lowest useful layer.
+- Use table-driven tests for protocol/state-machine behavior.
+- Avoid real production Supabase data in tests.
+- Keep secrets out of test files and snapshots.
+
+## What To Cover
+
+### Frontend
+
+- Component states, hooks, stores, and API wrappers.
+- Editor utilities/extensions without duplicating full browser behavior.
+- AI streaming UI and markdown rendering with mocked streams.
+- Collaboration URL/session/presence helpers with mocked WebSocket/Y.js boundaries.
+
+### Node Services
+
+- Gateway proxy routing, CORS, rate limits, and OpenAPI metadata.
+- Document service validation, repository/service behavior, permissions, and route status codes.
+- Auth middleware and shared error middleware.
+- Collaboration Y.js protocol handling, awareness, JWT handshake, persistence service, and repository behavior.
+
+### AI Service
+
+- Pydantic schemas and validation.
+- Agent orchestration, prompt/dependency assembly, and model catalog behavior.
+- SSE chunk behavior without calling real providers.
+- Embedding indexing/search behavior with mocked embedding clients.
+- Repository behavior for AI tables and pgvector query construction.
+
+## Collaboration Tests
+
+- Test Y.js sync and awareness message behavior at the protocol layer.
+- Test `CollabPersistenceService` separately from WebSocket handling.
+- Remember current persistence is partially wired: updates/snapshots can be stored, but room initialization does not yet restore from DB.
+- When implementing restore-on-room-create, add an integration/regression test that proves a restarted/empty room loads the previous Y.js state.
+
+## CI Expectations
+
+The checked-in `CI` workflow follows this order:
+
+```text
+1. Lint and format checks
+2. Type checks / builds
+3. Unit tests
+4. Integration tests
+5. Frontend E2E smoke tests
+6. Production compose validation
+7. Production image builds
+8. Deploy from `prod` only after checks pass
+```
 
 ## Production Safety
 
-- Smoke tests only: app reachable, auth works, CRUD in isolated test workspace, collab health
-- Never test against real user workspaces or documents
-- Dedicated production test credentials with least privilege
-- All created artifacts tagged and auto-cleaned
-
-## Ownership Rules
-
-- **New feature**: unit tests minimum; integration if it crosses API/DB/WebSocket boundaries; E2E if critical user flow
-- **Bug fix**: regression test at the lowest layer that reproduces the issue
-- **Flaky tests**: treat as broken production code — fix or quarantine immediately
+- Smoke tests should use dedicated least-privilege test accounts.
+- Create isolated workspaces/documents and clean them up.
+- Never run destructive tests against real user workspaces or production documents.

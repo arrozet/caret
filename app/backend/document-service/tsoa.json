@@ -1,0 +1,21 @@
+{
+  "entryFile": "src/app.ts",
+  "controllerPathGlobs": ["src/controllers/*_controller.ts"],
+  "noImplicitAdditionalProperties": "throw-on-extras",
+  "spec": {
+    "outputDirectory": "src/openapi",
+    "specFileBaseName": "swagger",
+    "specVersion": 3,
+    "basePath": "/",
+    "name": "Caret Document Service API",
+    "description": "REST API for Caret documents, folders, and workspaces.",
+    "version": "0.1.0",
+    "securityDefinitions": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

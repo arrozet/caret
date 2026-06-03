@@ -1,0 +1,2461 @@
+{
+  "openapi": "3.0.0",
+  "components": {
+    "examples": {},
+    "headers": {},
+    "parameters": {},
+    "requestBodies": {},
+    "responses": {},
+    "schemas": {
+      "ErrorResponseDto": {
+        "description": "Standard JSON error payload returned by gateway and downstream services.",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message."
+          }
+        },
+        "required": ["error"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "Record_string.unknown_": {
+        "properties": {},
+        "additionalProperties": {},
+        "type": "object",
+        "description": "Construct a type with a set of properties K of type T"
+      },
+      "JsonObject": {
+        "$ref": "#/components/schemas/Record_string.unknown_",
+        "description": "Generic JSON object used for rich document content and AI context payloads."
+      },
+      "DocumentResponseDto": {
+        "description": "Public document response returned through the API Gateway.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Document UUID."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace this document belongs to."
+          },
+          "folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Folder this document is in, or null for workspace root."
+          },
+          "title": {
+            "type": "string",
+            "description": "Document title."
+          },
+          "status": {
+            "type": "string",
+            "description": "Lifecycle status."
+          },
+          "visibility": {
+            "type": "string",
+            "description": "Access scope."
+          },
+          "owner_user_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Document owner user ID."
+          },
+          "content_json": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ],
+            "nullable": true,
+            "description": "Latest Tiptap/ProseMirror JSON content."
+          },
+          "content_text": {
+            "type": "string",
+            "nullable": true,
+            "description": "Latest plain-text content."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "ISO 8601 creation timestamp."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "ISO 8601 update timestamp."
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "folder_id",
+          "title",
+          "status",
+          "visibility",
+          "owner_user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "CreateDocumentRequestDto": {
+        "description": "Create document request body.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Document title."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Target workspace UUID."
+          },
+          "folder_id": {
+            "type": "string",
+            "description": "Optional target folder UUID."
+          }
+        },
+        "required": ["title", "workspace_id"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "UpdateDocumentRequestDto": {
+        "description": "Update document request body.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Updated title."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Updated workspace UUID when moving the document."
+          },
+          "folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Updated folder UUID, or null for workspace root."
+          },
+          "content_json": {
+            "$ref": "#/components/schemas/JsonObject",
+            "description": "Updated Tiptap/ProseMirror JSON content."
+          },
+          "content_text": {
+            "type": "string",
+            "description": "Updated plain-text content."
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "InviteDocumentCollaboratorResponseDto": {
+        "description": "Direct document invite response.",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "Document UUID."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Invited user UUID."
+          },
+          "email": {
+            "type": "string",
+            "description": "Invited user email."
+          },
+          "role": {
+            "type": "string",
+            "enum": ["owner", "editor", "commenter", "viewer"],
+            "description": "Assigned document role."
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["document"],
+            "nullable": false,
+            "description": "Invite scope."
+          }
+        },
+        "required": ["document_id", "user_id", "email", "role", "scope"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "InviteCollaboratorRequestDto": {
+        "description": "Invite collaborator request body.",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Target user email address."
+          }
+        },
+        "required": ["email"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "WorkspaceResponseDto": {
+        "description": "Public workspace response returned through the API Gateway.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Workspace UUID."
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true,
+            "description": "URL-friendly slug."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["personal", "shared"],
+            "description": "Workspace kind."
+          },
+          "created_by_user_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "User who created the workspace."
+          },
+          "role": {
+            "type": "string",
+            "description": "Caller's role in this workspace."
+          },
+          "shared_with": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Other active member emails excluding the caller."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "ISO 8601 creation timestamp."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "ISO 8601 update timestamp."
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "kind",
+          "created_by_user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "CreateWorkspaceRequestDto": {
+        "description": "Create workspace request body.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Workspace display name."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Optional URL-friendly slug."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["personal", "shared"],
+            "description": "Workspace kind."
+          }
+        },
+        "required": ["name"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "UpdateWorkspaceRequestDto": {
+        "description": "Update workspace request body.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Updated display name."
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "InviteWorkspaceCollaboratorResponseDto": {
+        "description": "Workspace invite response.",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace UUID."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Invited user UUID."
+          },
+          "email": {
+            "type": "string",
+            "description": "Invited user email."
+          },
+          "role": {
+            "type": "string",
+            "enum": ["member"],
+            "nullable": false,
+            "description": "Assigned role."
+          }
+        },
+        "required": ["workspace_id", "user_id", "email", "role"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "FolderResponseDto": {
+        "description": "Public folder response returned through the API Gateway.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Folder UUID."
+          },
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace this folder belongs to."
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parent folder UUID, or null for workspace root."
+          },
+          "name": {
+            "type": "string",
+            "description": "Folder display name."
+          },
+          "sort_order": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Manual sort order, or null for default ordering."
+          },
+          "created_by_user_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "User who created the folder."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "ISO 8601 creation timestamp."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "ISO 8601 update timestamp."
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "parent_folder_id",
+          "name",
+          "sort_order",
+          "created_by_user_id",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "CreateFolderRequestDto": {
+        "description": "Create folder request body.",
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "description": "Workspace UUID."
+          },
+          "name": {
+            "type": "string",
+            "description": "Folder display name."
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional parent folder UUID, or null for workspace root."
+          },
+          "sort_order": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Optional manual sort order."
+          }
+        },
+        "required": ["workspace_id", "name"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "UpdateFolderRequestDto": {
+        "description": "Update folder request body.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Updated folder name."
+          },
+          "parent_folder_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Updated parent folder UUID, or null for workspace root."
+          },
+          "sort_order": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Updated manual sort order."
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ModelsResponseDto": {
+        "description": "AI model catalog response.",
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/JsonObject"
+            },
+            "type": "array",
+            "description": "Available model descriptors."
+          },
+          "default_model_id": {
+            "type": "string",
+            "description": "Default model id selected by the server."
+          }
+        },
+        "required": ["models", "default_model_id"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ConversationResponseDto": {
+        "description": "AI conversation response.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Conversation UUID."
+          },
+          "document_id": {
+            "type": "string",
+            "description": "Document UUID."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Owner user UUID."
+          },
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional conversation title."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "ISO 8601 creation timestamp."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "ISO 8601 update timestamp."
+          }
+        },
+        "required": ["id", "document_id", "user_id", "title", "created_at", "updated_at"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "CreateConversationRequestDto": {
+        "description": "Create AI conversation request body.",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "Document UUID."
+          },
+          "title": {
+            "type": "string",
+            "description": "Optional conversation title."
+          }
+        },
+        "required": ["document_id"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "ConversationListResponseDto": {
+        "description": "AI conversation list response.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JsonObject"
+            },
+            "type": "array",
+            "description": "Conversation list items."
+          },
+          "total": {
+            "type": "number",
+            "format": "double",
+            "description": "Total conversations available server-side."
+          }
+        },
+        "required": ["items", "total"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "MessageListResponseDto": {
+        "description": "AI message list response.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JsonObject"
+            },
+            "type": "array",
+            "description": "Message list items."
+          },
+          "total": {
+            "type": "number",
+            "format": "double",
+            "description": "Total messages available server-side."
+          }
+        },
+        "required": ["items", "total"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "StreamConversationRequestDto": {
+        "description": "Stream AI request body.",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "User message text."
+          },
+          "document_id": {
+            "type": "string",
+            "description": "Active document UUID."
+          },
+          "document_context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/JsonObject"
+              }
+            ],
+            "description": "Optional editor context snapshot."
+          },
+          "agent_type": {
+            "type": "string",
+            "description": "Optional agent type slug."
+          }
+        },
+        "required": ["message", "document_id"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "SuggestionResponseDto": {
+        "description": "AI suggestion response.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Suggestion UUID."
+          },
+          "conversation_id": {
+            "type": "string",
+            "description": "Conversation UUID."
+          },
+          "document_id": {
+            "type": "string",
+            "description": "Document UUID."
+          },
+          "message_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "Message UUID, when associated."
+          },
+          "status": {
+            "type": "string",
+            "description": "Suggestion lifecycle status."
+          },
+          "original_text": {
+            "type": "string",
+            "nullable": true,
+            "description": "Original text, when available."
+          },
+          "suggested_text": {
+            "type": "string",
+            "description": "Suggested replacement text."
+          },
+          "position_start": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Optional start offset."
+          },
+          "position_end": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Optional end offset."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "ISO 8601 creation timestamp."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "ISO 8601 update timestamp."
+          }
+        },
+        "required": [
+          "id",
+          "conversation_id",
+          "document_id",
+          "message_id",
+          "status",
+          "original_text",
+          "suggested_text",
+          "position_start",
+          "position_end",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "UpdateSuggestionStatusRequestDto": {
+        "description": "Update AI suggestion status body.",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["applied", "dismissed", "superseded"],
+            "description": "New suggestion status."
+          }
+        },
+        "required": ["status"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "IndexEmbeddingsResponseDto": {
+        "description": "Index embeddings response.",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "Document UUID."
+          },
+          "chunks_indexed": {
+            "type": "number",
+            "format": "double",
+            "description": "Number of chunks indexed."
+          }
+        },
+        "required": ["document_id", "chunks_indexed"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "IndexEmbeddingsRequestDto": {
+        "description": "Index embeddings request body.",
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "Document UUID."
+          },
+          "content": {
+            "type": "string",
+            "description": "Plain-text content to index."
+          }
+        },
+        "required": ["document_id", "content"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "GatewayInfoResponseDto": {
+        "description": "API Gateway service metadata response.",
+        "properties": {
+          "service": {
+            "type": "string",
+            "enum": ["caret-api-gateway"],
+            "nullable": false,
+            "description": "Service identifier."
+          },
+          "version": {
+            "type": "string",
+            "enum": ["v1"],
+            "nullable": false,
+            "description": "Public API version."
+          },
+          "endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Route prefixes forwarded by the gateway."
+          }
+        },
+        "required": ["service", "version", "endpoints"],
+        "type": "object",
+        "additionalProperties": false
+      },
+      "HealthResponseDto": {
+        "description": "Health response returned by service liveness endpoints.",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"],
+            "nullable": false,
+            "description": "Current service health status."
+          },
+          "service": {
+            "type": "string",
+            "enum": ["api-gateway"],
+            "nullable": false,
+            "description": "Service identifier."
+          }
+        },
+        "required": ["status", "service"],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "info": {
+    "title": "Caret API Gateway",
+    "version": "0.1.0",
+    "description": "Gateway discovery endpoints and proxy prefixes for the Caret public API.",
+    "contact": {}
+  },
+  "paths": {
+    "/api/v1/documents": {
+      "post": {
+        "operationId": "CreateDocument",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a document in a workspace.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDocumentRequestDto"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "ListDocuments",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentResponseDto"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List documents in a workspace.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/documents/shared": {
+      "get": {
+        "operationId": "ListSharedDocuments",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentResponseDto"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List documents shared directly with the caller.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": []
+      }
+    },
+    "/api/v1/documents/{id}": {
+      "get": {
+        "operationId": "GetDocument",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Get a document by ID.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "UpdateDocument",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Update a document's title, placement, or content.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocumentRequestDto"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "DeleteDocument",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Soft-delete a document.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/documents/{id}/invite": {
+      "post": {
+        "operationId": "InviteDocumentCollaborator",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteDocumentCollaboratorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Invite a collaborator directly to a document.",
+        "tags": ["Documents"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCollaboratorRequestDto"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces": {
+      "post": {
+        "operationId": "CreateWorkspace",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a workspace.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkspaceRequestDto"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "ListWorkspaces",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceResponseDto"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List workspaces visible to the caller.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": []
+      }
+    },
+    "/api/v1/workspaces/{id}": {
+      "patch": {
+        "operationId": "UpdateWorkspace",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Update a workspace.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspaceRequestDto"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "DeleteWorkspace",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Soft-delete a workspace.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/workspaces/{id}/invite": {
+      "post": {
+        "operationId": "InviteWorkspaceCollaborator",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteWorkspaceCollaboratorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Invite a collaborator to a workspace.",
+        "tags": ["Workspaces"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCollaboratorRequestDto"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/folders": {
+      "post": {
+        "operationId": "CreateFolder",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a folder in a workspace.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFolderRequestDto"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "ListFolders",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FolderResponseDto"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List folders in a workspace.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "parent_folder_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/folders/all": {
+      "get": {
+        "operationId": "ListAllFolders",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FolderResponseDto"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List all folders in a workspace as a flat tree-building payload.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/folders/{id}": {
+      "patch": {
+        "operationId": "UpdateFolder",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Update a folder.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFolderRequestDto"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "DeleteFolder",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Soft-delete a folder.",
+        "tags": ["Folders"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/models": {
+      "get": {
+        "operationId": "GetModels",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Fetch the curated AI model catalog.",
+        "tags": ["AI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": []
+      }
+    },
+    "/api/v1/ai/conversations": {
+      "post": {
+        "operationId": "CreateConversation",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create an AI conversation for a document.",
+        "tags": ["AI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConversationRequestDto"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "ListConversations",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationListResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "List AI conversations for a document.",
+        "tags": ["AI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/conversations/{conversation_id}/messages": {
+      "get": {
+        "operationId": "ListMessages",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageListResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Fetch all messages in an AI conversation.",
+        "tags": ["AI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/conversations/{conversation_id}": {
+      "delete": {
+        "operationId": "DeleteConversation",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete an AI conversation.",
+        "tags": ["AI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/conversations/{conversation_id}/touch": {
+      "post": {
+        "operationId": "TouchConversation",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Mark an AI conversation as recently used.",
+        "tags": ["AI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/conversations/{conversation_id}/stream": {
+      "post": {
+        "operationId": "StreamConversation",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Stream an AI assistant response via Server-Sent Events.",
+        "tags": ["AI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StreamConversationRequestDto"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/suggestions/{suggestion_id}/status": {
+      "patch": {
+        "operationId": "UpdateSuggestionStatus",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Update the lifecycle status of a persisted AI suggestion.",
+        "tags": ["AI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "suggestion_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSuggestionStatusRequestDto"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/embeddings/index": {
+      "post": {
+        "operationId": "IndexEmbeddings",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexEmbeddingsResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Index document text into the vector store for retrieval.",
+        "tags": ["Embeddings"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexEmbeddingsRequestDto"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1": {
+      "get": {
+        "operationId": "GetApiInfo",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayInfoResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return available API v1 route prefixes.",
+        "tags": ["Gateway"],
+        "security": [],
+        "parameters": []
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "GetHealth",
+        "responses": {
+          "200": {
+            "description": "Ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return liveness status for the API Gateway.",
+        "tags": ["Gateway"],
+        "security": [],
+        "parameters": []
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ]
+}
