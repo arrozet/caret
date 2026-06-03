@@ -1,4 +1,4 @@
-name: Deploy Production
+name: Verify Production
 
 on:
   workflow_run:
@@ -14,12 +14,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-deploy
+  group: production-verification
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy through Coolify
+  verify:
+    name: Verify Coolify deployment
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment:
@@ -32,31 +32,187 @@ jobs:
           echo "Manual production deployments must be run from the prod branch."
           exit 1
 
-      - name: Trigger Coolify deployment
+      - name: Wait for Coolify deployment
         env:
-          COOLIFY_DEPLOY_WEBHOOK_URL: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK_URL }}
-          COOLIFY_DEPLOY_TOKEN: ${{ secrets.COOLIFY_DEPLOY_TOKEN }}
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          COOLIFY_API_URL: ${{ secrets.COOLIFY_API_URL || vars.COOLIFY_API_URL || 'https://ops.caret.page/api/v1' }}
+          COOLIFY_RESOURCE_UUID: ${{ secrets.COOLIFY_RESOURCE_UUID || vars.COOLIFY_RESOURCE_UUID }}
+          COOLIFY_RESOURCE_FQDN: ${{ vars.COOLIFY_RESOURCE_FQDN || 'caret.page' }}
+          TARGET_BRANCH: prod
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          WAIT_TIMEOUT_SECONDS: "900"
+          WAIT_INTERVAL_SECONDS: "20"
         run: |
           set -euo pipefail
 
-          if [ -z "${COOLIFY_DEPLOY_WEBHOOK_URL:-}" ]; then
-            echo "COOLIFY_DEPLOY_WEBHOOK_URL is required."
-            exit 1
-          fi
+          python <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
 
-          curl_args=(
-            --fail-with-body
-            --retry 3
-            --retry-delay 5
-            --request POST
-            "$COOLIFY_DEPLOY_WEBHOOK_URL"
+
+          def read_env(name: str, default: str = "") -> str:
+              """Return a stripped environment variable value."""
+              return os.environ.get(name, default).strip()
+
+
+          api_token = read_env("COOLIFY_API_TOKEN")
+          api_url = read_env("COOLIFY_API_URL").rstrip("/")
+          resource_uuid = read_env("COOLIFY_RESOURCE_UUID")
+          resource_fqdn = read_env("COOLIFY_RESOURCE_FQDN")
+          target_branch = read_env("TARGET_BRANCH", "prod")
+          target_sha = read_env("TARGET_SHA")
+          timeout_seconds = int(read_env("WAIT_TIMEOUT_SECONDS", "900"))
+          interval_seconds = int(read_env("WAIT_INTERVAL_SECONDS", "20"))
+
+          if not api_token:
+              print("::error::COOLIFY_API_TOKEN is required. Create a read-only Coolify API token and store it as a GitHub Actions secret.")
+              sys.exit(1)
+
+          if not api_url:
+              print("::error::COOLIFY_API_URL is required. Store https://ops.caret.page/api/v1 as a GitHub Actions secret or variable.")
+              sys.exit(1)
+
+          if not target_sha:
+              print("::error::Target commit SHA is empty; cannot verify the production deployment.")
+              sys.exit(1)
+
+
+          def request_json(path: str) -> object:
+              """Call Coolify API and return decoded JSON, with clear auth errors."""
+              request = urllib.request.Request(
+                  f"{api_url}{path}",
+                  headers={
+                      "Accept": "application/json",
+                      "Authorization": f"Bearer {api_token}",
+                  },
+              )
+
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      payload = response.read().decode("utf-8")
+                      return json.loads(payload) if payload else None
+              except urllib.error.HTTPError as error:
+                  body = error.read().decode("utf-8", errors="replace")
+                  if error.code in (401, 403):
+                      print(
+                          "::error::Coolify API authentication failed. "
+                          "The COOLIFY_API_TOKEN may be expired, revoked, missing read permission, "
+                          "or blocked by Coolify API Access / Allowed IPs settings. "
+                          "Create a new read-only token and update the GitHub Actions secret."
+                      )
+                      print(f"Coolify response: HTTP {error.code} {body}")
+                  else:
+                      print(f"::error::Coolify API request failed: HTTP {error.code} {body}")
+                  sys.exit(1)
+              except urllib.error.URLError as error:
+                  print(f"::error::Could not reach Coolify API at {api_url}: {error}")
+                  sys.exit(1)
+
+
+          def normalize_sha(value: object) -> str:
+              """Return a comparable commit SHA string."""
+              return str(value or "").strip().lower()
+
+
+          def sha_matches(deployed_sha: str, expected_sha: str) -> bool:
+              """Allow comparing full and short Git commit SHAs."""
+              deployed_sha = normalize_sha(deployed_sha)
+              expected_sha = normalize_sha(expected_sha)
+              return bool(deployed_sha and expected_sha and (deployed_sha.startswith(expected_sha) or expected_sha.startswith(deployed_sha)))
+
+
+          def find_application(applications: list[dict[str, object]]) -> dict[str, object] | None:
+              """Find the Coolify application resource for Caret production."""
+              if resource_uuid:
+                  for application in applications:
+                      if str(application.get("uuid", "")).strip() == resource_uuid:
+                          return application
+                  return None
+
+              candidates = [
+                  application
+                  for application in applications
+                  if str(application.get("git_branch", "")).strip() == target_branch
+              ]
+
+              if resource_fqdn:
+                  fqdn_matches = [
+                      application
+                      for application in candidates
+                      if resource_fqdn in str(application.get("fqdn", ""))
+                      or resource_fqdn in str(application.get("docker_compose_domains", ""))
+                  ]
+                  if len(fqdn_matches) == 1:
+                      return fqdn_matches[0]
+                  if len(fqdn_matches) > 1:
+                      print("::warning::Multiple Coolify applications matched the production FQDN; set COOLIFY_RESOURCE_UUID for exact matching.")
+                      return fqdn_matches[0]
+
+              repo_matches = [
+                  application
+                  for application in candidates
+                  if "caret" in str(application.get("git_repository", "")).lower()
+                  or "caret" in str(application.get("git_full_url", "")).lower()
+                  or "caret" in str(application.get("name", "")).lower()
+              ]
+              if len(repo_matches) == 1:
+                  return repo_matches[0]
+              if len(repo_matches) > 1:
+                  print("::warning::Multiple Coolify applications matched the Caret repository; set COOLIFY_RESOURCE_UUID for exact matching.")
+                  return repo_matches[0]
+
+              return None
+
+
+          deadline = time.monotonic() + timeout_seconds
+          attempt = 0
+          latest_summary = "no Coolify application response yet"
+
+          print(f"Waiting for Coolify to deploy commit {target_sha} on branch {target_branch}.")
+
+          while time.monotonic() < deadline:
+              attempt += 1
+              applications = request_json("/applications")
+              if not isinstance(applications, list):
+                  print(f"::error::Unexpected Coolify /applications response: {applications!r}")
+                  sys.exit(1)
+
+              application = find_application(applications)
+              if not application:
+                  print("::error::Could not find the Caret production application in Coolify. Set COOLIFY_RESOURCE_UUID to the Coolify resource UUID.")
+                  sys.exit(1)
+
+              deployed_sha = normalize_sha(application.get("git_commit_sha"))
+              status = str(application.get("status", "")).strip()
+              uuid = str(application.get("uuid", "")).strip()
+              name = str(application.get("name", "")).strip()
+              latest_summary = f"name={name or 'unknown'} uuid={uuid or 'unknown'} sha={deployed_sha or 'unknown'} status={status or 'unknown'}"
+
+              print(f"Attempt {attempt}: {latest_summary}")
+
+              if sha_matches(deployed_sha, target_sha):
+                  lowered_status = status.lower()
+                  if lowered_status and "unhealthy" in lowered_status:
+                      print(f"::error::Coolify deployed commit {target_sha}, but the resource is unhealthy: {latest_summary}")
+                      sys.exit(1)
+                  if not lowered_status or "running" in lowered_status:
+                      print(f"Coolify is serving the target commit: {latest_summary}")
+                      sys.exit(0)
+
+              time.sleep(interval_seconds)
+
+          print(
+              "::error::Timed out waiting for Coolify to serve the target commit. "
+              "The deployment may still be pending or it may have failed in Coolify. "
+              f"Last observed state: {latest_summary}"
           )
-
-          if [ -n "${COOLIFY_DEPLOY_TOKEN:-}" ]; then
-            curl_args+=(--header "Authorization: Bearer $COOLIFY_DEPLOY_TOKEN")
-          fi
-
-          curl "${curl_args[@]}"
+          sys.exit(1)
+          PY
 
       - name: Smoke test production endpoints
         env:

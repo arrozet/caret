@@ -1,6 +1,6 @@
 # CI/CD Pipeline
 
-Caret uses GitHub Actions for repository CI and a controlled production deployment trigger into Coolify.
+Caret uses GitHub Actions for repository CI and production deployment verification. Coolify deploys production automatically from the `prod` branch through its GitHub integration/webhook.
 
 ## Branches
 
@@ -13,18 +13,24 @@ Caret uses GitHub Actions for repository CI and a controlled production deployme
 | Workflow | File | Trigger | Purpose |
 | --- | --- | --- | --- |
 | CI | `.github/workflows/ci.yml` | Pushes to `main` and `prod` | Runs formatting checks, linting, type/build checks, unit tests, integration tests, frontend E2E smoke tests, production compose validation, and production image builds. |
-| Deploy Production | `.github/workflows/deploy-production.yml` | Successful `CI` workflow after a remote change on `prod`, manual dispatch from `prod` | Calls the Coolify deployment webhook, then runs production smoke checks. |
+| Verify Production | `.github/workflows/deploy-production.yml` | Successful `CI` workflow after a remote change on `prod`, manual dispatch from `prod` | Waits until Coolify reports the target commit as deployed, then runs production smoke checks against the public endpoints. |
 
 ## GitHub Environment
 
-Create a `production` environment in GitHub repository settings. Configure required reviewers there if production deploys should require manual approval.
+Create a `production` environment in GitHub repository settings if environment metadata or manual smoke-test approvals are needed.
 
 ## Required GitHub Secrets
 
 | Secret | Purpose |
 | --- | --- |
-| `COOLIFY_DEPLOY_WEBHOOK_URL` | Coolify deploy webhook URL for the Caret Docker Compose resource. |
-| `COOLIFY_DEPLOY_TOKEN` | Optional bearer token if the Coolify webhook is protected by an extra token. |
+| `COOLIFY_API_TOKEN` | Read-only Coolify API token used to verify that the target commit was deployed. Rotate it before its expiry date. |
+| `COOLIFY_API_URL` | Coolify API base URL, currently `https://ops.caret.page/api/v1`. This may be stored as a secret or a repository variable. |
+
+Optional:
+
+| Secret or variable | Purpose |
+| --- | --- |
+| `COOLIFY_RESOURCE_UUID` | Exact Coolify application/resource UUID. If unset, the workflow tries to discover the resource from branch `prod` and `caret.page`. |
 
 Runtime secrets such as `DATABASE_URL`, Supabase keys, provider API keys, and JWT secrets stay in Coolify environment variables, not GitHub workflow files.
 
@@ -41,7 +47,9 @@ Runtime secrets such as `DATABASE_URL`, Supabase keys, provider API keys, and JW
 
 ## Production Smoke Tests
 
-The production deployment workflow always checks:
+Before smoke tests, the production verification workflow polls Coolify for up to 15 minutes and fails if the Coolify API token is expired, revoked, blocked by API access settings, or if the target commit never becomes the active production commit.
+
+After the target commit is active, it always checks:
 
 - `GET {PRODUCTION_FRONTEND_URL}/health`
 - `GET {PRODUCTION_API_URL}/health`
