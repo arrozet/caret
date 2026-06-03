@@ -1,8 +1,8 @@
 # Coolify Production Deployment
 
-Caret production is deployed from the `prod` branch to the Hetzner server managed by Coolify.
+Caret production is deployed automatically from the `prod` branch to the Hetzner server managed by Coolify.
 
-GitHub Actions validates changes before production deployment. See `docs/deployment/ci-cd.md` for workflow triggers, required GitHub secrets, variables, and smoke checks.
+GitHub Actions validates changes, verifies that Coolify deployed the target commit, and runs public smoke checks after Coolify's automatic deployment. See `docs/deployment/ci-cd.md` for workflow triggers, secrets, variables, and smoke checks.
 
 ## Domains
 
@@ -31,9 +31,9 @@ The remaining services are internal and should not receive public domains.
 
 ## CI/CD Trigger
 
-Create a Coolify deploy webhook for the Caret Docker Compose resource and store it as the GitHub secret `COOLIFY_DEPLOY_WEBHOOK_URL`.
+Enable Coolify's GitHub integration/webhook for the Caret Docker Compose resource so pushes to `prod` create deployments automatically.
 
-The checked-in production deployment workflow runs only after the `CI` workflow succeeds on the `prod` branch, or when manually dispatched from the `prod` branch. Runtime environment variables remain in Coolify.
+The checked-in production verification workflow runs only after the `CI` workflow succeeds on the `prod` branch, or when manually dispatched from the `prod` branch. It does not call the Coolify deploy webhook; it uses a read-only `COOLIFY_API_TOKEN` to confirm that the target commit became active before smoke tests. Runtime environment variables remain in Coolify.
 
 ## Required Variables
 
